@@ -1,3 +1,12 @@
+network-manager (1.14.6-2+deb10u1+grm2u1) stable; urgency=medium
+
+  [ cjheo ]
+  * [536037e2] Several g_prefix_error functions have been replaced for translation.
+
+  [ Gooroom Autobuilder ]
+
+ -- Gooroom Autobuilder <jenkins@gooroom.kr>  Tue, 07 Jul 2020 16:01:11 +0900
+
 network-manager (1.14.6-2+deb10u1) stable; urgency=medium
 
   * core: fix file permissions for "/var/lib/NetworkManager/secret_key"
