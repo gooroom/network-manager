@@ -1,25 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2016 - 2017 Red Hat, Inc.
+ * Copyright (C) 2016 - 2017 Red Hat, Inc.
  */
 
 #include <stdlib.h>
 #include <unistd.h>
 #include <syslog.h>
-#include <string.h>
 #include <arpa/inet.h>
 #include <linux/if.h>
 #include <linux/if_link.h>
@@ -46,13 +32,13 @@
         const NMLogDomain __domain = (domain); \
         \
         if (nm_logging_enabled (__level, __domain)) { \
-            gint64 _ts = nm_utils_get_monotonic_timestamp_ns (); \
+            gint64 _ts = nm_utils_get_monotonic_timestamp_nsec (); \
             \
             _nm_log (__level, __domain, 0, NULL, NULL, \
                      "%s[%ld.%09ld]: " _NM_UTILS_MACRO_FIRST (__VA_ARGS__), \
                      _NMLOG_PREFIX_NAME, \
-                     (long) (_ts / NM_UTILS_NS_PER_SECOND), \
-                     (long) (_ts % NM_UTILS_NS_PER_SECOND) \
+                     (long) (_ts / NM_UTILS_NSEC_PER_SEC), \
+                     (long) (_ts % NM_UTILS_NSEC_PER_SEC) \
                      _NM_UTILS_MACRO_REST (__VA_ARGS__)); \
         } \
     } G_STMT_END
@@ -115,14 +101,14 @@ int nmtstp_run_command (const char *format, ...) _nm_printf (1, 2);
 
 /*****************************************************************************/
 
-guint nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_ms);
+guint nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_msec);
 guint nmtstp_wait_for_signal_until (NMPlatform *platform, gint64 until_ms);
-const NMPlatformLink *nmtstp_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, gint64 timeout_ms);
+const NMPlatformLink *nmtstp_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, gint64 timeout_msec);
 const NMPlatformLink *nmtstp_wait_for_link_until (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, gint64 until_ms);
 
-#define nmtstp_assert_wait_for_signal(platform, timeout_ms) \
+#define nmtstp_assert_wait_for_signal(platform, timeout_msec) \
 	G_STMT_START { \
-		if (nmtstp_wait_for_signal (platform, timeout_ms) == 0) \
+		if (nmtstp_wait_for_signal (platform, timeout_msec) == 0) \
 			g_assert_not_reached (); \
 	} G_STMT_END
 
@@ -132,8 +118,8 @@ const NMPlatformLink *nmtstp_wait_for_link_until (NMPlatform *platform, const ch
 			g_assert_not_reached (); \
 	} G_STMT_END
 
-#define nmtstp_assert_wait_for_link(platform, ifname, expected_link_type, timeout_ms) \
-	nmtst_assert_nonnull (nmtstp_wait_for_link (platform, ifname, expected_link_type, timeout_ms))
+#define nmtstp_assert_wait_for_link(platform, ifname, expected_link_type, timeout_msec) \
+	nmtst_assert_nonnull (nmtstp_wait_for_link (platform, ifname, expected_link_type, timeout_msec))
 
 #define nmtstp_assert_wait_for_link_until(platform, ifname, expected_link_type, until_ms) \
 	nmtst_assert_nonnull (nmtstp_wait_for_link_until (platform, ifname, expected_link_type, until_ms))
@@ -274,6 +260,58 @@ nmtstp_ip6_route_get_all (NMPlatform *platform,
 GArray *nmtstp_platform_ip4_address_get_all (NMPlatform *self, int ifindex);
 GArray *nmtstp_platform_ip6_address_get_all (NMPlatform *self, int ifindex);
 
+/*****************************************************************************/
+
+static inline gboolean
+_nmtstp_platform_routing_rules_get_all_predicate (const NMPObject *obj,
+                                                  gpointer user_data)
+{
+	int addr_family = GPOINTER_TO_INT (user_data);
+
+	g_assert (NMP_OBJECT_GET_TYPE (obj) == NMP_OBJECT_TYPE_ROUTING_RULE);
+
+	return    addr_family == AF_UNSPEC
+	       || NMP_OBJECT_CAST_ROUTING_RULE (obj)->addr_family == addr_family;
+}
+
+static inline GPtrArray *
+nmtstp_platform_routing_rules_get_all (NMPlatform *platform, int addr_family)
+{
+	NMPLookup lookup;
+
+	g_assert (NM_IS_PLATFORM (platform));
+	g_assert (NM_IN_SET (addr_family, AF_UNSPEC, AF_INET, AF_INET6));
+
+	nmp_lookup_init_obj_type (&lookup, NMP_OBJECT_TYPE_ROUTING_RULE);
+	return nm_platform_lookup_clone (platform,
+	                                 &lookup,
+	                                 _nmtstp_platform_routing_rules_get_all_predicate,
+	                                 GINT_TO_POINTER (addr_family));
+}
+
+static inline guint
+nmtstp_platform_routing_rules_get_count (NMPlatform *platform, int addr_family)
+{
+	const NMDedupMultiHeadEntry *head_entry;
+	NMDedupMultiIter iter;
+	const NMPObject *obj;
+	NMPLookup lookup;
+	guint n;
+
+	g_assert (NM_IS_PLATFORM (platform));
+	g_assert (NM_IN_SET (addr_family, AF_UNSPEC, AF_INET, AF_INET6));
+
+	nmp_lookup_init_obj_type (&lookup, NMP_OBJECT_TYPE_ROUTING_RULE);
+	head_entry = nm_platform_lookup (platform, &lookup);
+
+	n = 0;
+	nmp_cache_iter_for_each (&iter, head_entry, &obj) {
+		if (_nmtstp_platform_routing_rules_get_all_predicate (obj, GINT_TO_POINTER (addr_family)))
+			n++;
+	}
+	return n;
+}
+
 gboolean nmtstp_platform_ip4_route_delete (NMPlatform *platform, int ifindex, in_addr_t network, guint8 plen, guint32 metric);
 gboolean nmtstp_platform_ip6_route_delete (NMPlatform *platform, int ifindex, struct in6_addr network, guint8 plen, guint32 metric);
 
@@ -322,15 +360,21 @@ const NMPlatformLink *nmtstp_link_tun_add (NMPlatform *platform,
                                            const char *name,
                                            const NMPlatformLnkTun *lnk,
                                            int *out_fd);
+const NMPlatformLink *nmtstp_link_vrf_add (NMPlatform *platform,
+                                           gboolean external_command,
+                                           const char *name,
+                                           const NMPlatformLnkVrf *lnk,
+                                           gboolean *out_not_supported);
 const NMPlatformLink *nmtstp_link_vxlan_add (NMPlatform *platform,
                                              gboolean external_command,
                                              const char *name,
                                              const NMPlatformLnkVxlan *lnk);
 
-void nmtstp_link_del (NMPlatform *platform,
-                      gboolean external_command,
-                      int ifindex,
-                      const char *name);
+void nmtstp_link_delete (NMPlatform *platform,
+                         gboolean external_command,
+                         int ifindex,
+                         const char *name,
+                         gboolean require_exist);
 
 /*****************************************************************************/
 
@@ -349,9 +393,9 @@ _nmtstp_env1_wrapper_setup (const NmtstTestData *test_data)
 
 	_LOGT ("TEST[%s]: setup", test_data->testpath);
 
-	nm_platform_link_delete (NM_PLATFORM_GET, nm_platform_link_get_ifindex (NM_PLATFORM_GET, DEVICE_NAME));
-	g_assert (!nm_platform_link_get_by_ifname (NM_PLATFORM_GET, DEVICE_NAME));
-	g_assert_cmpint (nm_platform_link_dummy_add (NM_PLATFORM_GET, DEVICE_NAME, NULL), ==, NM_PLATFORM_ERROR_SUCCESS);
+	nmtstp_link_delete (NM_PLATFORM_GET, -1, -1, DEVICE_NAME, FALSE);
+
+	g_assert (NMTST_NM_ERR_SUCCESS (nm_platform_link_dummy_add (NM_PLATFORM_GET, DEVICE_NAME, NULL)));
 
 	*p_ifindex = nm_platform_link_get_ifindex (NM_PLATFORM_GET, DEVICE_NAME);
 	g_assert_cmpint (*p_ifindex, >, 0);

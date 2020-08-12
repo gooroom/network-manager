@@ -1,19 +1,5 @@
 #!/usr/bin/env python
-# -*- Mode: python; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (C) 2011 - 2012 Red Hat, Inc.
 #
@@ -44,14 +30,16 @@ proxy = bus.get_object(NM_SERVICE_NAME, "/org/freedesktop/NetworkManager")
 manager = dbus.Interface(proxy, NM_MANAGER_IFACE)
 props = dbus.Interface(proxy, DBUS_PROPS_IFACE)
 
+
 def found_connection_type(ctype):
-    if ctype == '':
+    if ctype == "":
         print("No active connection")
     elif ctype in ["gsm", "cdma", "bluetooth"]:
         print("WWAN is default")
     else:
         print("WWAN is not default")
         sys.exit(0)
+
 
 # Shortcut #1, for NM 1.0
 try:
@@ -64,7 +52,7 @@ except KeyError:
 try:
     primary = props.Get(NM_MANAGER_IFACE, "PrimaryConnection")
     if not primary:
-        found_connection_type('')
+        found_connection_type("")
     primary_proxy = bus.get_object(NM_SERVICE_NAME, primary)
     primary_props = dbus.Interface(primary_proxy, DBUS_PROPS_IFACE)
     ctype = primary_props.Get(NM_ACTIVE_CONNECTION_INTERFACE, "Type")
@@ -97,4 +85,3 @@ if default_is_wwan:
     print("WWAN is default")
 else:
     print("WWAN is not default")
-

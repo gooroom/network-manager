@@ -1,22 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -343,7 +327,7 @@ out:
 		/* setting a value purges all invalid values that were set
 		 * via GObject property. */
 		changed = TRUE;
-		g_clear_pointer (&priv->data_invalid, g_hash_table_unref);
+		nm_clear_pointer (&priv->data_invalid, g_hash_table_unref);
 	}
 	if (changed)
 		_notify (self, PROP_DATA);
@@ -395,33 +379,38 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 	return TRUE;
 }
 
-static gboolean
-compare_property (NMSetting *setting,
-                  NMSetting *other,
-                  const GParamSpec *prop_spec,
+static NMTernary
+compare_property (const NMSettInfoSetting *sett_info,
+                  guint property_idx,
+                  NMConnection *con_a,
+                  NMSetting *set_a,
+                  NMConnection *con_b,
+                  NMSetting *set_b,
                   NMSettingCompareFlags flags)
 {
 	NMSettingUserPrivate *priv, *pri2;
 
-	g_return_val_if_fail (NM_IS_SETTING_USER (setting), FALSE);
-	g_return_val_if_fail (NM_IS_SETTING_USER (other), FALSE);
+	if (nm_streq (sett_info->property_infos[property_idx].name, NM_SETTING_USER_DATA)) {
 
-	if (!nm_streq0 (prop_spec->name, NM_SETTING_USER_DATA))
-		goto call_parent;
+		if (NM_FLAGS_HAS (flags, NM_SETTING_COMPARE_FLAG_INFERRABLE))
+			return NM_TERNARY_DEFAULT;
 
-	priv = NM_SETTING_USER_GET_PRIVATE (NM_SETTING_USER (setting));
-	pri2 = NM_SETTING_USER_GET_PRIVATE (NM_SETTING_USER (other));
+		if (!set_b)
+			return TRUE;
 
-	if (!nm_utils_hash_table_equal (priv->data, pri2->data, TRUE, g_str_equal))
-		return FALSE;
+		priv = NM_SETTING_USER_GET_PRIVATE (NM_SETTING_USER (set_a));
+		pri2 = NM_SETTING_USER_GET_PRIVATE (NM_SETTING_USER (set_b));
+		return    nm_utils_hash_table_equal (priv->data, pri2->data, TRUE, g_str_equal)
+		       && nm_utils_hash_table_equal (priv->data_invalid, pri2->data_invalid, TRUE, g_str_equal);
+	}
 
-	if (!nm_utils_hash_table_equal (priv->data_invalid, pri2->data_invalid, TRUE, g_str_equal))
-		return FALSE;
-
-	return TRUE;
-
-call_parent:
-	return NM_SETTING_CLASS (nm_setting_user_parent_class)->compare_property (setting, other, prop_spec, flags);
+	return NM_SETTING_CLASS (nm_setting_user_parent_class)->compare_property (sett_info,
+	                                                                          property_idx,
+	                                                                          con_a,
+	                                                                          set_a,
+	                                                                          con_b,
+	                                                                          set_b,
+	                                                                          flags);
 }
 
 /*****************************************************************************/
@@ -473,8 +462,8 @@ set_property (GObject *object, guint prop_id,
 
 		data = g_value_get_boxed (value);
 		if (!data || !g_hash_table_size (data)) {
-			g_clear_pointer (&priv->data, g_hash_table_unref);
-			g_clear_pointer (&priv->data_invalid, g_hash_table_unref);
+			nm_clear_pointer (&priv->data, g_hash_table_unref);
+			nm_clear_pointer (&priv->data_invalid, g_hash_table_unref);
 			return;
 		}
 
@@ -499,7 +488,7 @@ set_property (GObject *object, guint prop_id,
 		}
 		if (   priv->data_invalid
 		    && !g_hash_table_size (priv->data_invalid))
-			g_clear_pointer (&priv->data_invalid, g_hash_table_unref);
+			nm_clear_pointer (&priv->data_invalid, g_hash_table_unref);
 
 		break;
 	default:
@@ -549,8 +538,8 @@ nm_setting_user_class_init (NMSettingUserClass *klass)
 	NMSettingClass *setting_class = NM_SETTING_CLASS (klass);
 	GArray *properties_override = _nm_sett_info_property_override_create_array ();
 
-	object_class->set_property = set_property;
 	object_class->get_property = get_property;
+	object_class->set_property = set_property;
 	object_class->finalize     = finalize;
 
 	setting_class->compare_property = compare_property;
@@ -582,15 +571,9 @@ nm_setting_user_class_init (NMSettingUserClass *klass)
 	                        G_TYPE_HASH_TABLE,
 	                        G_PARAM_READWRITE |
 	                        G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[PROP_DATA], &nm_sett_info_propert_type_strdict);
 
 	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
-
-	_properties_override_add_transform (properties_override,
-	                                    g_object_class_find_property (G_OBJECT_CLASS (setting_class),
-	                                                                  NM_SETTING_USER_DATA),
-	                                    G_VARIANT_TYPE ("a{ss}"),
-	                                    _nm_utils_strdict_to_dbus,
-	                                    _nm_utils_strdict_from_dbus);
 
 	_nm_setting_class_commit_full (setting_class, NM_META_SETTING_TYPE_USER,
 	                               NULL, properties_override);

@@ -1,52 +1,40 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * shvar.c
- *
- * Implementation of non-destructively reading/writing files containing
- * only shell variable declarations and full-line comments.
- *
- * Copyright 1999,2000 Red Hat, Inc.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+ * Copyright (C) 1999, 2000 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "shvar.h"
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "nm-core-internal.h"
 #include "nm-core-utils.h"
-#include "nm-utils/nm-enum-utils.h"
-#include "nm-utils/nm-io-utils.h"
+#include "nm-glib-aux/nm-enum-utils.h"
+#include "nm-glib-aux/nm-io-utils.h"
 #include "c-list/src/c-list.h"
+#include "nms-ifcfg-rh-utils.h"
 
 /*****************************************************************************/
 
 struct _shvarLine {
 
+	const char *key;
+
 	CList lst;
+
+	/* We index variables by their key in shvarFile.lst_idx. One shell variable might
+	 * occur multiple times in a file (in which case the last occurrence wins).
+	 * Hence, we need to keep a list of all the same keys.
+	 *
+	 * This is a pointer to the next shadowed line. */
+	struct _shvarLine *prev_shadowed;
 
 	/* There are three cases:
 	 *
@@ -65,20 +53,40 @@ struct _shvarLine {
 	 *   @key/@key_with_prefix.
 	 * */
 	char *line;
-	const char *key;
 	char *key_with_prefix;
+
+	/* svSetValue() will clear the dirty flag. */
+	bool dirty:1;
 };
 
 typedef struct _shvarLine shvarLine;
 
 struct _shvarFile {
-	char      *fileName;
-	int        fd;
-	CList      lst_head;
-	gboolean   modified;
+	char *fileName;
+	CList lst_head;
+	GHashTable *lst_idx;
+	int fd;
+	bool modified:1;
 };
 
 /*****************************************************************************/
+
+static void _line_link_parse (shvarFile *s, const char *value, gsize len);
+
+/*****************************************************************************/
+
+#define ASSERT_key_is_well_known(key) \
+	nm_assert ( ({ \
+		const char *_key = (key); \
+		gboolean _is_wellknown = TRUE; \
+		\
+		if (!nms_ifcfg_rh_utils_is_well_known_key (_key)) { \
+			_is_wellknown = FALSE; \
+			g_critical ("ifcfg-rh key \"%s\" is not well-known", _key); \
+		} \
+		\
+		_is_wellknown; \
+	}) )
 
 /**
  * svParseBoolean:
@@ -215,9 +223,9 @@ _escape_ansic (const char *source)
 
 /*****************************************************************************/
 
-#define _char_req_escape(ch)        NM_IN_SET (ch,      '\"', '\\',       '$', '`')
-#define _char_req_escape_old(ch)    NM_IN_SET (ch,      '\"', '\\', '\'', '$', '`', '~')
-#define _char_req_quotes(ch)        NM_IN_SET (ch, ' ',             '\'',           '~', '\t', '|', '&', ';', '(', ')', '<', '>')
+#define _char_req_escape(ch)        NM_IN_SET (ch,      '"', '\\',       '$', '`')
+#define _char_req_escape_old(ch)    NM_IN_SET (ch,      '"', '\\', '\'', '$', '`', '~')
+#define _char_req_quotes(ch)        NM_IN_SET (ch, ' ',            '\'',           '~', '\t', '|', '&', ';', '(', ')', '<', '>')
 
 const char *
 svEscape (const char *s, char **to_free)
@@ -330,7 +338,7 @@ _gstr_init (GString **str, const char *value, gsize i)
 		 * Unescaping usually does not extend the length of a string,
 		 * so we might be tempted to allocate a fixed buffer of length
 		 * (strlen(value)+CONST).
-		 * However, due to $'\Ux' escapes, the maxium length is some
+		 * However, due to $'\Ux' escapes, the maximum length is some
 		 * (FACTOR*strlen(value) + CONST), which is non trivial to get
 		 * right in all cases. Also, we would have to provision for the
 		 * very unlikely extreme case.
@@ -453,7 +461,7 @@ svUnescape (const char *value, char **to_free)
 					if (NM_IN_SET (value[i], '$', '`', '"', '\\')) {
 						/* Drop the backslash. */
 					} else if (NM_IN_SET (value[i], '\'', '~')) {
-						/* '\'' and '~' in double qoutes are not handled special by shell.
+						/* '\'' and '~' in double quotes are not handled special by shell.
 						 * However, old versions of svEscape() would wrongly use double-quoting
 						 * with backslash escaping for these characters (expecting svUnescape()
 						 * to remove the backslash).
@@ -625,15 +633,33 @@ out_error:
 
 /*****************************************************************************/
 
-static shvarFile *
-svFile_new (const char *name)
+shvarFile *
+svFile_new (const char *name,
+            int fd,
+            const char *content)
 {
 	shvarFile *s;
+	const char *p;
+	const char *q;
 
-	s = g_slice_new0 (shvarFile);
-	s->fd = -1;
-	s->fileName = g_strdup (name);
-	c_list_init (&s->lst_head);
+	nm_assert (name);
+	nm_assert (fd >= -1);
+
+	s = g_slice_new (shvarFile);
+	*s = (shvarFile) {
+		.fileName = g_strdup (name),
+		.fd       = fd,
+		.lst_head = C_LIST_INIT (s->lst_head),
+		.lst_idx  = g_hash_table_new (nm_pstr_hash, nm_pstr_equal),
+	};
+
+	if (content) {
+		for (p = content; (q = strchr (p, '\n')) != NULL; p = q + 1)
+			_line_link_parse (s, p, q - p);
+		if (p[0])
+			_line_link_parse (s, p, strlen (p));
+	}
+
 	return s;
 }
 
@@ -649,7 +675,7 @@ void
 _nmtst_svFileSetName (shvarFile *s, const char *fileName)
 {
 	/* changing the file name is not supported for regular
-	 * operation. Only allowed to use in tests, othewise,
+	 * operation. Only allowed to use in tests, otherwise,
 	 * the filename is immutable. */
 	g_free (s->fileName);
 	s->fileName = g_strdup (fileName);
@@ -693,8 +719,11 @@ line_new_parse (const char *value, gsize len)
 
 	nm_assert (value);
 
-	line = g_slice_new0 (shvarLine);
-	c_list_init (&line->lst);
+	line = g_slice_new (shvarLine);
+	*line = (shvarLine) {
+		.lst      = C_LIST_INIT (line->lst),
+		.dirty    = TRUE,
+	};
 
 	for (k = 0; k < len; k++) {
 		if (g_ascii_isspace (value[k]))
@@ -728,14 +757,19 @@ line_new_build (const char *key, const char *value)
 {
 	char *value_escaped = NULL;
 	shvarLine *line;
+	char *new_key;
 
 	value = svEscape (value, &value_escaped);
 
 	line = g_slice_new (shvarLine);
-	c_list_init (&line->lst);
-	line->line = value_escaped ?: g_strdup (value);
-	line->key_with_prefix = g_strdup (key);
-	line->key = line->key_with_prefix;
+	new_key = g_strdup (key),
+	*line = (shvarLine) {
+		.lst             = C_LIST_INIT (line->lst),
+		.line            = value_escaped ?: g_strdup (value),
+		.key_with_prefix = new_key,
+		.key             = new_key,
+		.dirty           = FALSE,
+	};
 	ASSERT_shvarLine (line);
 	return line;
 }
@@ -748,6 +782,8 @@ line_set (shvarLine *line, const char *value)
 
 	ASSERT_shvarLine (line);
 	nm_assert (line->key);
+
+	line->dirty = FALSE;
 
 	if (line->key != line->key_with_prefix) {
 		memmove (line->key_with_prefix, line->key, strlen (line->key) + 1);
@@ -775,13 +811,47 @@ static void
 line_free (shvarLine *line)
 {
 	ASSERT_shvarLine (line);
+	c_list_unlink_stale (&line->lst);
 	g_free (line->line);
 	g_free (line->key_with_prefix);
-	c_list_unlink_stale (&line->lst);
 	g_slice_free (shvarLine, line);
 }
 
 /*****************************************************************************/
+
+static void
+_line_link_parse (shvarFile *s, const char *value, gsize len)
+{
+	shvarLine *line;
+
+	line = line_new_parse (value, len);
+	if (!line->key)
+		goto do_link;
+
+	if (G_UNLIKELY (!g_hash_table_insert (s->lst_idx, line, line))) {
+		shvarLine *existing_key;
+		shvarLine *existing_val;
+
+		/* Slow-path: we have duplicate keys. Fix the mess we created.
+		 * Unfortunately, g_hash_table_insert() now had to allocate an extra
+		 * array to track the keys/values differently. I wish there was an
+		 * GHashTable API to add a key only if it does not exist yet. */
+
+		if (!g_hash_table_lookup_extended (s->lst_idx, line, (gpointer *) &existing_key, (gpointer *) &existing_val))
+			nm_assert_not_reached ();
+
+		nm_assert (existing_val == line);
+		nm_assert (existing_key != line);
+		line->prev_shadowed = existing_key;
+		g_hash_table_replace (s->lst_idx, line, line);
+	}
+
+do_link:
+	c_list_link_tail (&s->lst_head, &line->lst);
+}
+
+/*****************************************************************************/
+
 
 /* Open the file <name>, returning a shvarFile on success and NULL on failure.
  * Add a wrinkle to let the caller specify whether or not to create the file
@@ -790,11 +860,9 @@ line_free (shvarLine *line)
 static shvarFile *
 svOpenFileInternal (const char *name, gboolean create, GError **error)
 {
-	shvarFile *s;
 	gboolean closefd = FALSE;
 	int errsv = 0;
-	char *arena;
-	const char *p, *q;
+	gs_free char *content = NULL;
 	gs_free_error GError *local = NULL;
 	nm_auto_close int fd = -1;
 
@@ -811,23 +879,24 @@ svOpenFileInternal (const char *name, gboolean create, GError **error)
 
 	if (fd < 0) {
 		if (create)
-			return svFile_new (name);
+			return svFile_new (name, -1, NULL);
 
 		g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errsv),
 		             "Could not read file '%s': %s",
-		             name, strerror (errsv));
+		             name, nm_strerror_native (errsv));
 		return NULL;
 	}
 
-	if (nm_utils_fd_get_contents (closefd ? nm_steal_fd (&fd) : fd,
-	                              closefd,
-	                              10 * 1024 * 1024,
-	                              NM_UTILS_FILE_GET_CONTENTS_FLAG_NONE,
-	                              &arena,
-	                              NULL,
-	                              &local) < 0) {
+	if (!nm_utils_fd_get_contents (closefd ? nm_steal_fd (&fd) : fd,
+	                               closefd,
+	                               10 * 1024 * 1024,
+	                               NM_UTILS_FILE_GET_CONTENTS_FLAG_NONE,
+	                               &content,
+	                               NULL,
+	                               NULL,
+	                               &local)) {
 		if (create)
-			return svFile_new (name);
+			return svFile_new (name, -1, NULL);
 
 		g_set_error (error, G_FILE_ERROR,
 		             local->domain == G_FILE_ERROR ? local->code : G_FILE_ERROR_FAILED,
@@ -836,22 +905,14 @@ svOpenFileInternal (const char *name, gboolean create, GError **error)
 		return NULL;
 	}
 
-	s = svFile_new (name);
-
-	for (p = arena; (q = strchr (p, '\n')) != NULL; p = q + 1)
-		c_list_link_tail (&s->lst_head, &line_new_parse (p, q - p)->lst);
-	if (p[0])
-		c_list_link_tail (&s->lst_head, &line_new_parse (p, strlen (p))->lst);
-	g_free (arena);
-
 	/* closefd is set if we opened the file read-only, so go ahead and
 	 * close it, because we can't write to it anyway */
-	if (!closefd) {
-		nm_assert (fd > 0);
-		s->fd = nm_steal_fd (&fd);
-	}
-
-	return s;
+	nm_assert (closefd || fd >= 0);
+	return svFile_new (name,
+	                     !closefd
+	                   ? nm_steal_fd (&fd)
+	                   : -1,
+	                   content);
 }
 
 /* Open the file <name>, return shvarFile on success, NULL on failure */
@@ -873,39 +934,32 @@ svCreateFile (const char *name)
 /*****************************************************************************/
 
 static gboolean
-_is_all_digits (const char *str)
-{
-	return    str[0]
-	       && NM_STRCHAR_ALL (str, ch, g_ascii_isdigit (ch));
-}
-
-#define IS_NUMBERED_TAG(key, tab_name) \
-	({ \
-		const char *_key = (key); \
-		\
-		(   (strncmp (_key, tab_name, NM_STRLEN (tab_name)) == 0) \
-		 && _is_all_digits (&_key[NM_STRLEN (tab_name)])); \
-	})
-
-static gboolean
 _svKeyMatchesType (const char *key, SvKeyType match_key_type)
 {
 	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_ANY))
 		return TRUE;
 
+#define _IS_NUMBERED(key, tag) \
+	({ \
+		gint64 _idx; \
+		\
+		   NMS_IFCFG_RH_UTIL_IS_NUMBERED_TAG (key, tag, &_idx) \
+		&& _idx >= 0; \
+	})
+
 	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_ROUTE_SVFORMAT)) {
-		if (   IS_NUMBERED_TAG (key, "ADDRESS")
-		    || IS_NUMBERED_TAG (key, "NETMASK")
-		    || IS_NUMBERED_TAG (key, "GATEWAY")
-		    || IS_NUMBERED_TAG (key, "METRIC")
-		    || IS_NUMBERED_TAG (key, "OPTIONS"))
+		if (   _IS_NUMBERED (key, "ADDRESS")
+		    || _IS_NUMBERED (key, "NETMASK")
+		    || _IS_NUMBERED (key, "GATEWAY")
+		    || _IS_NUMBERED (key, "METRIC")
+		    || _IS_NUMBERED (key, "OPTIONS"))
 			return TRUE;
 	}
 	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_IP4_ADDRESS)) {
-		if (   IS_NUMBERED_TAG (key, "IPADDR")
-		    || IS_NUMBERED_TAG (key, "PREFIX")
-		    || IS_NUMBERED_TAG (key, "NETMASK")
-		    || IS_NUMBERED_TAG (key, "GATEWAY"))
+		if (   _IS_NUMBERED (key, "IPADDR")
+		    || _IS_NUMBERED (key, "PREFIX")
+		    || _IS_NUMBERED (key, "NETMASK")
+		    || _IS_NUMBERED (key, "GATEWAY"))
 			return TRUE;
 	}
 	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_USER)) {
@@ -913,16 +967,35 @@ _svKeyMatchesType (const char *key, SvKeyType match_key_type)
 			return TRUE;
 	}
 	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_TC)) {
-		if (   IS_NUMBERED_TAG (key, "QDISC")
-		    || IS_NUMBERED_TAG (key, "FILTER"))
+		if (   _IS_NUMBERED (key, "QDISC")
+		    || _IS_NUMBERED (key, "FILTER"))
 			return TRUE;
 	}
 	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_SRIOV_VF)) {
-		if (IS_NUMBERED_TAG (key, "SRIOV_VF"))
+		if (_IS_NUMBERED (key, "SRIOV_VF"))
+			return TRUE;
+	}
+	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_ROUTING_RULE4)) {
+		if (_IS_NUMBERED (key, "ROUTING_RULE_"))
+			return TRUE;
+	}
+	if (NM_FLAGS_HAS (match_key_type, SV_KEY_TYPE_ROUTING_RULE6)) {
+		if (_IS_NUMBERED (key, "ROUTING_RULE6_"))
 			return TRUE;
 	}
 
 	return FALSE;
+}
+
+gint64
+svNumberedParseKey (const char *key)
+{
+	gint64 idx;
+
+	if (   NMS_IFCFG_RH_UTIL_IS_NUMBERED_TAG (key, "ROUTING_RULE_", &idx)
+	    || NMS_IFCFG_RH_UTIL_IS_NUMBERED_TAG (key, "ROUTING_RULE6_", &idx))
+		return idx;
+	return -1;
 }
 
 GHashTable *
@@ -949,23 +1022,57 @@ svGetKeys (shvarFile *s, SvKeyType match_key_type)
 	return keys;
 }
 
+static int
+_get_keys_sorted_cmp (gconstpointer a,
+                      gconstpointer b,
+                      gpointer user_data)
+{
+	const char *k_a = *((const char *const*) a);
+	const char *k_b = *((const char *const*) b);
+	gint64 n_a;
+	gint64 n_b;
+
+	n_a = svNumberedParseKey (k_a);
+	n_b = svNumberedParseKey (k_b);
+	NM_CMP_DIRECT (n_a, n_b);
+	NM_CMP_RETURN (strcmp (k_a, k_b));
+	nm_assert_not_reached ();
+	return 0;
+}
+
+const char **
+svGetKeysSorted (shvarFile *s,
+                 SvKeyType match_key_type,
+                 guint *out_len)
+{
+	gs_unref_hashtable GHashTable *keys_hash = NULL;
+
+	keys_hash = svGetKeys (s, match_key_type);
+	if (!keys_hash) {
+		NM_SET_OUT (out_len, 0);
+		return NULL;
+	}
+	return (const char **) nm_utils_hash_keys_to_array (keys_hash,
+	                                                    _get_keys_sorted_cmp,
+	                                                    NULL,
+	                                                    out_len);
+}
+
 /*****************************************************************************/
 
 const char *
-svFindFirstKeyWithPrefix (shvarFile *s, const char *key_prefix)
+svFindFirstNumberedKey (shvarFile *s, const char *key_prefix)
 {
-	CList *current;
-	const shvarLine *l;
+	const shvarLine *line;
 
 	g_return_val_if_fail (s, NULL);
 	g_return_val_if_fail (key_prefix, NULL);
 
-	c_list_for_each (current, &s->lst_head) {
-		l = c_list_entry (current, shvarLine, lst);
-		if (   l->key
-		    && l->line
-		    && g_str_has_prefix (l->key, key_prefix))
-			return l->key;
+	c_list_for_each_entry (line, &s->lst_head, lst) {
+		if (   line->key
+		    && line->line
+		    && nms_ifcfg_rh_utils_is_numbered_tag (line->key, key_prefix, NULL))
+			return line->key;
 	}
 
 	return NULL;
@@ -976,20 +1083,16 @@ svFindFirstKeyWithPrefix (shvarFile *s, const char *key_prefix)
 static const char *
 _svGetValue (shvarFile *s, const char *key, char **to_free)
 {
-	CList *current;
-	const shvarLine *line, *l;
+	const shvarLine *line;
 	const char *v;
 
 	nm_assert (s);
 	nm_assert (_shell_is_name (key, -1));
 	nm_assert (to_free);
 
-	line = NULL;
-	c_list_for_each (current, &s->lst_head) {
-		l = c_list_entry (current, shvarLine, lst);
-		if (l->key && nm_streq (l->key, key))
-			line = l;
-	}
+	ASSERT_key_is_well_known (key);
+
+	line = g_hash_table_lookup (s->lst_idx, &key);
 
 	if (line && line->line) {
 		v = svUnescape (line->line, to_free);
@@ -1180,19 +1283,15 @@ svGetValueEnum (shvarFile *s, const char *key,
 gboolean
 svUnsetAll (shvarFile *s, SvKeyType match_key_type)
 {
-	CList *current;
 	shvarLine *line;
 	gboolean changed = FALSE;
 
 	g_return_val_if_fail (s, FALSE);
 
-	c_list_for_each (current, &s->lst_head) {
-		line = c_list_entry (current, shvarLine, lst);
+	c_list_for_each_entry (line, &s->lst_head, lst) {
 		ASSERT_shvarLine (line);
-		if (!line->key)
-			continue;
-
-		if (_svKeyMatchesType (line->key, match_key_type)) {
+		if (   line->key
+		    && _svKeyMatchesType (line->key, match_key_type)) {
 			if (nm_clear_g_free (&line->line)) {
 				ASSERT_shvarLine (line);
 				changed = TRUE;
@@ -1205,13 +1304,46 @@ svUnsetAll (shvarFile *s, SvKeyType match_key_type)
 	return changed;
 }
 
+gboolean
+svUnsetDirtyWellknown (shvarFile *s, NMTernary new_dirty_value)
+{
+	shvarLine *line;
+	gboolean changed = FALSE;
+
+	g_return_val_if_fail (s, FALSE);
+
+	c_list_for_each_entry (line, &s->lst_head, lst) {
+		const NMSIfcfgKeyTypeInfo *ti;
+
+		ASSERT_shvarLine (line);
+
+		if (   line->dirty
+		    && line->key
+		    && line->line
+		    && (ti = nms_ifcfg_rh_utils_is_well_known_key (line->key))
+		    && !NM_FLAGS_HAS (ti->key_flags, NMS_IFCFG_KEY_TYPE_KEEP_WHEN_DIRTY)) {
+			if (nm_clear_g_free (&line->line)) {
+				ASSERT_shvarLine (line);
+				changed = TRUE;
+			}
+		}
+
+		if (new_dirty_value != NM_TERNARY_DEFAULT)
+			line->dirty = (new_dirty_value != NM_TERNARY_FALSE);
+	}
+
+	if (changed)
+		s->modified = TRUE;
+	return changed;
+}
+
 /* Same as svSetValueStr() but it preserves empty @value -- contrary to
  * svSetValueStr() for which "" effectively means to remove the value. */
 gboolean
 svSetValue (shvarFile *s, const char *key, const char *value)
 {
-	CList *current;
-	shvarLine *line, *l;
+	shvarLine *line;
+	shvarLine *l_shadowed;
 	gboolean changed = FALSE;
 
 	g_return_val_if_fail (s, FALSE);
@@ -1219,29 +1351,37 @@ svSetValue (shvarFile *s, const char *key, const char *value)
 
 	nm_assert (_shell_is_name (key, -1));
 
-	line = NULL;
-	c_list_for_each (current, &s->lst_head) {
-		l = c_list_entry (current, shvarLine, lst);
-		if (l->key && nm_streq (l->key, key)) {
-			if (line) {
-				/* if we find multiple entries for the same key, we can
-				 * delete all but the last. */
-				line_free (line);
-				changed = TRUE;
-			}
-			line = l;
-		}
+	ASSERT_key_is_well_known (key);
+
+	line = g_hash_table_lookup (s->lst_idx, &key);
+	if (   line
+	    && (l_shadowed = line->prev_shadowed)) {
+		/* if we find multiple entries for the same key, we can
+		 * delete the shadowed ones. */
+		line->prev_shadowed = NULL;
+		changed = TRUE;
+		do {
+			shvarLine *l = l_shadowed;
+
+			l_shadowed = l_shadowed->prev_shadowed;
+			line_free (l);
+		} while (l_shadowed);
 	}
 
 	if (!value) {
 		if (line) {
+			/* We only clear the value, but leave the line entry. This way, if we
+			 * happen to re-add the value, we write it to the same line again. */
 			if (nm_clear_g_free (&line->line)) {
 				changed = TRUE;
 			}
 		}
 	} else {
 		if (!line) {
-			c_list_link_tail (&s->lst_head, &line_new_build (key, value)->lst);
+			line = line_new_build (key, value);
+			if (!g_hash_table_add (s->lst_idx, line))
+				nm_assert_not_reached ();
+			c_list_link_tail (&s->lst_head, &line->lst);
 			changed = TRUE;
 		} else {
 			if (line_set (line, value))
@@ -1289,6 +1429,12 @@ svSetValueBoolean (shvarFile *s, const char *key, gboolean value)
 }
 
 gboolean
+svSetValueBoolean_cond_true (shvarFile *s, const char *key, gboolean value)
+{
+	return svSetValue (s, key, value ? "yes" : NULL);
+}
+
+gboolean
 svSetValueEnum (shvarFile *s, const char *key, GType gtype, int value)
 {
 	gs_free char *v = NULL;
@@ -1317,37 +1463,42 @@ svWriteFile (shvarFile *s, int mode, GError **error)
 	FILE *f;
 	int tmpfd;
 	CList *current;
+	int errsv;
 
 	if (s->modified) {
 		if (s->fd == -1)
 			s->fd = open (s->fileName, O_WRONLY | O_CREAT | O_CLOEXEC, mode);
 		if (s->fd == -1) {
-			int errsv = errno;
-
+			errsv = errno;
 			g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errsv),
 			             "Could not open file '%s' for writing: %s",
-			             s->fileName, strerror (errsv));
+			             s->fileName, nm_strerror_native (errsv));
 			return FALSE;
 		}
 		if (ftruncate (s->fd, 0) < 0) {
-			int errsv = errno;
-
+			errsv = errno;
 			g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errsv),
 			             "Could not overwrite file '%s': %s",
-			             s->fileName, strerror (errsv));
+			             s->fileName, nm_strerror_native (errsv));
 			return FALSE;
 		}
 
 		tmpfd = fcntl (s->fd, F_DUPFD_CLOEXEC, 0);
 		if (tmpfd == -1) {
-			int errsv = errno;
-
+			errsv = errno;
 			g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errsv),
 			             "Internal error writing file '%s': %s",
-			             s->fileName, strerror (errsv));
+			             s->fileName, nm_strerror_native (errsv));
 			return FALSE;
 		}
 		f = fdopen (tmpfd, "w");
+		if (!f) {
+			errsv = errno;
+			g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errsv),
+			             "Internal error writing file '%s': %s",
+			             s->fileName, nm_strerror_native (errsv));
+			return FALSE;
+		}
 		fseek (f, 0, SEEK_SET);
 		c_list_for_each (current, &s->lst_head) {
 			const shvarLine *line = c_list_entry (current, shvarLine, lst);
@@ -1389,14 +1540,15 @@ svWriteFile (shvarFile *s, int mode, GError **error)
 void
 svCloseFile (shvarFile *s)
 {
-	CList *current, *safe;
+	shvarLine *line;
 
 	g_return_if_fail (s != NULL);
 
 	if (s->fd >= 0)
 		nm_close (s->fd);
 	g_free (s->fileName);
-	c_list_for_each_safe (current, safe, &s->lst_head)
-		line_free (c_list_entry (current, shvarLine, lst));
+	g_hash_table_destroy (s->lst_idx);
+	while ((line = c_list_first_entry (&s->lst_head, shvarLine, lst)))
+		line_free (line);
 	g_slice_free (shvarFile, s);
 }

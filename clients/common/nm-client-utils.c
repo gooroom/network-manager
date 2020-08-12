@@ -1,27 +1,15 @@
-/* nmcli - command-line tool to control NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2010 - 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-client-utils.h"
-#include "nm-utils.h"
 
+#include "nm-glib-aux/nm-secret-utils.h"
+#include "nm-glib-aux/nm-io-utils.h"
+#include "nm-utils.h"
 #include "nm-device-bond.h"
 #include "nm-device-bridge.h"
 #include "nm-device-team.h"
@@ -82,6 +70,10 @@ nmc_string_to_uint_base (const char *str,
 	char *end;
 	unsigned long int tmp;
 
+	if (!str || !str[0])
+		return FALSE;
+
+	/* FIXME: don't use this function, replace by _nm_utils_ascii_str_to_int64() */
 	errno = 0;
 	tmp = strtoul (str, &end, base);
 	if (errno || *end != '\0' || (range_check && (tmp < min || tmp > max))) {
@@ -273,6 +265,38 @@ NM_UTILS_LOOKUP_STR_DEFINE (nmc_device_state_to_string, NMDeviceState,
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_UNKNOWN,      N_("unknown")),
 )
 
+static
+NM_UTILS_LOOKUP_STR_DEFINE (_device_state_to_string, NMDeviceState,
+	NM_UTILS_LOOKUP_DEFAULT (NULL),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_PREPARE,      N_("connecting (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_CONFIG,       N_("connecting (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_NEED_AUTH,    N_("connecting (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_IP_CONFIG,    N_("connecting (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_IP_CHECK,     N_("connecting (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_SECONDARIES,  N_("connecting (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_ACTIVATED,    N_("connected (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_DEACTIVATING, N_("deactivating (externally)")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_FAILED,       N_("deactivating (externally)")),
+	NM_UTILS_LOOKUP_ITEM_IGNORE_OTHER (),
+)
+
+const char *
+nmc_device_state_to_string_with_external (NMDevice *device)
+{
+	NMActiveConnection *ac;
+	NMDeviceState state;
+	const char *s;
+
+	state = nm_device_get_state (device);
+
+	if (   (ac = nm_device_get_active_connection (device))
+	    && NM_FLAGS_HAS (nm_active_connection_get_state_flags (ac), NM_ACTIVATION_STATE_FLAG_EXTERNAL)
+	    && (s = _device_state_to_string (state)))
+		return s;
+
+	return nmc_device_state_to_string (state);
+}
+
 NM_UTILS_LOOKUP_STR_DEFINE (nmc_device_metered_to_string, NMMetered,
 	NM_UTILS_LOOKUP_DEFAULT (N_("unknown")),
 	NM_UTILS_LOOKUP_ITEM (NM_METERED_YES,       N_("yes")),
@@ -348,10 +372,11 @@ NM_UTILS_LOOKUP_STR_DEFINE (nmc_device_reason_to_string, NMDeviceStateReason,
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_NEW_ACTIVATION,                 N_("New connection activation was enqueued")),
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_PARENT_CHANGED,                 N_("The device's parent changed")),
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_PARENT_MANAGED_CHANGED,         N_("The device parent's management changed")),
-	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_OVSDB_FAILED,                   N_("OpenVSwitch database connection failed")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_OVSDB_FAILED,                   N_("Open vSwitch database connection failed")),
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_IP_ADDRESS_DUPLICATE,           N_("A duplicate IP address was detected")),
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_IP_METHOD_UNSUPPORTED,          N_("The selected IP method is not supported")),
 	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_SRIOV_CONFIGURATION_FAILED,     N_("Failed to configure SR-IOV parameters")),
+	NM_UTILS_LOOKUP_ITEM (NM_DEVICE_STATE_REASON_PEER_NOT_FOUND,                 N_("The Wi-Fi P2P peer could not be found")),
 )
 
 NM_UTILS_LOOKUP_STR_DEFINE (nm_active_connection_state_reason_to_string, NMActiveConnectionStateReason,
@@ -443,14 +468,14 @@ nmc_activation_get_effective_state (NMActiveConnection *active,
 }
 
 static gboolean
-can_show_graphics (void)
+can_show_utf8 (void)
 {
-	static gboolean can_show_graphics_set = FALSE;
-	gboolean can_show_graphics = TRUE;
+	static gboolean can_show_utf8_set = FALSE;
+	static gboolean can_show_utf8 = TRUE;
 	char *locale_str;
 
-	if (G_LIKELY (can_show_graphics_set))
-		return can_show_graphics;
+	if (G_LIKELY (can_show_utf8_set))
+		return can_show_utf8;
 
 	if (!g_get_charset (NULL)) {
 		/* Non-UTF-8 locale */
@@ -458,8 +483,23 @@ can_show_graphics (void)
 		if (locale_str)
 			g_free (locale_str);
 		else
-			can_show_graphics = FALSE;
+			can_show_utf8 = FALSE;
 	}
+
+	return can_show_utf8;
+}
+
+
+static gboolean
+can_show_graphics (void)
+{
+	static gboolean can_show_graphics_set = FALSE;
+	static gboolean can_show_graphics = TRUE;
+
+	if (G_LIKELY (can_show_graphics_set))
+		return can_show_graphics;
+
+	can_show_graphics = can_show_utf8 ();
 
 	/* The linux console font typically doesn't have characters we need */
 	if (g_strcmp0 (g_getenv ("TERM"), "linux") == 0)
@@ -509,4 +549,262 @@ nmc_password_subst_char (void)
 		return "\u2022"; /* Bullet */
 	else
 		return "*";
+}
+
+/*
+ * We actually use a small part of qrcodegen.c, but we'd prefer to keep it
+ * intact. Include it instead of linking to it to give the compiler a
+ * chance to optimize bits we don't need away.
+ */
+
+#pragma GCC visibility push(hidden)
+NM_PRAGMA_WARNING_DISABLE("-Wdeclaration-after-statement")
+#undef NDEBUG
+#define NDEBUG
+#include "qrcodegen.c"
+NM_PRAGMA_WARNING_REENABLE
+#pragma GCC visibility pop
+
+void
+nmc_print_qrcode (const char *str)
+{
+	uint8_t tempBuffer[qrcodegen_BUFFER_LEN_FOR_VERSION (qrcodegen_VERSION_MAX)];
+	uint8_t qrcode[qrcodegen_BUFFER_LEN_FOR_VERSION (qrcodegen_VERSION_MAX)];
+	gboolean term_linux;
+	int size;
+	int x;
+	int y;
+
+	term_linux = g_strcmp0 (g_getenv ("TERM"), "linux") == 0;
+	if (!term_linux && !can_show_graphics ())
+		return;
+
+	if (!qrcodegen_encodeText (str,
+	                           tempBuffer,
+	                           qrcode,
+	                           qrcodegen_Ecc_LOW,
+	                           qrcodegen_VERSION_MIN,
+	                           qrcodegen_VERSION_MAX,
+	                           qrcodegen_Mask_AUTO,
+	                           FALSE)) {
+		return;
+	}
+
+	size = qrcodegen_getSize (qrcode);
+
+	g_print ("\n");
+
+	if (term_linux) {
+		/* G1 alternate character set on Linux console. */
+		for (y = -1; y < size + 1; y += 1) {
+			g_print ("  \033[37;40;1m\016");
+			for (x = -1; x < size + 1; x++) {
+				g_print (  qrcodegen_getModule (qrcode, x, y)
+				         ? "  " : "\060\060");
+			}
+			g_print ("\017\033[0m\n");
+		}
+	} else {
+		/* UTF-8 */
+		for (y = -2; y < size + 2; y += 2) {
+			g_print ("  \033[37;40m");
+			for (x = -2; x < size + 2; x++) {
+				bool top = qrcodegen_getModule (qrcode, x, y);
+				bool bottom = qrcodegen_getModule (qrcode, x, y + 1);
+				if (top) {
+					g_print (bottom ? " " : "\u2584");
+				} else {
+					g_print (bottom ? "\u2580" : "\u2588");
+				}
+			}
+			g_print ("\033[0m\n");
+		}
+	}
+}
+
+/**
+ * nmc_utils_read_passwd_file:
+ * @passwd_file: file with passwords to parse
+ * @out_error_line: returns in case of a syntax error in the file, the line
+ *   on which it occurred.
+ * @error: location to store error, or %NULL
+ *
+ * Parse passwords given in @passwd_file and insert them into a hash table.
+ * Example of @passwd_file contents:
+ *   wifi.psk:tajne heslo
+ *   802-1x.password:krakonos
+ *   802-11-wireless-security:leap-password:my leap password
+ *
+ * Returns: (transfer full): hash table with parsed passwords, or %NULL on an error
+ */
+GHashTable *
+nmc_utils_read_passwd_file (const char *passwd_file,
+                            gssize *out_error_line,
+                            GError **error)
+{
+	nm_auto_clear_secret_ptr NMSecretPtr contents = { 0 };
+
+	NM_SET_OUT (out_error_line, -1);
+
+	if (!passwd_file)
+		return g_hash_table_new_full (nm_str_hash, g_str_equal, g_free, (GDestroyNotify) nm_free_secret);
+
+	if (!nm_utils_file_get_contents (-1,
+	                                 passwd_file,
+	                                 1024*1024,
+	                                 NM_UTILS_FILE_GET_CONTENTS_FLAG_SECRET,
+	                                 &contents.str,
+	                                 &contents.len,
+	                                 NULL,
+	                                 error))
+		return NULL;
+
+	return nmc_utils_parse_passwd_file (contents.str, out_error_line, error);
+}
+
+GHashTable *
+nmc_utils_parse_passwd_file (char *contents /* will be modified */,
+                             gssize *out_error_line,
+                             GError **error)
+{
+	gs_unref_hashtable GHashTable *pwds_hash = NULL;
+	const char *contents_str;
+	gsize contents_line;
+
+	pwds_hash = g_hash_table_new_full (nm_str_hash, g_str_equal, g_free, (GDestroyNotify) nm_free_secret);
+
+	NM_SET_OUT (out_error_line, -1);
+
+	contents_str = contents;
+	contents_line = 0;
+	while (contents_str[0]) {
+		nm_auto_free_secret char *l_hash_key = NULL;
+		nm_auto_free_secret char *l_hash_val = NULL;
+		const char *l_content_line;
+		const char *l_setting;
+		const char *l_prop;
+		const char *l_val;
+		const char *s;
+		gsize l_hash_val_len;
+
+		/* consume first line. As line delimiters we accept "\r\n", "\n", and "\r". */
+		l_content_line = contents_str;
+		s = l_content_line;
+		while (!NM_IN_SET (s[0], '\0', '\r', '\n'))
+			s++;
+		if (s[0] != '\0') {
+			if (   s[0] == '\r'
+			    && s[1] == '\n') {
+				((char *) s)[0] = '\0';
+				s += 2;
+			} else {
+				((char *) s)[0] = '\0';
+				s += 1;
+			}
+		}
+		contents_str = s;
+		contents_line++;
+
+		l_content_line = nm_str_skip_leading_spaces (l_content_line);
+		if (NM_IN_SET (l_content_line[0], '\0', '#')) {
+			/* a comment or empty line. Ignore. */
+			continue;
+		}
+
+		l_setting = l_content_line;
+
+		s = l_setting;
+		while (!NM_IN_SET (s[0], '\0', ':', '='))
+			s++;
+		if (s[0] == '\0') {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("missing colon for \"<setting>.<property>:<secret>\" format"));
+			return NULL;
+		}
+		((char *) s)[0] = '\0';
+		s++;
+
+		l_val = s;
+
+		g_strchomp ((char *) l_setting);
+
+		nm_assert (nm_str_is_stripped (l_setting));
+
+		s = strchr (l_setting, '.');
+		if (!s) {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("missing dot for \"<setting>.<property>:<secret>\" format"));
+			return NULL;
+		} else if (s == l_setting) {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("missing setting for \"<setting>.<property>:<secret>\" format"));
+			return NULL;
+		}
+		((char *) s)[0] = '\0';
+		s++;
+
+		l_prop = s;
+		if (l_prop[0] == '\0') {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("missing property for \"<setting>.<property>:<secret>\" format"));
+			return NULL;
+		}
+
+		/* Accept wifi-sec or wifi instead of cumbersome '802-11-wireless-security' */
+		if (NM_IN_STRSET (l_setting, "wifi-sec", "wifi"))
+			l_setting = NM_SETTING_WIRELESS_SECURITY_SETTING_NAME;
+
+		if (nm_setting_lookup_type (l_setting) == G_TYPE_INVALID) {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("invalid setting name"));
+			return NULL;
+		}
+
+		if (   nm_streq (l_setting, "vpn")
+		    && NM_STR_HAS_PREFIX (l_prop, "secret.")) {
+			/* in 1.12.0, we wrongly required the VPN secrets to be named
+			 * "vpn.secret". It should be "vpn.secrets". Work around it
+			 * (rh#1628833). */
+			l_hash_key = g_strdup_printf ("vpn.secrets.%s", &l_prop[NM_STRLEN ("secret.")]);
+		} else
+			l_hash_key = g_strdup_printf ("%s.%s", l_setting, l_prop);
+
+		if (!g_utf8_validate (l_hash_key, -1, NULL)) {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("property name is not UTF-8"));
+			return NULL;
+		}
+
+		/* Support backslash escaping in the secret value. We strip non-escaped leading/trailing whitespaces. */
+		s = nm_utils_buf_utf8safe_unescape (l_val, NM_UTILS_STR_UTF8_SAFE_UNESCAPE_STRIP_SPACES, &l_hash_val_len, (gpointer *) &l_hash_val);
+		if (!l_hash_val)
+			l_hash_val = g_strdup (s);
+
+		if (!g_utf8_validate (l_hash_val, -1, NULL)) {
+			/* In some cases it might make sense to support binary secrets (like the WPA-PSK which has no
+			 * defined encoding. However, all API that follows can only handle UTF-8, and no mechanism
+			 * to escape the secrets. Reject non-UTF-8 early. */
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("secret is not UTF-8"));
+			return NULL;
+		}
+
+		if (strlen (l_hash_val) != l_hash_val_len) {
+			NM_SET_OUT (out_error_line, contents_line);
+			nm_utils_error_set (error, NM_UTILS_ERROR_UNKNOWN,
+			                    _("secret is not UTF-8"));
+			return NULL;
+		}
+
+		g_hash_table_insert (pwds_hash, g_steal_pointer (&l_hash_key), g_steal_pointer (&l_hash_val));
+	}
+
+	return g_steal_pointer (&pwds_hash);
 }

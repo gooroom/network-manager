@@ -1,22 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * (C) Copyright 2015 Red Hat, Inc.
+// SPDX-License-Identifier: LGPL-2.1+
+/*
+ * Copyright (C) 2015 Red Hat, Inc.
  */
 
 #ifndef __NM_DEFAULT_H__
@@ -30,8 +14,6 @@
 #define NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE           (1 <<  5)
 #define NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE_INTERNAL  (1 <<  6)
 #define NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE_PRIVATE   (1 <<  7)
-#define NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_UTIL           (1 <<  8)
-#define NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB           (1 <<  9)
 #define NM_NETWORKMANAGER_COMPILATION_WITH_DAEMON               (1 << 10)
 #define NM_NETWORKMANAGER_COMPILATION_WITH_SYSTEMD              (1 << 11)
 
@@ -52,17 +34,6 @@
                                                      | NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE_INTERNAL \
                                                      )
 
-#define NM_NETWORKMANAGER_COMPILATION_LIBNM_UTIL     ( 0 \
-                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_GLIB \
-                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_GLIB_I18N_LIB \
-                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_UTIL \
-                                                     )
-
-#define NM_NETWORKMANAGER_COMPILATION_LIBNM_GLIB     ( 0 \
-                                                     | NM_NETWORKMANAGER_COMPILATION_LIBNM_UTIL \
-                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB \
-                                                     )
-
 #define NM_NETWORKMANAGER_COMPILATION_CLIENT         ( 0 \
                                                      | NM_NETWORKMANAGER_COMPILATION_WITH_GLIB \
                                                      | NM_NETWORKMANAGER_COMPILATION_WITH_GLIB_I18N_PROG \
@@ -78,9 +49,14 @@
                                                      | NM_NETWORKMANAGER_COMPILATION_WITH_DAEMON \
                                                      )
 
+#define NM_NETWORKMANAGER_COMPILATION_SYSTEMD_SHARED ( 0 \
+                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_GLIB \
+                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_SYSTEMD \
+                                                     )
+
 #define NM_NETWORKMANAGER_COMPILATION_SYSTEMD        ( 0 \
                                                      | NM_NETWORKMANAGER_COMPILATION_DAEMON \
-                                                     | NM_NETWORKMANAGER_COMPILATION_WITH_SYSTEMD \
+                                                     | NM_NETWORKMANAGER_COMPILATION_SYSTEMD_SHARED \
                                                      )
 
 #define NM_NETWORKMANAGER_COMPILATION_GLIB           ( 0 \
@@ -179,7 +155,7 @@
 #if NM_MORE_ASSERTS == 0
 #ifndef G_DISABLE_CAST_CHECKS
 /* Unless compiling with G_DISABLE_CAST_CHECKS, glib performs type checking
- * during G_VARIANT_TYPE() via g_variant_type_checked_(). This is not necesary
+ * during G_VARIANT_TYPE() via g_variant_type_checked_(). This is not necessary
  * because commonly this cast is needed during something like
  *
  *   g_variant_builder_init (&props, G_VARIANT_TYPE ("a{sv}"));
@@ -285,26 +261,27 @@ _nm_g_return_if_fail_warning (const char *log_domain,
 
 /*****************************************************************************/
 
-#include "nm-utils/nm-macros-internal.h"
-#include "nm-utils/nm-shared-utils.h"
-
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_UTIL
-/* no hash-utils in legacy code. */
-#else
-#include "nm-utils/nm-hash-utils.h"
-#endif
+#include "nm-glib-aux/nm-macros-internal.h"
+#include "nm-glib-aux/nm-shared-utils.h"
+#include "nm-glib-aux/nm-errno.h"
+#include "nm-glib-aux/nm-hash-utils.h"
 
 /*****************************************************************************/
 
-#if (NETWORKMANAGER_COMPILATION) & (NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE | NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_UTIL)
+#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE
 #include "nm-version.h"
 #endif
 
 /*****************************************************************************/
 
 #if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_DAEMON
+#include "nm-core-types.h"
 #include "nm-types.h"
 #include "nm-logging.h"
+#endif
+
+#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_PRIVATE
+#include "nm-libnm-utils.h"
 #endif
 
 #if ((NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM) && !((NETWORKMANAGER_COMPILATION) & (NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_PRIVATE | NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_CORE_INTERNAL))

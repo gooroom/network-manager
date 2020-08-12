@@ -1,20 +1,6 @@
-/* NetworkManager initrd configuration generator
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2014 - 2018 Red Hat, Inc.
+// SPDX-License-Identifier: LGPL-2.1+
+/*
+ * Copyright (C) 2014 - 2018 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -22,18 +8,15 @@
 #include "nm-initrd-generator.h"
 
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <sys/inotify.h>
-#include <errno.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
 #include "nm-core-internal.h"
-#include "platform/nm-platform.h"
 #include "NetworkManagerUtils.h"
 
 /*****************************************************************************/
@@ -173,6 +156,10 @@ ip_setting_add_from_block (GHashTable *nic,
 	if (!s_ip6) {
 		s_ip6 = (NMSettingIPConfig *) nm_setting_ip6_config_new ();
 		nm_connection_add_setting (connection, (NMSetting *) s_ip6);
+
+		g_object_set (s_ip6,
+		              NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE, (int) NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_EUI64,
+		              NULL);
 	}
 
 	family = guess_ip_address_family (s_ipaddr);
@@ -183,7 +170,7 @@ ip_setting_add_from_block (GHashTable *nic,
 	case AF_INET:
 		s_ip = s_ip4;
 		g_object_set (s_ip6, NM_SETTING_IP_CONFIG_METHOD,
-		              NM_SETTING_IP6_CONFIG_METHOD_IGNORE, NULL);
+		              NM_SETTING_IP6_CONFIG_METHOD_DISABLED, NULL);
 		break;
 	case AF_INET6:
 		s_ip = s_ip6;
@@ -197,12 +184,12 @@ ip_setting_add_from_block (GHashTable *nic,
 		return FALSE;
 	}
 
-	if (   (g_strcmp0 (s_origin, "3") == 0 && family == AF_INET)
-	    || (g_strcmp0 (s_origin, "4") == 0 && family == AF_INET)) {
+	if (   (nm_streq0 (s_origin, "3") && family == AF_INET)
+	    || (nm_streq0 (s_origin, "4") && family == AF_INET)) {
 		method = NM_SETTING_IP4_CONFIG_METHOD_AUTO;
-	} else if (g_strcmp0 (s_origin, "3") == 0 && family == AF_INET6) {
+	} else if (nm_streq0 (s_origin, "3") && family == AF_INET6) {
 		method = NM_SETTING_IP6_CONFIG_METHOD_DHCP;
-	} else if (g_strcmp0 (s_origin, "4") == 0 && family == AF_INET6) {
+	} else if (nm_streq0 (s_origin, "4") && family == AF_INET6) {
 		method = NM_SETTING_IP6_CONFIG_METHOD_AUTO;
 	} else if (family == AF_INET) {
 		method = NM_SETTING_IP4_CONFIG_METHOD_MANUAL;
@@ -212,23 +199,23 @@ ip_setting_add_from_block (GHashTable *nic,
 		g_return_val_if_reached (FALSE);
 	}
 	g_object_set (s_ip,
-                      NM_SETTING_IP_CONFIG_METHOD, method,
-                      NM_SETTING_IP_CONFIG_MAY_FAIL, FALSE,
+	              NM_SETTING_IP_CONFIG_METHOD, method,
+	              NM_SETTING_IP_CONFIG_MAY_FAIL, FALSE,
 	              NULL);
 
-	if (s_gateway && !nm_utils_ipaddr_valid (family, s_gateway)) {
+	if (s_gateway && !nm_utils_ipaddr_is_valid (family, s_gateway)) {
 		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_INVALID_CONNECTION,
 		             "iBFT: invalid IP gateway '%s'.", s_gateway);
 		return FALSE;
 	}
 
-	if (s_dns1 && !nm_utils_ipaddr_valid (family, s_dns1)) {
+	if (s_dns1 && !nm_utils_ipaddr_is_valid (family, s_dns1)) {
 		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_INVALID_CONNECTION,
 		             "iBFT: invalid DNS1 address '%s'.", s_dns1);
 		return FALSE;
 	}
 
-	if (s_dns2 && !nm_utils_ipaddr_valid (family, s_dns2)) {
+	if (s_dns2 && !nm_utils_ipaddr_is_valid (family, s_dns2)) {
 		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_INVALID_CONNECTION,
 		             "iBFT: invalid DNS2 address '%s'.", s_dns2);
 		return FALSE;
@@ -308,6 +295,7 @@ connection_setting_add (GHashTable *nic,
 	              NM_SETTING_CONNECTION_TYPE, type,
 	              NM_SETTING_CONNECTION_UUID, uuid,
 	              NM_SETTING_CONNECTION_ID, id,
+	              NM_SETTING_CONNECTION_INTERFACE_NAME, NULL,
 	              NULL);
 
 	g_free (uuid);

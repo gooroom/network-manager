@@ -1,13 +1,8 @@
+# SPDX-License-Identifier: LGPL-2.1+
+
 name = 'nmtui'
 
-deps = [
-  newt_dep,
-  nm_core_dep
-]
-
-cflags = clients_cflags + [
-  '-DG_LOG_DOMAIN="@0@"'.format(name),
-]
+common_c_flags = clients_c_flags + ['-DG_LOG_DOMAIN="@0@"'.format(name)]
 
 subdir('newt')
 
@@ -51,21 +46,23 @@ sources = files(
   'nmtui-edit.c',
   'nmtui-hostname.c',
   'nmt-utils.c',
-  'nmt-widget-list.c'
+  'nmt-widget-list.c',
 )
 
-deps += [
-  libnm_dep,
+deps = [
   libnmc_base_dep,
-  libnmt_newt_dep
+  libnmc_dep,
+  libnmt_newt_dep,
+  libnm_libnm_aux_dep,
 ]
 
 executable(
   name,
   sources,
   dependencies: deps,
-  c_args: cflags,
+  c_args: common_c_flags,
+  link_with: libnm_systemd_logging_stub,
   link_args: ldflags_linker_script_binary,
   link_depends: linker_script_binary,
-  install: true
+  install: true,
 )

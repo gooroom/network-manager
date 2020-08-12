@@ -1,23 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2017 Red Hat, Inc.
- * Copyright 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2017 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
  */
 
 #ifndef __NM_SETTING_WIRELESS_SECURITY_H__
@@ -54,9 +38,9 @@ G_BEGIN_DECLS
  * @NM_WEP_KEY_TYPE_LAST: placeholder value for bounds-checking
  *
  * The #NMWepKeyType values specify how any WEP keys present in the setting
- * are intepreted.  There are no standards governing how to hash the various WEP
+ * are interpreted.  There are no standards governing how to hash the various WEP
  * key/passphrase formats into the actual WEP key.  Unfortunately some WEP keys
- * can be interpreted in multiple ways, requring the setting to specify how to
+ * can be interpreted in multiple ways, requiring the setting to specify how to
  * interpret the any WEP keys.  For example, the key "732f2d712e4a394a375d366931"
  * is both a valid Hexadecimal WEP key and a WEP passphrase.  Further, many
  * ASCII keys are also valid WEP passphrases, but since passphrases and ASCII
@@ -99,9 +83,12 @@ typedef enum {
  *
  * Configure the use of WPS by a connection while it activates.
  *
+ * Note: prior to 1.16, this was a GEnum type instead of a GFlags type
+ * although, with the same numeric values.
+ *
  * Since: 1.10
  **/
-typedef enum {
+typedef enum { /*< flags >*/
 	NM_SETTING_WIRELESS_SECURITY_WPS_METHOD_DEFAULT     = 0x00000000,
 	NM_SETTING_WIRELESS_SECURITY_WPS_METHOD_DISABLED    = 0x00000001,
 	NM_SETTING_WIRELESS_SECURITY_WPS_METHOD_AUTO        = 0x00000002,

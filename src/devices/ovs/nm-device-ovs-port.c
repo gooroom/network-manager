@@ -1,25 +1,12 @@
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-device-ovs-port.h"
+#include "nm-device-ovs-interface.h"
 #include "nm-ovsdb.h"
 
 #include "devices/nm-device-private.h"
@@ -71,17 +58,10 @@ get_generic_capabilities (NMDevice *device)
 }
 
 static NMActStageReturn
-act_stage3_ip4_config_start (NMDevice *device,
-                             NMIP4Config **out_config,
-                             NMDeviceStateReason *out_failure_reason)
-{
-	return NM_ACT_STAGE_RETURN_IP_FAIL;
-}
-
-static NMActStageReturn
-act_stage3_ip6_config_start (NMDevice *device,
-                             NMIP6Config **out_config,
-                             NMDeviceStateReason *out_failure_reason)
+act_stage3_ip_config_start (NMDevice *device,
+                            int addr_family,
+                            gpointer *out_config,
+                            NMDeviceStateReason *out_failure_reason)
 {
 	return NM_ACT_STAGE_RETURN_IP_FAIL;
 }
@@ -106,21 +86,35 @@ add_iface_cb (GError *error, gpointer user_data)
 static gboolean
 enslave_slave (NMDevice *device, NMDevice *slave, NMConnection *connection, gboolean configure)
 {
+	NMDeviceOvsPort *self = NM_DEVICE_OVS_PORT (device);
 	NMActiveConnection *ac_port = NULL;
 	NMActiveConnection *ac_bridge = NULL;
+	NMDevice *bridge_device;
 
 	if (!configure)
 		return TRUE;
 
 	ac_port = NM_ACTIVE_CONNECTION (nm_device_get_act_request (device));
 	ac_bridge = nm_active_connection_get_master (ac_port);
-	if (!ac_bridge)
-		ac_bridge = ac_port;
+	if (!ac_bridge) {
+		_LOGW (LOGD_DEVICE, "can't enslave %s: bridge active-connection not found",
+		       nm_device_get_iface (slave));
+		return FALSE;
+	}
+
+	bridge_device = nm_active_connection_get_device (ac_bridge);
+	if (!bridge_device) {
+		_LOGW (LOGD_DEVICE, "can't enslave %s: bridge device not found",
+		       nm_device_get_iface (slave));
+		return FALSE;
+	}
 
 	nm_ovsdb_add_interface (nm_ovsdb_get (),
 	                        nm_active_connection_get_applied_connection (ac_bridge),
 	                        nm_device_get_applied_connection (device),
 	                        nm_device_get_applied_connection (slave),
+	                        bridge_device,
+	                        slave,
 	                        add_iface_cb, g_object_ref (slave));
 
 	return TRUE;
@@ -146,8 +140,18 @@ del_iface_cb (GError *error, gpointer user_data)
 static void
 release_slave (NMDevice *device, NMDevice *slave, gboolean configure)
 {
-	nm_ovsdb_del_interface (nm_ovsdb_get (), nm_device_get_iface (slave),
-	                        del_iface_cb, g_object_ref (slave));
+	NMDeviceOvsPort *self = NM_DEVICE_OVS_PORT (device);
+
+	if (configure) {
+		_LOGI (LOGD_DEVICE, "releasing ovs interface %s", nm_device_get_ip_iface (slave));
+		nm_ovsdb_del_interface (nm_ovsdb_get (), nm_device_get_iface (slave),
+		                        del_iface_cb, g_object_ref (slave));
+		/* Open VSwitch is going to delete this one. We must ignore what happens
+		 * next with the interface. */
+		if (NM_IS_DEVICE_OVS_INTERFACE (slave))
+			nm_device_update_from_platform_link (slave, NULL);
+	} else
+		_LOGI (LOGD_DEVICE, "ovs interface %s was released", nm_device_get_ip_iface (slave));
 }
 
 /*****************************************************************************/
@@ -186,8 +190,7 @@ nm_device_ovs_port_class_init (NMDeviceOvsPortClass *klass)
 	device_class->get_type_description = get_type_description;
 	device_class->create_and_realize = create_and_realize;
 	device_class->get_generic_capabilities = get_generic_capabilities;
-	device_class->act_stage3_ip4_config_start = act_stage3_ip4_config_start;
-	device_class->act_stage3_ip6_config_start = act_stage3_ip6_config_start;
+	device_class->act_stage3_ip_config_start = act_stage3_ip_config_start;
 	device_class->enslave_slave = enslave_slave;
 	device_class->release_slave = release_slave;
 }

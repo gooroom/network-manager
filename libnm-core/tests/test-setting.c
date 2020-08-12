@@ -1,27 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2008 - 2017 Red Hat, Inc.
- *
+ * Copyright (C) 2008 - 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include <linux/pkt_sched.h>
-#include <string.h>
+#include <net/if.h>
 
+#include "nm-core-internal.h"
 #include "nm-utils.h"
 #include "nm-utils-private.h"
 #include "nm-core-internal.h"
@@ -37,11 +24,115 @@
 #include "nm-simple-connection.h"
 #include "nm-setting-connection.h"
 #include "nm-errors.h"
-#include "nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
 
 #include "nm-utils/nm-test-utils.h"
 
 #define TEST_CERT_DIR NM_BUILD_SRCDIR"/libnm-core/tests/certs"
+
+/*****************************************************************************/
+
+/* assert that the define is just a plain integer (boolean). */
+
+G_STATIC_ASSERT (   (WITH_JSON_VALIDATION) == 1
+                 || (WITH_JSON_VALIDATION) == 0);
+
+_nm_unused static const int _with_json_validation = WITH_JSON_VALIDATION;
+
+/*****************************************************************************/
+
+/* converts @dict to a connection. In this case, @dict must be good, without warnings, so that
+ * NM_SETTING_PARSE_FLAGS_STRICT and NM_SETTING_PARSE_FLAGS_BEST_EFFORT yield the exact same results. */
+static NMConnection *
+_connection_new_from_dbus_strict (GVariant *dict,
+                                  gboolean normalize)
+{
+	gs_unref_object NMConnection *con_x_0 = NULL;
+	gs_unref_object NMConnection *con_x_s = NULL;
+	gs_unref_object NMConnection *con_x_e = NULL;
+	gs_unref_object NMConnection *con_n_0 = NULL;
+	gs_unref_object NMConnection *con_n_s = NULL;
+	gs_unref_object NMConnection *con_n_e = NULL;
+	gs_free_error GError *error = NULL;
+	guint i;
+
+	g_assert (g_variant_is_of_type (dict, NM_VARIANT_TYPE_CONNECTION));
+
+	con_x_0 = _nm_simple_connection_new_from_dbus (dict, NM_SETTING_PARSE_FLAGS_NONE, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con_x_0), error);
+
+	con_x_s = _nm_simple_connection_new_from_dbus (dict, NM_SETTING_PARSE_FLAGS_STRICT, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con_x_s), error);
+
+	con_x_e = _nm_simple_connection_new_from_dbus (dict, NM_SETTING_PARSE_FLAGS_BEST_EFFORT, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con_x_e), error);
+
+	con_n_0 = _nm_simple_connection_new_from_dbus (dict, NM_SETTING_PARSE_FLAGS_NORMALIZE, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con_n_0), error);
+
+	con_n_s = _nm_simple_connection_new_from_dbus (dict, NM_SETTING_PARSE_FLAGS_STRICT | NM_SETTING_PARSE_FLAGS_NORMALIZE, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con_n_s), error);
+
+	con_n_e = _nm_simple_connection_new_from_dbus (dict, NM_SETTING_PARSE_FLAGS_BEST_EFFORT | NM_SETTING_PARSE_FLAGS_NORMALIZE, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con_n_e), error);
+
+	nmtst_assert_connection_verifies (con_x_0);
+	nmtst_assert_connection_verifies (con_x_e);
+	nmtst_assert_connection_verifies (con_x_s);
+
+	nmtst_assert_connection_verifies_without_normalization (con_n_0);
+	nmtst_assert_connection_verifies_without_normalization (con_n_e);
+	nmtst_assert_connection_verifies_without_normalization (con_n_s);
+
+	/* randomly compare some pairs that we created. They must all be equal,
+	 * after accounting for normalization. */
+	for (i = 0; i < 10; i++) {
+		NMConnection *cons[] = { con_x_0, con_x_s, con_x_e, con_n_0, con_n_s, con_n_e };
+		guint idx_a = (nmtst_get_rand_uint32 () % G_N_ELEMENTS (cons));
+		guint idx_b = (nmtst_get_rand_uint32 () % G_N_ELEMENTS (cons));
+		gboolean normalize_a, normalize_b;
+
+		if (idx_a <= 2 && idx_b <= 2) {
+			normalize_a = nmtst_get_rand_bool ();
+			normalize_b = normalize_a;
+		} else if (idx_a > 2 && idx_b > 2) {
+			normalize_a = nmtst_get_rand_bool ();
+			normalize_b = nmtst_get_rand_bool ();
+		} else {
+			normalize_a = (idx_a <= 2) ? TRUE : nmtst_get_rand_bool ();
+			normalize_b = (idx_b <= 2) ? TRUE : nmtst_get_rand_bool ();
+		}
+		nmtst_assert_connection_equals (cons[idx_a], normalize_a, cons[idx_b], normalize_b);
+	}
+
+	return (normalize)
+	       ? g_steal_pointer (&con_x_0)
+	       : g_steal_pointer (&con_n_0);
+}
+
+/*****************************************************************************/
+
+static char *
+_create_random_ipaddr (int addr_family, gboolean as_service)
+{
+	char delimiter = as_service ? ':' : '/';
+	int num;
+
+	if (addr_family == AF_UNSPEC)
+		addr_family = nmtst_rand_select (AF_INET, AF_INET6);
+
+	g_assert (NM_IN_SET (addr_family, AF_INET, AF_INET6));
+
+	if (as_service)
+		num = (nmtst_get_rand_uint32 () % 1000) + 30000;
+	else
+		num = addr_family == AF_INET ? 32 : 128;
+
+	if (addr_family == AF_INET)
+		return g_strdup_printf ("192.168.%u.%u%c%d", nmtst_get_rand_uint32 () % 256, nmtst_get_rand_uint32 () % 256, delimiter, num);
+	else
+		return g_strdup_printf ("a:b:c::%02x:%02x%c%d", nmtst_get_rand_uint32 () % 256, nmtst_get_rand_uint32 () % 256, delimiter, num);
+}
 
 /*****************************************************************************/
 
@@ -409,8 +500,6 @@ create_bond_connection (NMConnection **con, NMSettingBond **s_bond)
 	                                        NULL,
 	                                        NM_SETTING_BOND_SETTING_NAME,
 	                                        &s_con);
-	g_assert (*con);
-	g_assert (s_con);
 
 	g_object_set (s_con, NM_SETTING_CONNECTION_INTERFACE_NAME, "bond0", NULL);
 
@@ -421,31 +510,25 @@ create_bond_connection (NMConnection **con, NMSettingBond **s_bond)
 }
 
 #define test_verify_options(exp, ...) \
-	G_STMT_START { \
-		const char *__opts[] = { __VA_ARGS__ , NULL }; \
-		\
-		_test_verify_options (__opts, exp); \
-	} G_STMT_END
+	_test_verify_options (exp, NM_MAKE_STRV (__VA_ARGS__))
 
 static void
-_test_verify_options (const char **options, gboolean expected_result)
+_test_verify_options (gboolean expected_result,
+                      const char *const *options)
 {
 	gs_unref_object NMConnection *con = NULL;
 	NMSettingBond *s_bond;
-	GError *error = NULL;
-	gboolean success;
-	const char **option;
+	const char *const *option;
+
+	g_assert (NM_PTRARRAY_LEN (options) % 2 == 0);
 
 	create_bond_connection (&con, &s_bond);
 
-	for (option = options; option[0] && option[1]; option += 2)
+	for (option = options; option[0]; option += 2)
 		g_assert (nm_setting_bond_add_option (s_bond, option[0], option[1]));
 
 	if (expected_result) {
 		nmtst_assert_connection_verifies_and_normalizable (con);
-		nmtst_connection_normalize (con);
-		success = nm_setting_verify ((NMSetting *) s_bond, con, &error);
-		nmtst_assert_success (success, error);
 	} else {
 		nmtst_assert_connection_unnormalizable (con,
 		                                        NM_CONNECTION_ERROR,
@@ -498,6 +581,25 @@ test_bond_verify (void)
 	test_verify_options (TRUE,
 	                     "mode", "802.3ad",
 	                     "ad_actor_system", "ae:00:11:33:44:55");
+	test_verify_options (TRUE,
+	                     "mode", "0",
+	                     "miimon", "0",
+	                     "updelay", "0",
+	                     "downdelay", "0");
+	test_verify_options (TRUE,
+	                     "mode", "0",
+	                     "downdelay", "0",
+	                     "updelay", "0");
+	test_verify_options (TRUE,
+	                     "mode", "0",
+	                     "miimon", "100",
+	                     "arp_ip_target", "1.1.1.1",
+	                     "arp_interval", "200");
+	test_verify_options (TRUE,
+	                     "mode", "0",
+	                     "downdelay", "100",
+	                     "arp_ip_target", "1.1.1.1",
+	                     "arp_interval", "200");
 }
 
 static void
@@ -534,21 +636,23 @@ test_bond_compare (void)
 	                           ((const char *[]){ "mode", "balance-rr", "miimon", "1", NULL }),
 	                           ((const char *[]){ "mode", "balance-rr", "miimon", "2", NULL }));
 
-	/* ignore default values */
-	test_bond_compare_options (TRUE,
+	test_bond_compare_options (FALSE,
 	                           ((const char *[]){ "miimon", "1", NULL }),
 	                           ((const char *[]){ "miimon", "1", "updelay", "0", NULL }));
 
-	/* special handling of num_grat_arp, num_unsol_na */
 	test_bond_compare_options (FALSE,
 	                           ((const char *[]){ "num_grat_arp", "2", NULL }),
 	                           ((const char *[]){ "num_grat_arp", "1", NULL }));
-	test_bond_compare_options (TRUE,
+	test_bond_compare_options (FALSE,
 	                           ((const char *[]){ "num_grat_arp", "3", NULL }),
 	                           ((const char *[]){ "num_unsol_na", "3", NULL }));
-	test_bond_compare_options (TRUE,
+	test_bond_compare_options (FALSE,
 	                           ((const char *[]){ "num_grat_arp", "4", NULL }),
 	                           ((const char *[]){ "num_unsol_na", "4", "num_grat_arp", "4", NULL }));
+
+	test_bond_compare_options (FALSE,
+	                           ((const char *[]){ "mode", "balance-rr", "miimon", "100", NULL }),
+	                           ((const char *[]){ "mode", "balance-rr", NULL }));
 }
 
 static void
@@ -874,7 +978,6 @@ test_dcb_bandwidth_sums (void)
 
 /*****************************************************************************/
 
-#if WITH_JSON_VALIDATION
 static void
 _test_team_config_sync (const char *team_config,
                         int notify_peer_count,
@@ -897,26 +1000,31 @@ _test_team_config_sync (const char *team_config,
 	guint i, j;
 	gboolean found;
 
+	if (!WITH_JSON_VALIDATION) {
+		g_test_skip ("team test requires JSON validation");
+		return;
+	}
+
 	s_team = (NMSettingTeam *) nm_setting_team_new ();
 	g_assert (s_team);
 
 	g_object_set (s_team, NM_SETTING_TEAM_CONFIG, team_config, NULL);
-	g_assert (nm_setting_team_get_notify_peers_count (s_team) == notify_peer_count);
-	g_assert (nm_setting_team_get_notify_peers_interval (s_team) == notify_peers_interval);
-	g_assert (nm_setting_team_get_mcast_rejoin_count (s_team) == mcast_rejoin_count);
-	g_assert (nm_setting_team_get_mcast_rejoin_interval (s_team) == mcast_rejoin_interval);
-	g_assert (nm_setting_team_get_runner_tx_balancer_interval (s_team) == runner_tx_balancer_interval);
-	g_assert (nm_setting_team_get_runner_active (s_team) == runner_active);
-	g_assert (nm_setting_team_get_runner_fast_rate (s_team) == runner_fast_rate);
-	g_assert (nm_setting_team_get_runner_sys_prio (s_team) == runner_sys_prio);
-	g_assert (nm_setting_team_get_runner_min_ports (s_team) == runner_min_ports);
-	g_assert (nm_streq0 (nm_setting_team_get_runner (s_team), runner));
-	g_assert (nm_streq0 (nm_setting_team_get_runner_hwaddr_policy (s_team), runner_hwaddr_policy));
-	g_assert (nm_streq0 (nm_setting_team_get_runner_tx_balancer (s_team), runner_tx_balancer));
-	g_assert (nm_streq0 (nm_setting_team_get_runner_agg_select_policy (s_team), runner_agg_select_policy));
+	g_assert_cmpint (nm_setting_team_get_notify_peers_count (s_team), ==, notify_peer_count);
+	g_assert_cmpint (nm_setting_team_get_notify_peers_interval (s_team), ==, notify_peers_interval);
+	g_assert_cmpint (nm_setting_team_get_mcast_rejoin_count (s_team), ==, mcast_rejoin_count);
+	g_assert_cmpint (nm_setting_team_get_mcast_rejoin_interval (s_team), ==, mcast_rejoin_interval);
+	g_assert_cmpint (nm_setting_team_get_runner_tx_balancer_interval (s_team), ==, runner_tx_balancer_interval);
+	g_assert_cmpint (nm_setting_team_get_runner_active (s_team), ==, runner_active);
+	g_assert_cmpint (nm_setting_team_get_runner_fast_rate (s_team), ==, runner_fast_rate);
+	g_assert_cmpint (nm_setting_team_get_runner_sys_prio (s_team), ==, runner_sys_prio);
+	g_assert_cmpint (nm_setting_team_get_runner_min_ports (s_team), ==, runner_min_ports);
+	g_assert_cmpstr (nm_setting_team_get_runner (s_team), ==, runner);
+	g_assert_cmpstr (nm_setting_team_get_runner_hwaddr_policy (s_team), ==, runner_hwaddr_policy);
+	g_assert_cmpstr (nm_setting_team_get_runner_tx_balancer (s_team), ==, runner_tx_balancer);
+	g_assert_cmpstr (nm_setting_team_get_runner_agg_select_policy (s_team), ==, runner_agg_select_policy);
 
 	if (runner_tx_hash) {
-		g_assert (runner_tx_hash->len == nm_setting_team_get_num_runner_tx_hash (s_team));
+		g_assert_cmpint (runner_tx_hash->len, ==, nm_setting_team_get_num_runner_tx_hash (s_team));
 		for (i = 0; i < runner_tx_hash->len; i++) {
 			found = FALSE;
 			for (j = 0; j < nm_setting_team_get_num_runner_tx_hash (s_team); j++) {
@@ -931,7 +1039,7 @@ _test_team_config_sync (const char *team_config,
 	}
 
 	if (link_watchers) {
-		g_assert (link_watchers->len == nm_setting_team_get_num_link_watchers (s_team));
+		g_assert_cmpint (link_watchers->len, ==, nm_setting_team_get_num_link_watchers (s_team));
 		for (i = 0; i < link_watchers->len; i++) {
 			found = FALSE;
 			for (j = 0; j < nm_setting_team_get_num_link_watchers (s_team); j++) {
@@ -952,11 +1060,11 @@ static void
 test_runner_roundrobin_sync_from_config (void)
 {
 	_test_team_config_sync ("",
-	                        0, 0, 0, 0,
-	                        NM_SETTING_TEAM_RUNNER_ROUNDROBIN,
+	                        -1, -1, -1, -1,
+	                        NULL,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 }
 
@@ -964,11 +1072,11 @@ static void
 test_runner_broadcast_sync_from_config (void)
 {
 	_test_team_config_sync ("{\"runner\": {\"name\": \"broadcast\"}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_BROADCAST,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 }
 
@@ -976,11 +1084,11 @@ static void
 test_runner_random_sync_from_config (void)
 {
 	_test_team_config_sync ("{\"runner\": {\"name\": \"random\"}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_RANDOM,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 }
 
@@ -988,12 +1096,11 @@ static void
 test_runner_activebackup_sync_from_config (void)
 {
 	_test_team_config_sync ("{\"runner\": {\"name\": \"activebackup\"}}",
-	                        NM_SETTING_TEAM_NOTIFY_PEERS_COUNT_ACTIVEBACKUP_DEFAULT, 0,
-	                        NM_SETTING_TEAM_NOTIFY_MCAST_COUNT_ACTIVEBACKUP_DEFAULT, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_ACTIVEBACKUP,
-	                        NM_SETTING_TEAM_RUNNER_HWADDR_POLICY_DEFAULT,
+	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 }
 
@@ -1008,29 +1115,29 @@ test_runner_loadbalance_sync_from_config (void)
 	g_ptr_array_add (tx_hash, g_strdup ("ipv6"));
 
 	_test_team_config_sync ("{\"runner\": {\"name\": \"loadbalance\"}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_LOADBALANCE,
 	                        NULL,
-	                        tx_hash, NULL, NM_SETTING_TEAM_RUNNER_TX_BALANCER_INTERVAL_DEFAULT,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        NULL, NULL, -1,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 
 	_test_team_config_sync ("{\"runner\": {\"name\": \"loadbalance\", "
 	                        "\"tx_hash\": [\"eth\", \"ipv4\", \"ipv6\"]}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_LOADBALANCE,
 	                        NULL,
-	                        tx_hash, NULL, NM_SETTING_TEAM_RUNNER_TX_BALANCER_INTERVAL_DEFAULT,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        tx_hash, NULL, -1,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 
 	_test_team_config_sync ("{\"runner\": {\"name\": \"loadbalance\", \"tx_hash\": [\"eth\", \"ipv4\", \"ipv6\"], "
 	                        "\"tx_balancer\": {\"name\": \"basic\", \"balancing_interval\": 30}}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_LOADBALANCE,
 	                        NULL,
 	                        tx_hash, "basic", 30,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        NULL);
 }
 
@@ -1045,21 +1152,21 @@ test_runner_lacp_sync_from_config (void)
 	g_ptr_array_add (tx_hash, g_strdup ("ipv6"));
 
 	_test_team_config_sync ("{\"runner\": {\"name\": \"lacp\", \"tx_hash\": [\"eth\", \"ipv4\", \"ipv6\"]}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_LACP,
 	                        NULL,
-	                        tx_hash, NULL, NM_SETTING_TEAM_RUNNER_TX_BALANCER_INTERVAL_DEFAULT,
-	                        TRUE, FALSE, NM_SETTING_TEAM_RUNNER_SYS_PRIO_DEFAULT, 0,
-	                        NM_SETTING_TEAM_RUNNER_AGG_SELECT_POLICY_DEFAULT,
+	                        tx_hash, NULL, -1,
+	                        TRUE, FALSE, -1, -1,
+	                        NULL,
 	                        NULL);
 
 	_test_team_config_sync ("{\"runner\": {\"name\": \"lacp\", \"tx_hash\": [\"eth\", \"ipv4\", \"ipv6\"], "
 	                        "\"active\": false, \"fast_rate\": true, \"sys_prio\": 10, \"min_ports\": 5, "
 	                        "\"agg_select_policy\": \"port_config\"}}",
-	                        0, 0, 0, 0,
+	                        -1, -1, -1, -1,
 	                        NM_SETTING_TEAM_RUNNER_LACP,
 	                        NULL,
-	                        tx_hash, NULL, NM_SETTING_TEAM_RUNNER_TX_BALANCER_INTERVAL_DEFAULT,
+	                        tx_hash, NULL, -1,
 	                        FALSE, TRUE, 10, 5, "port_config",
 	                        NULL);
 }
@@ -1072,11 +1179,11 @@ test_watcher_ethtool_sync_from_config (void)
 	link_watchers = g_ptr_array_new_with_free_func ((GDestroyNotify) nm_team_link_watcher_unref);
 	g_ptr_array_add (link_watchers, nm_team_link_watcher_new_ethtool (0, 0, NULL));
 	_test_team_config_sync ("{\"link_watch\": {\"name\": \"ethtool\"}}",
-	                        0, 0, 0, 0,
-	                        "roundrobin",
+	                        -1, -1, -1, -1,
+	                        NULL,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        link_watchers);
 }
 
@@ -1088,11 +1195,11 @@ test_watcher_nsna_ping_sync_from_config (void)
 	link_watchers = g_ptr_array_new_with_free_func ((GDestroyNotify) nm_team_link_watcher_unref);
 	g_ptr_array_add (link_watchers, nm_team_link_watcher_new_nsna_ping (0, 0, 3, "target.host", NULL));
 	_test_team_config_sync ("{\"link_watch\": {\"name\": \"nsna_ping\", \"target_host\": \"target.host\"}}",
-	                        0, 0, 0, 0,
-	                        "roundrobin",
+	                        -1, -1, -1, -1,
+	                        NULL,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        link_watchers);
 }
 
@@ -1106,11 +1213,11 @@ test_watcher_arp_ping_sync_from_config (void)
 	                 nm_team_link_watcher_new_arp_ping (0, 0, 3, "target.host", "source.host", 0, NULL));
 	_test_team_config_sync ("{\"link_watch\": {\"name\": \"arp_ping\", \"target_host\": \"target.host\", "
 	                        "\"source_host\": \"source.host\"}}",
-	                        0, 0, 0, 0,
-	                        "roundrobin",
+	                        -1, -1, -1, -1,
+	                        NULL,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        link_watchers);
 }
 
@@ -1135,11 +1242,11 @@ test_multiple_watchers_sync_from_config (void)
 	                        "\"validate_active\": true, \"validate_inactive\": true, \"send_always\": true}, "
 	                        "{\"name\": \"nsna_ping\", \"init_wait\": 3, \"interval\": 6, \"missed_max\": 9, "
 	                        "\"target_host\": \"target.host\"}]}",
-	                        0, 0, 0, 0,
-	                        "roundrobin",
+	                        -1, -1, -1, -1,
+	                        NULL,
 	                        NULL,
 	                        NULL, NULL, -1,
-	                        FALSE, FALSE, -1, -1, NULL,
+	                        TRUE, FALSE, -1, -1, NULL,
 	                        link_watchers);
 }
 
@@ -1157,6 +1264,11 @@ _test_team_port_config_sync (const char *team_port_config,
 	gs_unref_object NMSettingTeamPort *s_team_port = NULL;
 	guint i, j;
 	gboolean found;
+
+	if (!WITH_JSON_VALIDATION) {
+		g_test_skip ("team test requires JSON validation");
+		return;
+	}
 
 	s_team_port = (NMSettingTeamPort *) nm_setting_team_port_new ();
 	g_assert (s_team_port);
@@ -1190,52 +1302,52 @@ _test_team_port_config_sync (const char *team_port_config,
 static void
 test_team_port_default (void)
 {
-	_test_team_port_config_sync ("", -1, 0, FALSE, 255, 0, NULL);
+	_test_team_port_config_sync ("", -1, 0, FALSE, -1, -1, NULL);
 }
 
 static void
 test_team_port_queue_id (void)
 {
 	_test_team_port_config_sync ("{\"queue_id\": 3}",
-	                             3, 0, FALSE, 255, 0, NULL);
+	                             3, 0, FALSE, -1, -1, NULL);
 	_test_team_port_config_sync ("{\"queue_id\": 0}",
-	                             0, 0, FALSE, 255, 0, NULL);
+	                             0, 0, FALSE, -1, -1, NULL);
 }
 
 static void
 test_team_port_prio (void)
 {
 	_test_team_port_config_sync ("{\"prio\": 6}",
-	                             -1, 6, FALSE, 255, 0, NULL);
+	                             -1, 6, FALSE, -1, -1, NULL);
 	_test_team_port_config_sync ("{\"prio\": 0}",
-	                             -1, 0, FALSE, 255, 0, NULL);
+	                             -1, 0, FALSE, -1, -1, NULL);
 }
 
 static void
 test_team_port_sticky (void)
 {
 	_test_team_port_config_sync ("{\"sticky\": true}",
-	                             -1, 0, TRUE, 255, 0, NULL);
+	                             -1, 0, TRUE, -1, -1, NULL);
 	_test_team_port_config_sync ("{\"sticky\": false}",
-	                             -1, 0, FALSE, 255, 0, NULL);
+	                             -1, 0, FALSE, -1, -1, NULL);
 }
 
 static void
 test_team_port_lacp_prio (void)
 {
 	_test_team_port_config_sync ("{\"lacp_prio\": 9}",
-	                             -1, 0, FALSE, 9, 0, NULL);
+	                             -1, 0, FALSE, 9, -1, NULL);
 	_test_team_port_config_sync ("{\"lacp_prio\": 0}",
-	                             -1, 0, FALSE, 0, 0, NULL);
+	                             -1, 0, FALSE, 0, -1, NULL);
 }
 
 static void
 test_team_port_lacp_key (void)
 {
 	_test_team_port_config_sync ("{\"lacp_key\": 12}",
-	                             -1, 0, FALSE, 255, 12, NULL);
+	                             -1, 0, FALSE, -1, 12, NULL);
 	_test_team_port_config_sync ("{\"lacp_key\": 0}",
-	                             -1, 0, FALSE, 255, 0, NULL);
+	                             -1, 0, FALSE, -1, 0, NULL);
 }
 
 static void
@@ -1262,12 +1374,178 @@ test_team_port_full_config (void)
 	                             "\"send_always\": true}]}",
 	                             10, 20, true, 30, 40, NULL);
 }
-#endif
 
 /*****************************************************************************/
 
 static void
-test_ethtool_1 (void)
+_check_team_setting (NMSetting *setting)
+{
+	gs_unref_object NMSetting *setting2 = NULL;
+	gs_unref_object NMSetting *setting_clone = NULL;
+	gboolean is_port = NM_IS_SETTING_TEAM_PORT (setting);
+	gs_unref_variant GVariant *variant2 = NULL;
+	gs_unref_variant GVariant *variant3 = NULL;
+
+	g_assert (NM_IS_SETTING_TEAM (setting) || is_port);
+
+	setting2 = g_object_new (G_OBJECT_TYPE (setting),
+	                           is_port
+	                         ? NM_SETTING_TEAM_PORT_CONFIG
+	                         : NM_SETTING_TEAM_CONFIG,
+	                           is_port
+	                         ? nm_setting_team_port_get_config (NM_SETTING_TEAM_PORT (setting))
+	                         : nm_setting_team_get_config (NM_SETTING_TEAM (setting)),
+	                         NULL);
+
+	if (WITH_JSON_VALIDATION)
+		nmtst_assert_setting_is_equal (setting, setting2, NM_SETTING_COMPARE_FLAG_EXACT);
+
+	g_clear_object (&setting2);
+
+	nmtst_assert_setting_dbus_roundtrip (setting);
+
+	/* OK, now parse the setting only from the D-Bus variant, but removing the JSON config.
+	 * For that, we have to "drop" the JSON and we do that by resetting the property.
+	 * This causes JSON to be regenerated and it's in a normalized form that will compare
+	 * equal. */
+	setting_clone = nm_setting_duplicate (setting);
+	setting = setting_clone;
+	if (is_port) {
+		g_object_set (setting,
+		              NM_SETTING_TEAM_PORT_STICKY,
+		              nm_setting_team_port_get_sticky (NM_SETTING_TEAM_PORT (setting)),
+		              NULL);
+	} else {
+		g_object_set (setting,
+		              NM_SETTING_TEAM_RUNNER_SYS_PRIO,
+		              nm_setting_team_get_runner_sys_prio (NM_SETTING_TEAM (setting)),
+		              NULL);
+	}
+	variant2 = _nm_setting_to_dbus (setting, NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
+	variant3 = nm_utils_gvariant_vardict_filter_drop_one (variant2, "config");
+	setting2 = nmtst_assert_setting_dbus_new (G_OBJECT_TYPE (setting), variant3);
+	nmtst_assert_setting_is_equal (setting, setting2, NM_SETTING_COMPARE_FLAG_EXACT);
+}
+
+static void
+test_team_setting (void)
+{
+	gs_unref_variant GVariant *variant = nmtst_variant_from_string (G_VARIANT_TYPE_VARDICT,
+	                                                                "{'config': <'{\"link_watch\": {\"name\": \"ethtool\"}}'>, 'interface-name': <'nm-team'>, 'link-watchers': <[{'name': <'ethtool'>}]>}");
+	gs_free_error GError *error = NULL;
+	gs_unref_object NMSetting *setting = NULL;
+	nm_auto_unref_team_link_watcher NMTeamLinkWatcher *watcher1 = nm_team_link_watcher_new_nsna_ping (1, 3, 4, "bbb", NULL);
+	nm_auto_unref_team_link_watcher NMTeamLinkWatcher *watcher2 = nm_team_link_watcher_new_arp_ping2 (1, 3, 4, -1, "ccc", "ddd", 0, NULL);
+
+	g_assert (watcher1);
+	g_assert (watcher2);
+
+	setting = _nm_setting_new_from_dbus (NM_TYPE_SETTING_TEAM,
+	                                     variant,
+	                                     NULL,
+	                                     NM_SETTING_PARSE_FLAGS_STRICT,
+	                                     &error);
+	nmtst_assert_success (setting, error);
+	_check_team_setting (setting);
+
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{\"link_watch\": {\"name\": \"ethtool\"}}");
+	g_assert_cmpint (nm_setting_team_get_num_link_watchers (NM_SETTING_TEAM (setting)), ==, 1);
+
+	g_object_set (setting,
+	              NM_SETTING_TEAM_RUNNER_SYS_PRIO,
+	              (int) 10,
+	              NULL);
+
+	_check_team_setting (setting);
+	g_assert_cmpint (nm_setting_team_get_num_link_watchers (NM_SETTING_TEAM (setting)), ==, 1);
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{ \"runner\": { \"sys_prio\": 10 }, \"link_watch\": { \"name\": \"ethtool\" } }");
+
+	nm_setting_team_remove_link_watcher (NM_SETTING_TEAM (setting), 0);
+
+	_check_team_setting (setting);
+	g_assert_cmpint (nm_setting_team_get_num_link_watchers (NM_SETTING_TEAM (setting)), ==, 0);
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{ \"runner\": { \"sys_prio\": 10 } }");
+
+	nm_setting_team_add_link_watcher (NM_SETTING_TEAM (setting), watcher1);
+	_check_team_setting (setting);
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{ \"runner\": { \"sys_prio\": 10 }, \"link_watch\": { \"name\": \"nsna_ping\", \"interval\": 3, \"init_wait\": 1, \"missed_max\": 4, \"target_host\": \"bbb\" } }");
+
+	nm_setting_team_add_link_watcher (NM_SETTING_TEAM (setting), watcher2);
+	_check_team_setting (setting);
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{ \"runner\": { \"sys_prio\": 10 }, \"link_watch\": [ { \"name\": \"nsna_ping\", \"interval\": 3, \"init_wait\": 1, \"missed_max\": 4, \"target_host\": \"bbb\" }, { \"name\": \"arp_ping\", \"interval\": 3, \"init_wait\": 1, \"missed_max\": 4, \"source_host\": \"ddd\", \"target_host\": \"ccc\" } ] }");
+
+	nm_setting_team_remove_link_watcher (NM_SETTING_TEAM (setting), 0);
+	nm_setting_team_remove_link_watcher (NM_SETTING_TEAM (setting), 0);
+	g_object_set (setting,
+	              NM_SETTING_TEAM_RUNNER_TX_BALANCER_INTERVAL,
+	              (int) 5,
+	              NULL);
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{ \"runner\": { \"tx_balancer\": { \"balancing_interval\": 5 }, \"sys_prio\": 10 } }");
+
+	g_object_set (setting,
+	              NM_SETTING_TEAM_RUNNER,
+	              NULL,
+	              NULL);
+	_check_team_setting (setting);
+	g_assert_cmpstr (nm_setting_team_get_config (NM_SETTING_TEAM (setting)), ==, "{ \"runner\": { \"tx_balancer\": { \"balancing_interval\": 5 }, \"sys_prio\": 10 } }");
+
+	g_object_set (setting,
+	              NM_SETTING_TEAM_CONFIG,
+	              "{ \"runner\": { \"tx_hash\": [ \"eth\", \"l3\" ] } }",
+	              NULL);
+	_check_team_setting (setting);
+}
+
+/*****************************************************************************/
+
+static void
+_setting_ethtool_set_feature (NMSettingEthtool *s_ethtool,
+                              const char *opt_name,
+                              NMTernary value)
+{
+	g_assert (NM_IS_SETTING_ETHTOOL (s_ethtool));
+
+	if (nmtst_get_rand_bool ()) {
+		nm_setting_ethtool_set_feature (s_ethtool, opt_name, value);
+		return;
+	}
+
+	if (value == NM_TERNARY_DEFAULT) {
+		nm_setting_option_set (NM_SETTING (s_ethtool), opt_name, NULL);
+		return;
+	}
+
+	if (nmtst_get_rand_bool ())
+		nm_setting_option_set_boolean (NM_SETTING (s_ethtool), opt_name, value);
+	else
+		nm_setting_option_set (NM_SETTING (s_ethtool), opt_name, g_variant_new_boolean (value));
+}
+
+static NMTernary
+_setting_ethtool_get_feature (NMSettingEthtool *s_ethtool,
+                              const char *opt_name)
+{
+	GVariant *v;
+	gboolean b;
+
+	switch (nmtst_get_rand_uint32 () % 3) {
+	case 0:
+		return nm_setting_ethtool_get_feature (s_ethtool, opt_name);
+	case 1:
+		if (!nm_setting_option_get_boolean (NM_SETTING (s_ethtool), opt_name, &b))
+			return NM_TERNARY_DEFAULT;
+		return b;
+	default:
+		v = nm_setting_option_get (NM_SETTING (s_ethtool), opt_name);
+		if (   !v
+		    || !g_variant_is_of_type (v, G_VARIANT_TYPE_BOOLEAN))
+			return NM_TERNARY_DEFAULT;
+		return g_variant_get_boolean (v);
+	}
+}
+
+static void
+test_ethtool_features (void)
 {
 	gs_unref_object NMConnection *con = NULL;
 	gs_unref_object NMConnection *con2 = NULL;
@@ -1287,16 +1565,16 @@ test_ethtool_1 (void)
 	s_ethtool = NM_SETTING_ETHTOOL (nm_setting_ethtool_new ());
 	nm_connection_add_setting (con, NM_SETTING (s_ethtool));
 
-	nm_setting_ethtool_set_feature (s_ethtool,
-	                                NM_ETHTOOL_OPTNAME_FEATURE_RX,
-	                                NM_TERNARY_TRUE);
-	nm_setting_ethtool_set_feature (s_ethtool,
-	                                NM_ETHTOOL_OPTNAME_FEATURE_LRO,
-	                                NM_TERNARY_FALSE);
+	_setting_ethtool_set_feature (s_ethtool,
+	                              NM_ETHTOOL_OPTNAME_FEATURE_RX,
+	                              NM_TERNARY_TRUE);
+	_setting_ethtool_set_feature (s_ethtool,
+	                              NM_ETHTOOL_OPTNAME_FEATURE_LRO,
+	                              NM_TERNARY_FALSE);
 
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool, NM_ETHTOOL_OPTNAME_FEATURE_RX), ==, NM_TERNARY_TRUE);
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool, NM_ETHTOOL_OPTNAME_FEATURE_LRO), ==, NM_TERNARY_FALSE);
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool, NM_ETHTOOL_OPTNAME_FEATURE_SG),  ==, NM_TERNARY_DEFAULT);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool, NM_ETHTOOL_OPTNAME_FEATURE_RX), ==, NM_TERNARY_TRUE);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool, NM_ETHTOOL_OPTNAME_FEATURE_LRO), ==, NM_TERNARY_FALSE);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool, NM_ETHTOOL_OPTNAME_FEATURE_SG),  ==, NM_TERNARY_DEFAULT);
 
 	nmtst_connection_normalize (con);
 
@@ -1307,19 +1585,20 @@ test_ethtool_1 (void)
 
 	s_ethtool2 = NM_SETTING_ETHTOOL (nm_connection_get_setting (con2, NM_TYPE_SETTING_ETHTOOL));
 
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool2, NM_ETHTOOL_OPTNAME_FEATURE_RX),  ==, NM_TERNARY_TRUE);
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool2, NM_ETHTOOL_OPTNAME_FEATURE_LRO), ==, NM_TERNARY_FALSE);
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool2, NM_ETHTOOL_OPTNAME_FEATURE_SG),  ==, NM_TERNARY_DEFAULT);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool2, NM_ETHTOOL_OPTNAME_FEATURE_RX),  ==, NM_TERNARY_TRUE);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool2, NM_ETHTOOL_OPTNAME_FEATURE_LRO), ==, NM_TERNARY_FALSE);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool2, NM_ETHTOOL_OPTNAME_FEATURE_SG),  ==, NM_TERNARY_DEFAULT);
 
 	nmtst_assert_connection_verifies_without_normalization (con2);
 
 	nmtst_assert_connection_equals (con, FALSE, con2, FALSE);
 
-	keyfile = nm_keyfile_write (con, NULL, NULL, &error);
+	keyfile = nm_keyfile_write (con, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
 	nmtst_assert_success (keyfile, error);
 
 	con3 = nm_keyfile_read (keyfile,
 	                        "/ignored/current/working/directory/for/loading/relative/paths",
+	                        NM_KEYFILE_HANDLER_FLAGS_NONE,
 	                        NULL,
 	                        NULL,
 	                        &error);
@@ -1334,9 +1613,179 @@ test_ethtool_1 (void)
 
 	s_ethtool3 = NM_SETTING_ETHTOOL (nm_connection_get_setting (con3, NM_TYPE_SETTING_ETHTOOL));
 
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool3, NM_ETHTOOL_OPTNAME_FEATURE_RX),  ==, NM_TERNARY_TRUE);
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool3, NM_ETHTOOL_OPTNAME_FEATURE_LRO), ==, NM_TERNARY_FALSE);
-	g_assert_cmpint (nm_setting_ethtool_get_feature (s_ethtool3, NM_ETHTOOL_OPTNAME_FEATURE_SG),  ==, NM_TERNARY_DEFAULT);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool3, NM_ETHTOOL_OPTNAME_FEATURE_RX),  ==, NM_TERNARY_TRUE);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool3, NM_ETHTOOL_OPTNAME_FEATURE_LRO), ==, NM_TERNARY_FALSE);
+	g_assert_cmpint (_setting_ethtool_get_feature (s_ethtool3, NM_ETHTOOL_OPTNAME_FEATURE_SG),  ==, NM_TERNARY_DEFAULT);
+}
+
+static void
+test_ethtool_coalesce (void)
+{
+	gs_unref_object NMConnection *con = NULL;
+	gs_unref_object NMConnection *con2 = NULL;
+	gs_unref_object NMConnection *con3 = NULL;
+	gs_unref_variant GVariant *variant = NULL;
+	gs_free_error GError *error = NULL;
+	gs_unref_keyfile GKeyFile *keyfile = NULL;
+	NMSettingConnection *s_con;
+	NMSettingEthtool *s_ethtool;
+	NMSettingEthtool *s_ethtool2;
+	NMSettingEthtool *s_ethtool3;
+	guint32 u32;
+
+	con = nmtst_create_minimal_connection ("ethtool-coalesce",
+	                                        NULL,
+	                                        NM_SETTING_WIRED_SETTING_NAME,
+	                                        &s_con);
+	s_ethtool = NM_SETTING_ETHTOOL (nm_setting_ethtool_new ());
+	nm_connection_add_setting (con, NM_SETTING (s_ethtool));
+
+	nm_setting_option_set_uint32 (NM_SETTING (s_ethtool),
+	                              NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES,
+	                              4);
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES, &u32));
+	g_assert_cmpuint (u32, ==, 4);
+
+	nmtst_connection_normalize (con);
+
+	variant = nm_connection_to_dbus (con, NM_CONNECTION_SERIALIZE_ALL);
+
+	con2 = nm_simple_connection_new_from_dbus (variant, &error);
+	nmtst_assert_success (con2, error);
+
+	s_ethtool2 = NM_SETTING_ETHTOOL (nm_connection_get_setting (con2, NM_TYPE_SETTING_ETHTOOL));
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool2), NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES, &u32));
+	g_assert_cmpuint (u32, ==, 4);
+
+	nmtst_assert_connection_verifies_without_normalization (con2);
+
+	nmtst_assert_connection_equals (con, FALSE, con2, FALSE);
+
+	keyfile = nm_keyfile_write (con, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+	nmtst_assert_success (keyfile, error);
+
+	con3 = nm_keyfile_read (keyfile,
+	                        "/ignored/current/working/directory/for/loading/relative/paths",
+	                        NM_KEYFILE_HANDLER_FLAGS_NONE,
+	                        NULL,
+	                        NULL,
+	                        &error);
+	nmtst_assert_success (con3, error);
+
+	nm_keyfile_read_ensure_id (con3, "unused-because-already-has-id");
+	nm_keyfile_read_ensure_uuid (con3, "unused-because-already-has-uuid");
+
+	nmtst_connection_normalize (con3);
+
+	nmtst_assert_connection_equals (con, FALSE, con3, FALSE);
+
+	s_ethtool3 = NM_SETTING_ETHTOOL (nm_connection_get_setting (con3, NM_TYPE_SETTING_ETHTOOL));
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool3), NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES, &u32));
+	g_assert_cmpuint (u32, ==, 4);
+
+
+	nm_setting_option_set (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES, NULL);
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES, NULL));
+
+	nm_setting_option_set_uint32 (NM_SETTING (s_ethtool),
+	                              NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES,
+	                              8);
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES, &u32));
+	g_assert_cmpuint (u32, ==, 8);
+
+	nm_setting_option_clear_by_name (NM_SETTING (s_ethtool), nm_ethtool_optname_is_coalesce);
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES, NULL));
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES, NULL));
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_COALESCE_TX_USECS, NULL));
+}
+
+static void
+test_ethtool_ring (void)
+{
+	gs_unref_object NMConnection *con = NULL;
+	gs_unref_object NMConnection *con2 = NULL;
+	gs_unref_object NMConnection *con3 = NULL;
+	gs_unref_variant GVariant *variant = NULL;
+	gs_free_error GError *error = NULL;
+	gs_unref_keyfile GKeyFile *keyfile = NULL;
+	NMSettingConnection *s_con;
+	NMSettingEthtool *s_ethtool;
+	NMSettingEthtool *s_ethtool2;
+	NMSettingEthtool *s_ethtool3;
+	guint32 out_value;
+
+	con = nmtst_create_minimal_connection ("ethtool-ring",
+	                                        NULL,
+	                                        NM_SETTING_WIRED_SETTING_NAME,
+	                                        &s_con);
+	s_ethtool = NM_SETTING_ETHTOOL (nm_setting_ethtool_new ());
+	nm_connection_add_setting (con, NM_SETTING (s_ethtool));
+
+	nm_setting_option_set_uint32 (NM_SETTING (s_ethtool),
+	                              NM_ETHTOOL_OPTNAME_RING_RX_JUMBO,
+	                              4);
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, &out_value));
+	g_assert_cmpuint (out_value, ==, 4);
+
+	nmtst_connection_normalize (con);
+
+	variant = nm_connection_to_dbus (con, NM_CONNECTION_SERIALIZE_ALL);
+
+	con2 = nm_simple_connection_new_from_dbus (variant, &error);
+	nmtst_assert_success (con2, error);
+
+	s_ethtool2 = NM_SETTING_ETHTOOL (nm_connection_get_setting (con2, NM_TYPE_SETTING_ETHTOOL));
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool2), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, &out_value));
+	g_assert_cmpuint (out_value, ==, 4);
+
+	nmtst_assert_connection_verifies_without_normalization (con2);
+
+	nmtst_assert_connection_equals (con, FALSE, con2, FALSE);
+
+	keyfile = nm_keyfile_write (con, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+	nmtst_assert_success (keyfile, error);
+
+	con3 = nm_keyfile_read (keyfile,
+	                        "/ignored/current/working/directory/for/loading/relative/paths",
+	                        NM_KEYFILE_HANDLER_FLAGS_NONE,
+	                        NULL,
+	                        NULL,
+	                        &error);
+	nmtst_assert_success (con3, error);
+
+	nm_keyfile_read_ensure_id (con3, "unused-because-already-has-id");
+	nm_keyfile_read_ensure_uuid (con3, "unused-because-already-has-uuid");
+
+	nmtst_connection_normalize (con3);
+
+	nmtst_assert_connection_equals (con, FALSE, con3, FALSE);
+
+	s_ethtool3 = NM_SETTING_ETHTOOL (nm_connection_get_setting (con3, NM_TYPE_SETTING_ETHTOOL));
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool3), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, &out_value));
+	g_assert_cmpuint (out_value, ==, 4);
+
+
+	nm_setting_option_set (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, NULL);
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, NULL));
+
+	nm_setting_option_set_uint32 (NM_SETTING (s_ethtool),
+	                              NM_ETHTOOL_OPTNAME_RING_RX_JUMBO,
+	                              8);
+
+	g_assert_true (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, &out_value));
+	g_assert_cmpuint (out_value, ==, 8);
+
+	nm_setting_option_clear_by_name (NM_SETTING (s_ethtool), nm_ethtool_optname_is_ring);
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_RX_JUMBO, NULL));
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_RX, NULL));
+	g_assert_false (nm_setting_option_get_uint32 (NM_SETTING (s_ethtool), NM_ETHTOOL_OPTNAME_RING_TX, NULL));
 }
 
 /*****************************************************************************/
@@ -1567,6 +2016,216 @@ test_sriov_parse_vlans (void)
 	test_sriov_parse_vlan_one ("1.2.ad;2.0.q;5;3", TRUE, {1, 2, 1}, {2, 0, 0}, {3, 0, 0}, {5, 0, 0});
 }
 
+static void
+test_bridge_vlans (void)
+{
+	NMBridgeVlan *v1, *v2;
+	GError *error = NULL;
+	guint16 vid_start, vid_end;
+	char *str;
+
+	v1 = nm_bridge_vlan_from_str ("1 foobar", &error);
+	nmtst_assert_no_success (v1, error);
+	g_clear_error (&error);
+
+	v1 = nm_bridge_vlan_from_str ("4095", &error);
+	nmtst_assert_no_success (v1, error);
+	g_clear_error (&error);
+
+	/* test ranges */
+	v1 = nm_bridge_vlan_from_str ("2-1000 untagged", &error);
+	nmtst_assert_success (v1, error);
+	g_assert_cmpint (nm_bridge_vlan_get_vid_range (v1, &vid_start, &vid_end), ==, TRUE);
+	g_assert_cmpuint (vid_start, ==, 2);
+	g_assert_cmpuint (vid_end, ==, 1000);
+	g_assert_cmpint (nm_bridge_vlan_is_pvid (v1), ==, FALSE);
+	g_assert_cmpint (nm_bridge_vlan_is_untagged (v1), ==, TRUE);
+	nm_bridge_vlan_unref (v1);
+
+	/* test comparison (1) */
+	v1 = nm_bridge_vlan_from_str ("10 untagged", &error);
+	nmtst_assert_success (v1, error);
+
+	g_assert_cmpint (nm_bridge_vlan_get_vid_range (v1, &vid_start, &vid_end), ==, FALSE);
+	g_assert_cmpuint (vid_start, ==, 10);
+	g_assert_cmpuint (vid_end, ==, 10);
+	g_assert_cmpint (nm_bridge_vlan_is_sealed (v1), ==, FALSE);
+	g_assert_cmpint (nm_bridge_vlan_is_pvid (v1), ==, FALSE);
+	g_assert_cmpint (nm_bridge_vlan_is_untagged (v1), ==, TRUE);
+
+	nm_bridge_vlan_set_pvid (v1, TRUE);
+	nm_bridge_vlan_set_untagged (v1, FALSE);
+	nm_bridge_vlan_seal (v1);
+
+	g_assert_cmpint (nm_bridge_vlan_is_sealed (v1), ==, TRUE);
+	g_assert_cmpint (nm_bridge_vlan_is_pvid (v1), ==, TRUE);
+	g_assert_cmpint (nm_bridge_vlan_is_untagged (v1), ==, FALSE);
+
+	str = nm_bridge_vlan_to_str (v1, &error);
+	nmtst_assert_success (str, error);
+	g_assert_cmpstr (str, ==, "10 pvid");
+	nm_clear_g_free (&str);
+
+	v2 = nm_bridge_vlan_from_str ("  10  pvid  ", &error);
+	nmtst_assert_success (v2, error);
+
+	g_assert_cmpint (nm_bridge_vlan_cmp (v1, v2), ==, 0);
+
+	nm_bridge_vlan_unref (v1);
+	nm_bridge_vlan_unref (v2);
+
+	/* test comparison (2) */
+	v1 = nm_bridge_vlan_from_str ("10", &error);
+	nmtst_assert_success (v1, error);
+	v2 = nm_bridge_vlan_from_str ("20", &error);
+	nmtst_assert_success (v2, error);
+
+	g_assert_cmpint (nm_bridge_vlan_cmp (v1, v2), <, 0);
+
+	nm_bridge_vlan_unref (v1);
+	nm_bridge_vlan_unref (v2);
+}
+
+static void
+create_bridge_connection (NMConnection **con, NMSettingBridge **s_bridge)
+{
+	NMSettingConnection *s_con;
+
+	g_assert (con);
+	g_assert (s_bridge);
+
+	*con = nmtst_create_minimal_connection ("bridge",
+	                                        NULL,
+	                                        NM_SETTING_BOND_SETTING_NAME,
+	                                        &s_con);
+
+	g_object_set (s_con, NM_SETTING_CONNECTION_INTERFACE_NAME, "bridge0", NULL);
+
+	*s_bridge = (NMSettingBridge *) nm_setting_bridge_new ();
+	g_assert (*s_bridge);
+
+	nm_connection_add_setting (*con, NM_SETTING (*s_bridge));
+}
+
+#define test_verify_options_bridge(exp, ...) \
+	_test_verify_options_bridge (exp, NM_MAKE_STRV (__VA_ARGS__))
+
+static void
+_test_verify_options_bridge (gboolean expected_result,
+                             const char *const *options)
+{
+	gs_unref_object NMConnection *con = NULL;
+	NMSettingBridge *s_bridge;
+	const char *const *option;
+
+	g_assert (NM_PTRARRAY_LEN (options) % 2 == 0);
+
+	create_bridge_connection (&con, &s_bridge);
+
+	for (option = options; option[0]; option += 2) {
+		const char *option_key = option[0];
+		const char *option_val = option[1];
+		GParamSpec *pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (s_bridge), option_key);
+
+		g_assert (pspec);
+		g_assert (option_val);
+
+		switch (G_PARAM_SPEC_VALUE_TYPE (pspec)) {
+		case G_TYPE_UINT: {
+				guint uvalue;
+
+				uvalue = _nm_utils_ascii_str_to_uint64 (option_val, 10, 0, G_MAXUINT, -1);
+				g_assert (errno == 0);
+				g_object_set (s_bridge, option_key, uvalue, NULL);
+			}
+			break;
+		case G_TYPE_BOOLEAN: {
+				int bvalue;
+
+				bvalue = _nm_utils_ascii_str_to_bool (option_val, -1);
+				g_assert (bvalue != -1);
+				g_object_set (s_bridge, option_key, bvalue, NULL);
+			}
+			break;
+		case G_TYPE_STRING:
+			g_object_set (s_bridge, option_key, option_val, NULL);
+			break;
+		default:
+			g_assert_not_reached();
+			break;
+		}
+	}
+
+	if (expected_result)
+		nmtst_assert_connection_verifies_and_normalizable (con);
+	else {
+		nmtst_assert_connection_unnormalizable (con,
+		                                        NM_CONNECTION_ERROR,
+		                                        NM_CONNECTION_ERROR_INVALID_PROPERTY);
+	}
+}
+
+static void
+test_bridge_verify (void)
+{
+	/* group-address */
+	test_verify_options_bridge (FALSE,
+	                            "group-address", "nonsense");
+	test_verify_options_bridge (FALSE,
+	                            "group-address", "FF:FF:FF:FF:FF:FF");
+	test_verify_options_bridge (FALSE,
+	                            "group-address", "01:02:03:04:05:06");
+	test_verify_options_bridge (TRUE,
+	                            "group-address", "01:80:C2:00:00:00");
+	test_verify_options_bridge (FALSE,
+	                            "group-address", "01:80:C2:00:00:02");
+	test_verify_options_bridge (FALSE,
+	                            "group-address", "01:80:C2:00:00:03");
+	test_verify_options_bridge (TRUE,
+	                            "group-address", "01:80:C2:00:00:00");
+	test_verify_options_bridge (TRUE,
+	                            "group-address", "01:80:C2:00:00:0A");
+	/* vlan-protocol */
+	test_verify_options_bridge (FALSE,
+	                            "vlan-protocol", "nonsense124");
+	test_verify_options_bridge (FALSE,
+	                            "vlan-protocol", "802.11");
+	test_verify_options_bridge (FALSE,
+	                            "vlan-protocol", "802.1Q1");
+	test_verify_options_bridge (TRUE,
+	                            "vlan-protocol", "802.1Q");
+	test_verify_options_bridge (TRUE,
+	                            "vlan-protocol", "802.1ad");
+	/* multicast-router */
+	test_verify_options_bridge (FALSE,
+	                            "multicast-router",   "nonsense");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-snooping", "no",
+	                            "multicast-router",   "auto");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-snooping", "no",
+	                            "multicast-router",   "enabled");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-snooping", "no",
+	                            "multicast-router",   "disabled");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-snooping", "yes",
+	                            "multicast-router",   "enabled");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-snooping", "yes",
+	                            "multicast-router",   "auto");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-snooping", "yes",
+	                            "multicast-router",   "disabled");
+	/* multicast-hash-max */
+	test_verify_options_bridge (TRUE,
+	                            "multicast-hash-max",   "1024");
+	test_verify_options_bridge (TRUE,
+	                            "multicast-hash-max",   "8192");
+	test_verify_options_bridge (FALSE,
+	                            "multicast-hash-max",   "3");
+}
+
 /*****************************************************************************/
 
 static void
@@ -1575,6 +2234,7 @@ test_tc_config_qdisc (void)
 	NMTCQdisc *qdisc1, *qdisc2;
 	char *str;
 	GError *error = NULL;
+	GVariant *variant;
 
 	qdisc1 = nm_tc_qdisc_new ("fq_codel", TC_H_ROOT, &error);
 	nmtst_assert_success (qdisc1, error);
@@ -1618,8 +2278,8 @@ test_tc_config_qdisc (void)
 	nmtst_assert_success (qdisc1, error);
 
 	g_assert_cmpstr (nm_tc_qdisc_get_kind (qdisc1), ==, "pfifo_fast");
-	g_assert (nm_tc_qdisc_get_handle (qdisc1) == TC_H_MAKE (0x1234 << 16, 0x0000));
-	g_assert (nm_tc_qdisc_get_parent (qdisc1) == TC_H_MAKE (0xfff1 << 16, 0x0001));
+	g_assert (nm_tc_qdisc_get_handle (qdisc1) == TC_H_MAKE (0x1234u << 16, 0x0000u));
+	g_assert (nm_tc_qdisc_get_parent (qdisc1) == TC_H_MAKE (0xfff1u << 16, 0x0001u));
 
 	str = nm_utils_tc_qdisc_to_str (qdisc1, &error);
 	nmtst_assert_success (str, error);
@@ -1637,6 +2297,43 @@ test_tc_config_qdisc (void)
 
 	nm_tc_qdisc_unref (qdisc1);
 	nm_tc_qdisc_unref (qdisc2);
+
+#define CHECK_ATTRIBUTE(qdisc, name, vtype, type, value) \
+	variant = nm_tc_qdisc_get_attribute (qdisc, name); \
+	g_assert (variant); \
+	g_assert (g_variant_is_of_type (variant, vtype)); \
+	g_assert_cmpint (g_variant_get_ ## type(variant), ==, value);
+
+	qdisc1 = nm_utils_tc_qdisc_from_str ("handle 1235 root sfq perturb 10 quantum 1480 "
+	                                     "limit 9000 flows 1024 divisor 500 depth 12",
+	                                     &error);
+	nmtst_assert_success (qdisc1, error);
+
+	g_assert_cmpstr (nm_tc_qdisc_get_kind (qdisc1), ==, "sfq");
+	g_assert (nm_tc_qdisc_get_handle (qdisc1) == TC_H_MAKE (0x1235u << 16, 0x0000u));
+	g_assert (nm_tc_qdisc_get_parent (qdisc1) == TC_H_ROOT);
+	CHECK_ATTRIBUTE (qdisc1, "perturb", G_VARIANT_TYPE_INT32,  int32,  10);
+	CHECK_ATTRIBUTE (qdisc1, "quantum", G_VARIANT_TYPE_UINT32, uint32, 1480);
+	CHECK_ATTRIBUTE (qdisc1, "limit",   G_VARIANT_TYPE_UINT32, uint32, 9000);
+	CHECK_ATTRIBUTE (qdisc1, "flows",   G_VARIANT_TYPE_UINT32, uint32, 1024);
+	CHECK_ATTRIBUTE (qdisc1, "divisor", G_VARIANT_TYPE_UINT32, uint32, 500);
+	CHECK_ATTRIBUTE (qdisc1, "depth",   G_VARIANT_TYPE_UINT32, uint32, 12);
+	nm_tc_qdisc_unref (qdisc1);
+
+	qdisc1 = nm_utils_tc_qdisc_from_str ("handle 1235 root tbf rate 1000000 burst 5000 limit 10000",
+	                                     &error);
+	nmtst_assert_success (qdisc1, error);
+
+	g_assert_cmpstr (nm_tc_qdisc_get_kind (qdisc1), ==, "tbf");
+	g_assert (nm_tc_qdisc_get_handle (qdisc1) == TC_H_MAKE (0x1235u << 16, 0x0000u));
+	g_assert (nm_tc_qdisc_get_parent (qdisc1) == TC_H_ROOT);
+	CHECK_ATTRIBUTE (qdisc1, "rate",  G_VARIANT_TYPE_UINT64, uint64, 1000000);
+	CHECK_ATTRIBUTE (qdisc1, "burst", G_VARIANT_TYPE_UINT32, uint32, 5000);
+	CHECK_ATTRIBUTE (qdisc1, "limit", G_VARIANT_TYPE_UINT32, uint32, 10000);
+	nm_tc_qdisc_unref (qdisc1);
+
+
+#undef CHECK_ATTRIBUTE
 }
 
 static void
@@ -1700,12 +2397,12 @@ test_tc_config_tfilter (void)
 	GError *error = NULL;
 
 	tfilter1 = nm_tc_tfilter_new ("matchall",
-	                              TC_H_MAKE (0x1234 << 16, 0x0000),
+	                              TC_H_MAKE (0x1234u << 16, 0x0000u),
 	                              &error);
 	nmtst_assert_success (tfilter1, error);
 
 	tfilter2 = nm_tc_tfilter_new ("matchall",
-	                              TC_H_MAKE (0x1234 << 16, 0x0000),
+	                              TC_H_MAKE (0x1234u << 16, 0x0000u),
 	                              &error);
 	nmtst_assert_success (tfilter2, error);
 
@@ -1759,10 +2456,10 @@ test_tc_config_setting_valid (void)
 	nmtst_assert_success (qdisc1, error);
 
 	qdisc2 = nm_tc_qdisc_new ("pfifo_fast",
-	                          TC_H_MAKE (0xfff1 << 16, 0x0001),
+	                          TC_H_MAKE (0xfff1u << 16, 0x0001u),
 	                          &error);
 	nmtst_assert_success (qdisc2, error);
-	nm_tc_qdisc_set_handle (qdisc2, TC_H_MAKE (0x1234 << 16, 0x0000));
+	nm_tc_qdisc_set_handle (qdisc2, TC_H_MAKE (0x1234u << 16, 0x0000u));
 
 	g_assert (nm_setting_tc_config_get_num_qdiscs (s_tc) == 0);
 	g_assert (nm_setting_tc_config_add_qdisc (s_tc, qdisc1) == TRUE);
@@ -1865,16 +2562,16 @@ test_tc_config_dbus (void)
 
 	qdisc1 = nm_tc_qdisc_new ("fq_codel", TC_H_ROOT, &error);
 	nmtst_assert_success (qdisc1, error);
-	nm_tc_qdisc_set_handle (qdisc1, TC_H_MAKE (0x1234 << 16, 0x0000));
+	nm_tc_qdisc_set_handle (qdisc1, TC_H_MAKE (0x1234u << 16, 0x0000u));
 	nm_setting_tc_config_add_qdisc (NM_SETTING_TC_CONFIG (s_tc), qdisc1);
 
 	qdisc2 = nm_tc_qdisc_new ("ingress", TC_H_INGRESS, &error);
 	nmtst_assert_success (qdisc2, error);
-	nm_tc_qdisc_set_handle (qdisc2, TC_H_MAKE (TC_H_INGRESS, 0));
+	nm_tc_qdisc_set_handle (qdisc2, TC_H_MAKE (TC_H_INGRESS, 0u));
 	nm_setting_tc_config_add_qdisc (NM_SETTING_TC_CONFIG (s_tc), qdisc2);
 
 	tfilter1 = nm_tc_tfilter_new ("matchall",
-	                              TC_H_MAKE (0x1234 << 16, 0x0000),
+	                              TC_H_MAKE (0x1234u << 16, 0x0000u),
 	                              &error);
 	nmtst_assert_success (tfilter1, error);
 	action = nm_tc_action_new ("drop", &error);
@@ -1885,7 +2582,7 @@ test_tc_config_dbus (void)
 	nm_tc_tfilter_unref (tfilter1);
 
 	tfilter2 = nm_tc_tfilter_new ("matchall",
-	                              TC_H_MAKE (TC_H_INGRESS, 0),
+	                              TC_H_MAKE (TC_H_INGRESS, 0u),
 	                              &error);
 	nmtst_assert_success (tfilter2, error);
 	action = nm_tc_action_new ("simple", &error);
@@ -1946,6 +2643,1361 @@ test_tc_config_dbus (void)
 
 /*****************************************************************************/
 
+static void
+_rndt_wired_add_s390_options (NMSettingWired *s_wired,
+                              char **out_keyfile_entries)
+{
+	gsize n_opts;
+	gsize i, j;
+	const char *const*option_names;
+	gs_free const char **opt_keys = NULL;
+	gs_strfreev char **opt_vals = NULL;
+	gs_free bool *opt_found = NULL;
+	GString *keyfile_entries;
+	nm_auto_free_gstring GString *str_tmp = NULL;
+
+	option_names = nm_setting_wired_get_valid_s390_options (nmtst_get_rand_bool () ? NULL : s_wired);
+
+	n_opts = NM_PTRARRAY_LEN (option_names);
+	opt_keys = g_new (const char *, (n_opts + 1));
+	nmtst_rand_perm (NULL, opt_keys, option_names, sizeof (const char *), n_opts);
+	n_opts = nmtst_get_rand_uint32 () % (n_opts + 1);
+	opt_keys[n_opts] = NULL;
+
+	opt_vals = g_new0 (char *, n_opts + 1);
+	opt_found = g_new0 (bool, n_opts + 1);
+	for (i = 0; i < n_opts; i++) {
+		guint p = nmtst_get_rand_uint32 () % 1000;
+
+		if (p < 200)
+			opt_vals[i] = nm_strdup_int (i);
+		else {
+			opt_vals[i] = g_strdup_printf ("%s%s%s%s-%zu",
+			                               ((p % 5)  % 2) ? "\n" : "",
+			                               ((p % 7)  % 2) ? "\t" : "",
+			                               ((p % 11) % 2) ? "x" : "",
+			                               ((p % 13) % 2) ? "=" : "",
+			                               i);
+		}
+	}
+
+	if (nmtst_get_rand_bool ()) {
+		gs_unref_hashtable GHashTable *hash = NULL;
+
+		hash = g_hash_table_new (nm_str_hash, g_str_equal);
+		for (i = 0; i < n_opts; i++)
+			g_hash_table_insert (hash, (char *) opt_keys[i], opt_vals[i]);
+		g_object_set (s_wired,
+		              NM_SETTING_WIRED_S390_OPTIONS,
+		              hash,
+		              NULL);
+	} else {
+		_nm_setting_wired_clear_s390_options (s_wired);
+		for (i = 0; i < n_opts; i++) {
+			if (!nm_setting_wired_add_s390_option (s_wired, opt_keys[i], opt_vals[i]))
+				g_assert_not_reached ();
+		}
+	}
+
+	g_assert_cmpint (nm_setting_wired_get_num_s390_options (s_wired), ==, n_opts);
+
+	keyfile_entries = g_string_new (NULL);
+	str_tmp = g_string_new (NULL);
+	if (n_opts > 0)
+		g_string_append_printf (keyfile_entries, "[ethernet-s390-options]\n");
+	for (i = 0; i < n_opts; i++) {
+		gssize idx;
+		const char *k, *v;
+
+		nm_setting_wired_get_s390_option (s_wired, i, &k, &v);
+		g_assert (k);
+		g_assert (v);
+
+		idx = nm_utils_strv_find_first ((char **) opt_keys, n_opts, k);
+		g_assert (idx >= 0);
+		g_assert (!opt_found[idx]);
+		opt_found[idx] = TRUE;
+		g_assert_cmpstr (opt_keys[idx], ==, k);
+		g_assert_cmpstr (opt_vals[idx], ==, v);
+
+		g_string_truncate (str_tmp, 0);
+		for (j = 0; v[j] != '\0'; j++) {
+			if (v[j] == '\n')
+				g_string_append (str_tmp, "\\n");
+			else if (v[j] == '\t')
+				g_string_append (str_tmp, "\\t");
+			else
+				g_string_append_c (str_tmp, v[j]);
+		}
+
+		g_string_append_printf (keyfile_entries,
+		                        "%s=%s\n",
+		                        k,
+		                        str_tmp->str);
+	}
+	for (i = 0; i < n_opts; i++)
+		g_assert (opt_found[i]);
+	if (n_opts > 0)
+		g_string_append_printf (keyfile_entries, "\n");
+	*out_keyfile_entries = g_string_free (keyfile_entries, FALSE);
+}
+
+static GPtrArray *
+_rndt_wg_peers_create (void)
+{
+	GPtrArray *wg_peers;
+	guint i, n;
+
+	wg_peers = g_ptr_array_new_with_free_func ((GDestroyNotify) nm_wireguard_peer_unref);
+
+	n = nmtst_get_rand_uint32 () % 10;
+	for (i = 0; i < n; i++) {
+		NMWireGuardPeer *peer;
+		guint8 public_key_buf[NM_WIREGUARD_PUBLIC_KEY_LEN];
+		guint8 preshared_key_buf[NM_WIREGUARD_SYMMETRIC_KEY_LEN];
+		gs_free char *public_key = NULL;
+		gs_free char *preshared_key = NULL;
+		gs_free char *s_endpoint = NULL;
+		guint i_aip, n_aip;
+
+		/* we don't bother to create a valid curve25519 public key. Of course, libnm cannot
+		 * check whether the public key is bogus or not. Hence, for our purpose a random
+		 * bogus key is good enough. */
+		public_key = g_base64_encode (nmtst_rand_buf (NULL, public_key_buf, sizeof (public_key_buf)), sizeof (public_key_buf));
+
+		preshared_key = g_base64_encode (nmtst_rand_buf (NULL, preshared_key_buf, sizeof (preshared_key_buf)), sizeof (preshared_key_buf));
+
+		s_endpoint = _create_random_ipaddr (AF_UNSPEC, TRUE);
+
+		peer = nm_wireguard_peer_new ();
+		if (!nm_wireguard_peer_set_public_key (peer, public_key, TRUE))
+			g_assert_not_reached ();
+
+		if (!nm_wireguard_peer_set_preshared_key (peer, nmtst_rand_select (NULL, preshared_key), TRUE))
+			g_assert_not_reached ();
+
+		nm_wireguard_peer_set_preshared_key_flags (peer, nmtst_rand_select (NM_SETTING_SECRET_FLAG_NONE,
+		                                                                    NM_SETTING_SECRET_FLAG_NOT_SAVED,
+		                                                                    NM_SETTING_SECRET_FLAG_AGENT_OWNED));
+
+		nm_wireguard_peer_set_persistent_keepalive (peer,
+		                                            nmtst_rand_select ((guint32) 0, nmtst_get_rand_uint32 ()));
+
+		if (!nm_wireguard_peer_set_endpoint (peer, nmtst_rand_select (s_endpoint, NULL), TRUE))
+			g_assert_not_reached ();
+
+		n_aip = nmtst_rand_select (0, nmtst_get_rand_uint32 () % 10);
+		for (i_aip = 0; i_aip < n_aip; i_aip++) {
+			gs_free char *aip = NULL;
+
+			aip = _create_random_ipaddr (AF_UNSPEC, FALSE);
+			if (!nm_wireguard_peer_append_allowed_ip (peer, aip, FALSE))
+				g_assert_not_reached ();
+		}
+
+		g_assert (nm_wireguard_peer_is_valid (peer, TRUE, TRUE, NULL));
+
+		nm_wireguard_peer_seal (peer);
+		g_ptr_array_add (wg_peers, peer);
+	}
+
+	return wg_peers;
+}
+
+static const char *
+_rndt_wg_peers_to_keyfile (GPtrArray *wg_peers,
+                           gboolean strict,
+                           char **out_str)
+{
+	nm_auto_free_gstring GString *gstr = NULL;
+	nm_auto_free_gstring GString *gstr_aip = NULL;
+	guint i, j;
+
+	g_assert (wg_peers);
+	g_assert (out_str && !*out_str);
+
+	nm_gstring_prepare (&gstr);
+	for (i = 0; i < wg_peers->len; i++) {
+		const NMWireGuardPeer *peer = wg_peers->pdata[i];
+		gs_free char *s_endpoint = NULL;
+		gs_free char *s_preshared_key = NULL;
+		gs_free char *s_preshared_key_flags = NULL;
+		gs_free char *s_persistent_keepalive = NULL;
+		gs_free char *s_allowed_ips = NULL;
+
+		if (nm_wireguard_peer_get_endpoint (peer))
+			s_endpoint = g_strdup_printf ("endpoint=%s\n", nm_wireguard_peer_get_endpoint (peer));
+		else if (!strict)
+			s_endpoint = g_strdup_printf ("endpoint=\n");
+
+		if (   nm_wireguard_peer_get_preshared_key (peer)
+		    || !strict) {
+			if (nm_wireguard_peer_get_preshared_key_flags (peer) == NM_SETTING_SECRET_FLAG_NONE)
+				s_preshared_key = g_strdup_printf ("preshared-key=%s\n", nm_wireguard_peer_get_preshared_key (peer) ?: "");
+		}
+
+		if (   nm_wireguard_peer_get_preshared_key_flags (peer) != NM_SETTING_SECRET_FLAG_NOT_REQUIRED
+		    || !strict)
+			s_preshared_key_flags = g_strdup_printf ("preshared-key-flags=%d\n", (int) nm_wireguard_peer_get_preshared_key_flags (peer));
+
+		if (   nm_wireguard_peer_get_persistent_keepalive (peer) != 0
+		    || !strict)
+			s_persistent_keepalive = g_strdup_printf ("persistent-keepalive=%u\n", nm_wireguard_peer_get_persistent_keepalive (peer));
+
+		if (   nm_wireguard_peer_get_allowed_ips_len (peer) > 0
+		    || !strict) {
+			nm_gstring_prepare (&gstr_aip);
+			for (j = 0; j < nm_wireguard_peer_get_allowed_ips_len (peer); j++)
+				g_string_append_printf (gstr_aip, "%s;", nm_wireguard_peer_get_allowed_ip (peer, j, NULL));
+			s_allowed_ips = g_strdup_printf ("allowed-ips=%s\n", gstr_aip->str);
+		}
+
+		if (   !s_endpoint
+		    && !s_preshared_key
+		    && !s_preshared_key_flags
+		    && !s_persistent_keepalive
+		    && !s_allowed_ips)
+			s_endpoint = g_strdup_printf ("endpoint=\n");
+
+		g_string_append_printf (gstr,
+		                        "\n"
+		                        "[wireguard-peer.%s]\n"
+		                        "%s" /* endpoint */
+		                        "%s" /* preshared-key */
+		                        "%s" /* preshared-key-flags */
+		                        "%s" /* persistent-keepalive */
+		                        "%s" /* allowed-ips */
+		                        "",
+		                        nm_wireguard_peer_get_public_key (peer),
+		                        s_endpoint ?: "",
+		                        s_preshared_key ?: "",
+		                        s_preshared_key_flags ?: "",
+		                        s_persistent_keepalive ?: "",
+		                        s_allowed_ips ?: "");
+	}
+
+	return (*out_str = g_string_free (g_steal_pointer (&gstr), FALSE));
+}
+
+static void
+_rndt_wg_peers_assert_equal (NMSettingWireGuard *s_wg,
+                             GPtrArray *peers,
+                             gboolean consider_persistent_secrets,
+                             gboolean consider_all_secrets,
+                             gboolean expect_no_secrets)
+{
+	guint i;
+
+	g_assert (NM_IS_SETTING_WIREGUARD (s_wg));
+	g_assert (peers);
+
+	g_assert_cmpint (peers->len, ==, nm_setting_wireguard_get_peers_len (s_wg));
+
+	for (i = 0; i < peers->len; i++) {
+		const NMWireGuardPeer *a = peers->pdata[i];
+		const NMWireGuardPeer *b = nm_setting_wireguard_get_peer (s_wg, i);
+		gboolean consider_secrets;
+
+		g_assert (a);
+		g_assert (b);
+
+		g_assert_cmpint (nm_wireguard_peer_cmp (a, b, NM_SETTING_COMPARE_FLAG_IGNORE_SECRETS), ==, 0);
+
+		if (   consider_all_secrets
+		    || !nm_wireguard_peer_get_preshared_key (a))
+			consider_secrets = TRUE;
+		else if (nm_wireguard_peer_get_preshared_key (b))
+			consider_secrets = TRUE;
+		else if (   consider_persistent_secrets
+		         && nm_wireguard_peer_get_preshared_key_flags (b) == NM_SETTING_SECRET_FLAG_NONE)
+			consider_secrets = TRUE;
+		else
+			consider_secrets = FALSE;
+
+		if (consider_secrets) {
+			g_assert_cmpstr (nm_wireguard_peer_get_preshared_key (a), ==, nm_wireguard_peer_get_preshared_key (b));
+			g_assert_cmpint (nm_wireguard_peer_cmp (a, b, NM_SETTING_COMPARE_FLAG_EXACT), ==, 0);
+		}
+
+		if (expect_no_secrets)
+			g_assert_cmpstr (nm_wireguard_peer_get_preshared_key (b), ==, NULL);
+	}
+}
+
+static void
+_rndt_wg_peers_fix_secrets (NMSettingWireGuard *s_wg,
+                            GPtrArray *peers)
+{
+	guint i;
+
+	g_assert (NM_IS_SETTING_WIREGUARD (s_wg));
+	g_assert (peers);
+
+	g_assert_cmpint (peers->len, ==, nm_setting_wireguard_get_peers_len (s_wg));
+
+	for (i = 0; i < peers->len; i++) {
+		const NMWireGuardPeer *a = peers->pdata[i];
+		const NMWireGuardPeer *b = nm_setting_wireguard_get_peer (s_wg, i);
+		nm_auto_unref_wgpeer NMWireGuardPeer *b_clone = NULL;
+
+		g_assert (a);
+		g_assert (b);
+
+		g_assert_cmpint (nm_wireguard_peer_get_preshared_key_flags (a), ==, nm_wireguard_peer_get_preshared_key_flags (b));
+		g_assert_cmpint (nm_wireguard_peer_cmp (a, b, NM_SETTING_COMPARE_FLAG_IGNORE_SECRETS), ==, 0);
+
+		if (!nm_streq0 (nm_wireguard_peer_get_preshared_key (a),
+		                nm_wireguard_peer_get_preshared_key (b))) {
+			g_assert_cmpstr (nm_wireguard_peer_get_preshared_key (a), !=, NULL);
+			g_assert_cmpstr (nm_wireguard_peer_get_preshared_key (b), ==, NULL);
+			g_assert (NM_IN_SET (nm_wireguard_peer_get_preshared_key_flags (a), NM_SETTING_SECRET_FLAG_AGENT_OWNED,
+			                                                                    NM_SETTING_SECRET_FLAG_NOT_SAVED));
+			b_clone = nm_wireguard_peer_new_clone (b, TRUE);
+			if (!nm_wireguard_peer_set_preshared_key (b_clone, nm_wireguard_peer_get_preshared_key (a), TRUE))
+				g_assert_not_reached ();
+			nm_setting_wireguard_set_peer (s_wg, b_clone, i);
+			b = nm_setting_wireguard_get_peer (s_wg, i);
+			g_assert (b == b_clone);
+		} else {
+			if (nm_wireguard_peer_get_preshared_key (a)) {
+				g_assert (NM_IN_SET (nm_wireguard_peer_get_preshared_key_flags (a), NM_SETTING_SECRET_FLAG_NONE,
+				                                                                    NM_SETTING_SECRET_FLAG_NOT_REQUIRED));
+			} else {
+				g_assert (NM_IN_SET (nm_wireguard_peer_get_preshared_key_flags (a), NM_SETTING_SECRET_FLAG_AGENT_OWNED,
+				                                                                    NM_SETTING_SECRET_FLAG_NONE,
+				                                                                    NM_SETTING_SECRET_FLAG_NOT_SAVED,
+				                                                                    NM_SETTING_SECRET_FLAG_NOT_REQUIRED));
+			}
+		}
+
+		g_assert_cmpstr (nm_wireguard_peer_get_preshared_key (a), ==, nm_wireguard_peer_get_preshared_key (b));
+		g_assert_cmpint (nm_wireguard_peer_cmp (a, b, NM_SETTING_COMPARE_FLAG_EXACT), ==, 0);
+	}
+}
+
+static void
+test_roundtrip_conversion (gconstpointer test_data)
+{
+	const int MODE = GPOINTER_TO_INT (test_data);
+	const char *ID= nm_sprintf_bufa (100, "roundtrip-conversion-%d", MODE);
+	const char *UUID= "63376701-b61e-4318-bf7e-664a1c1eeaab";
+	const char *INTERFACE_NAME = nm_sprintf_bufa (100, "ifname%d", MODE);
+	guint32 ETH_MTU = nmtst_rand_select ((guint32) 0u,
+	                                     nmtst_get_rand_uint32 ());
+	const char *WG_PRIVATE_KEY = nmtst_get_rand_bool ()
+	                             ? "yGXGK+5bVnxSJUejH4vbpXbq+ZtaG4NB8IHRK/aVtE0="
+	                             : NULL;
+	const NMSettingSecretFlags WG_PRIVATE_KEY_FLAGS = nmtst_rand_select (NM_SETTING_SECRET_FLAG_NONE,
+	                                                                     NM_SETTING_SECRET_FLAG_NOT_SAVED,
+	                                                                     NM_SETTING_SECRET_FLAG_AGENT_OWNED);
+	const guint WG_LISTEN_PORT = nmtst_rand_select (0u,
+	                                                nmtst_get_rand_uint32 () % 0x10000);
+	const guint WG_FWMARK = nmtst_rand_select (0u,
+	                                           nmtst_get_rand_uint32 ());
+	gs_unref_ptrarray GPtrArray *kf_data_arr = g_ptr_array_new_with_free_func (g_free);
+	gs_unref_ptrarray GPtrArray *wg_peers = NULL;
+	const NMConnectionSerializationFlags dbus_serialization_flags[] = {
+		NM_CONNECTION_SERIALIZE_ALL,
+		NM_CONNECTION_SERIALIZE_NO_SECRETS,
+		NM_CONNECTION_SERIALIZE_ONLY_SECRETS,
+	};
+	guint dbus_serialization_flags_idx;
+	gs_unref_object NMConnection *con = NULL;
+	gs_free_error GError *error = NULL;
+	gs_free char *tmp_str = NULL;
+	guint kf_data_idx;
+	NMSettingConnection *s_con = NULL;
+	NMSettingWired *s_eth = NULL;
+	NMSettingWireGuard *s_wg = NULL;
+	union {
+		struct {
+			NMSettingIPConfig  *s_6;
+			NMSettingIPConfig  *s_4;
+		};
+		NMSettingIPConfig *s_x[2];
+	} s_ip;
+	int is_ipv4;
+	guint i;
+	gboolean success;
+	gs_free char *s390_keyfile_entries = NULL;
+
+	switch (MODE) {
+	case 0:
+		con = nmtst_create_minimal_connection (ID, UUID, NM_SETTING_WIRED_SETTING_NAME, &s_con);
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_INTERFACE_NAME,
+		              INTERFACE_NAME,
+		              NULL);
+		nmtst_connection_normalize (con);
+
+		s_eth = NM_SETTING_WIRED (nm_connection_get_setting (con, NM_TYPE_SETTING_WIRED));
+		g_assert (NM_IS_SETTING_WIRED (s_eth));
+
+		g_object_set (s_eth,
+		              NM_SETTING_WIRED_MTU,
+		              ETH_MTU,
+		              NULL);
+
+		_rndt_wired_add_s390_options (s_eth, &s390_keyfile_entries);
+
+		g_ptr_array_add (kf_data_arr,
+		    g_strdup_printf ("[connection]\n"
+		                     "id=%s\n"
+		                     "uuid=%s\n"
+		                     "type=ethernet\n"
+		                     "interface-name=%s\n"
+		                     "permissions=\n"
+		                     "\n"
+		                     "[ethernet]\n"
+		                     "mac-address-blacklist=\n"
+		                     "%s" /* mtu */
+		                     "\n"
+		                     "%s" /* [ethernet-s390-options] */
+		                     "[ipv4]\n"
+		                     "dns-search=\n"
+		                     "method=auto\n"
+		                     "\n"
+		                     "[ipv6]\n"
+		                     "addr-gen-mode=stable-privacy\n"
+		                     "dns-search=\n"
+		                     "method=auto\n"
+		                     "\n"
+		                     "[proxy]\n"
+		                     "",
+		                     ID,
+		                     UUID,
+		                     INTERFACE_NAME,
+		                       (ETH_MTU != 0)
+		                     ? nm_sprintf_bufa (100, "mtu=%u\n", ETH_MTU)
+		                     : "",
+		                     s390_keyfile_entries));
+
+		g_ptr_array_add (kf_data_arr,
+		    g_strdup_printf ("[connection]\n"
+		                     "id=%s\n"
+		                     "uuid=%s\n"
+		                     "type=ethernet\n"
+		                     "interface-name=%s\n"
+		                     "permissions=\n"
+		                     "\n"
+		                     "[ethernet]\n"
+		                     "mac-address-blacklist=\n"
+		                     "%s" /* mtu */
+		                     "\n"
+		                     "%s" /* [ethernet-s390-options] */
+		                     "[ipv4]\n"
+		                     "dns-search=\n"
+		                     "method=auto\n"
+		                     "\n"
+		                     "[ipv6]\n"
+		                     "addr-gen-mode=stable-privacy\n"
+		                     "dns-search=\n"
+		                     "method=auto\n"
+		                     "",
+		                     ID,
+		                     UUID,
+		                     INTERFACE_NAME,
+		                       (ETH_MTU != 0)
+		                     ? nm_sprintf_bufa (100, "mtu=%d\n", (int) ETH_MTU)
+		                     : "",
+		                     s390_keyfile_entries));
+
+		break;
+
+	case 1:
+		con = nmtst_create_minimal_connection (ID, UUID, "wireguard", &s_con);
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_INTERFACE_NAME,
+		              INTERFACE_NAME,
+		              NULL);
+		nmtst_connection_normalize (con);
+
+		s_wg = NM_SETTING_WIREGUARD (nm_connection_get_setting (con, NM_TYPE_SETTING_WIREGUARD));
+
+		g_ptr_array_add (kf_data_arr,
+		    g_strdup_printf ("[connection]\n"
+		                     "id=%s\n"
+		                     "uuid=%s\n"
+		                     "type=wireguard\n"
+		                     "interface-name=%s\n"
+		                     "permissions=\n"
+		                     "\n"
+		                     "[wireguard]\n"
+		                     "\n"
+		                     "[ipv4]\n"
+		                     "dns-search=\n"
+		                     "method=disabled\n"
+		                     "\n"
+		                     "[ipv6]\n"
+		                     "addr-gen-mode=stable-privacy\n"
+		                     "dns-search=\n"
+		                     "method=ignore\n"
+		                     "\n"
+		                     "[proxy]\n"
+		                     "",
+		                     ID,
+		                     UUID,
+		                     INTERFACE_NAME));
+		break;
+
+	case 2:
+		con = nmtst_create_minimal_connection (ID, UUID, "wireguard", &s_con);
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_INTERFACE_NAME,
+		              INTERFACE_NAME,
+		              NULL);
+		nmtst_connection_normalize (con);
+
+		s_wg = NM_SETTING_WIREGUARD (nm_connection_get_setting (con, NM_TYPE_SETTING_WIREGUARD));
+		g_object_set (s_wg,
+		              NM_SETTING_WIREGUARD_PRIVATE_KEY,
+		              WG_PRIVATE_KEY,
+		              NM_SETTING_WIREGUARD_PRIVATE_KEY_FLAGS,
+		              WG_PRIVATE_KEY_FLAGS,
+		              NM_SETTING_WIREGUARD_LISTEN_PORT,
+		              WG_LISTEN_PORT,
+		              NM_SETTING_WIREGUARD_FWMARK,
+		              WG_FWMARK,
+		              NULL);
+
+		wg_peers = _rndt_wg_peers_create ();
+
+		for (i = 0; i < wg_peers->len; i++)
+			nm_setting_wireguard_append_peer (s_wg, wg_peers->pdata[i]);
+
+		nm_clear_g_free (&tmp_str);
+
+		g_ptr_array_add (kf_data_arr,
+		    g_strdup_printf ("[connection]\n"
+		                     "id=%s\n"
+		                     "uuid=%s\n"
+		                     "type=wireguard\n"
+		                     "interface-name=%s\n"
+		                     "permissions=\n"
+		                     "\n"
+		                     "[wireguard]\n"
+		                     "%s" /* fwmark */
+		                     "%s" /* listen-port */
+		                     "%s" /* private-key-flags */
+		                     "%s" /* private-key */
+		                     "%s" /* [wireguard-peers*] */
+		                     "\n"
+		                     "[ipv4]\n"
+		                     "dns-search=\n"
+		                     "method=disabled\n"
+		                     "\n"
+		                     "[ipv6]\n"
+		                     "addr-gen-mode=stable-privacy\n"
+		                     "dns-search=\n"
+		                     "method=ignore\n"
+		                     "\n"
+		                     "[proxy]\n"
+		                     "",
+		                     ID,
+		                     UUID,
+		                     INTERFACE_NAME,
+		                     (  (WG_FWMARK != 0)
+		                      ? nm_sprintf_bufa (100, "fwmark=%u\n", WG_FWMARK)
+		                      : ""),
+		                     (  (WG_LISTEN_PORT != 0)
+		                      ? nm_sprintf_bufa (100, "listen-port=%u\n", WG_LISTEN_PORT)
+		                      : ""),
+		                     (  (WG_PRIVATE_KEY_FLAGS != NM_SETTING_SECRET_FLAG_NONE)
+		                      ? nm_sprintf_bufa (100, "private-key-flags=%u\n", (guint) WG_PRIVATE_KEY_FLAGS)
+		                      : ""),
+		                     (  (   WG_PRIVATE_KEY
+		                         && WG_PRIVATE_KEY_FLAGS == NM_SETTING_SECRET_FLAG_NONE)
+		                      ? nm_sprintf_bufa (100, "private-key=%s\n", WG_PRIVATE_KEY)
+		                      : ""),
+		                     _rndt_wg_peers_to_keyfile (wg_peers, TRUE, &tmp_str)));
+
+		_rndt_wg_peers_assert_equal (s_wg, wg_peers, TRUE, TRUE, FALSE);
+		break;
+
+	case 3:
+		con = nmtst_create_minimal_connection (ID, UUID, NM_SETTING_WIRED_SETTING_NAME, &s_con);
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_INTERFACE_NAME,
+		              INTERFACE_NAME,
+		              NULL);
+		nmtst_connection_normalize (con);
+
+		s_eth = NM_SETTING_WIRED (nm_connection_get_setting (con, NM_TYPE_SETTING_WIRED));
+		g_assert (NM_IS_SETTING_WIRED (s_eth));
+
+		g_object_set (s_eth,
+		              NM_SETTING_WIRED_MTU,
+		              ETH_MTU,
+		              NULL);
+
+		s_ip.s_4 = NM_SETTING_IP_CONFIG (nm_connection_get_setting (con, NM_TYPE_SETTING_IP4_CONFIG));
+		g_assert (NM_IS_SETTING_IP4_CONFIG (s_ip.s_4));
+
+		s_ip.s_6 = NM_SETTING_IP_CONFIG (nm_connection_get_setting (con, NM_TYPE_SETTING_IP6_CONFIG));
+		g_assert (NM_IS_SETTING_IP6_CONFIG (s_ip.s_6));
+
+		for (is_ipv4 = 0; is_ipv4 < 2; is_ipv4++) {
+			g_assert (NM_IS_SETTING_IP_CONFIG (s_ip.s_x[is_ipv4]));
+			for (i = 0; i < 3; i++) {
+				char addrstr[NM_UTILS_INET_ADDRSTRLEN];
+
+				nm_auto_unref_ip_routing_rule NMIPRoutingRule *rr = NULL;
+
+				rr = nm_ip_routing_rule_new (is_ipv4 ? AF_INET : AF_INET6);
+				nm_ip_routing_rule_set_priority (rr, i + 1);
+				if (i > 0) {
+					if (is_ipv4)
+						nm_sprintf_buf (addrstr, "192.168.%u.0", i);
+					else
+						nm_sprintf_buf (addrstr, "1:2:3:%x::", 10 + i);
+					nm_ip_routing_rule_set_from (rr, addrstr, is_ipv4 ? 24 + i : 64 + i);
+				}
+				nm_ip_routing_rule_set_table (rr, 1000 + i);
+
+				success = nm_ip_routing_rule_validate (rr, &error);
+				nmtst_assert_success (success, error);
+
+				nm_setting_ip_config_add_routing_rule (s_ip.s_x[is_ipv4], rr);
+			}
+		}
+
+		g_ptr_array_add (kf_data_arr,
+		    g_strdup_printf ("[connection]\n"
+		                     "id=%s\n"
+		                     "uuid=%s\n"
+		                     "type=ethernet\n"
+		                     "interface-name=%s\n"
+		                     "permissions=\n"
+		                     "\n"
+		                     "[ethernet]\n"
+		                     "mac-address-blacklist=\n"
+		                     "%s" /* mtu */
+		                     "\n"
+		                     "[ipv4]\n"
+		                     "dns-search=\n"
+		                     "method=auto\n"
+		                     "routing-rule1=priority 1 from 0.0.0.0/0 table 1000\n"
+		                     "routing-rule2=priority 2 from 192.168.1.0/25 table 1001\n"
+		                     "routing-rule3=priority 3 from 192.168.2.0/26 table 1002\n"
+		                     "\n"
+		                     "[ipv6]\n"
+		                     "addr-gen-mode=stable-privacy\n"
+		                     "dns-search=\n"
+		                     "method=auto\n"
+		                     "routing-rule1=priority 1 from ::/0 table 1000\n"
+		                     "routing-rule2=priority 2 from 1:2:3:b::/65 table 1001\n"
+		                     "routing-rule3=priority 3 from 1:2:3:c::/66 table 1002\n"
+		                     "\n"
+		                     "[proxy]\n"
+		                     "",
+		                     ID,
+		                     UUID,
+		                     INTERFACE_NAME,
+		                       (ETH_MTU != 0)
+		                     ? nm_sprintf_bufa (100, "mtu=%u\n", ETH_MTU)
+		                     : ""));
+
+		break;
+
+	default:
+		g_assert_not_reached ();
+	}
+
+	/* the first kf_data_arr entry is special: it is the exact result of what we expect
+	 * when converting @con to keyfile. Write @con to keyfile and compare the expected result
+	 * literally. */
+	{
+		gs_unref_keyfile GKeyFile *kf = NULL;
+
+		kf = nm_keyfile_write (con, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+		nmtst_assert_success (kf, error);
+
+		/* the first kf_data_arr entry is special: it must be what the writer would
+		 * produce again. */
+		nmtst_keyfile_assert_data (kf, kf_data_arr->pdata[0], -1);
+	}
+
+	/* check that reading any of kf_data_arr yields the same result that we expect. */
+	for (kf_data_idx = 0; kf_data_idx < kf_data_arr->len; kf_data_idx++) {
+		gs_unref_object NMConnection *con2 = NULL;
+		NMSettingWireGuard *s_wg2 = NULL;
+		NMSettingWired *s_eth2 = NULL;
+
+		con2 = nmtst_create_connection_from_keyfile (kf_data_arr->pdata[kf_data_idx], "/no/where/file.nmconnection");
+
+		switch (MODE) {
+		case 0:
+			s_eth2 = NM_SETTING_WIRED (nm_connection_get_setting (con2, NM_TYPE_SETTING_WIRED));
+			g_assert (NM_IS_SETTING_WIRED (s_eth2));
+
+			if (   ETH_MTU > (guint32) G_MAXINT
+			    && kf_data_idx == 1) {
+				/* older versions wrote values > 2^21 as signed integers, but the reader would
+				 * always reject such negative values for G_TYPE_UINT.
+				 *
+				 * The test case kf_data_idx #1 still writes the values in the old style.
+				 * The behavior was fixed, but such values are still rejected as invalid.
+				 *
+				 * Patch the setting so that the comparison below succeeds are usual. */
+				g_assert_cmpint (nm_setting_wired_get_mtu (s_eth2), ==, 0);
+				g_object_set (s_eth2,
+				              NM_SETTING_WIRED_MTU,
+				              ETH_MTU,
+				              NULL);
+			}
+
+			g_assert_cmpint (nm_setting_wired_get_mtu (s_eth), ==, ETH_MTU);
+			g_assert_cmpint (nm_setting_wired_get_mtu (s_eth2), ==, ETH_MTU);
+
+			g_assert_cmpint (nm_setting_wired_get_num_s390_options (s_eth2), ==, nm_setting_wired_get_num_s390_options (s_eth));
+
+			break;
+
+		case 1:
+			s_wg2 = NM_SETTING_WIREGUARD (nm_connection_get_setting (con2, NM_TYPE_SETTING_WIREGUARD));
+			g_assert (NM_IS_SETTING_WIREGUARD (s_wg2));
+
+			g_assert_cmpstr (nm_setting_wireguard_get_private_key (s_wg), ==, NULL);
+			g_assert_cmpstr (nm_setting_wireguard_get_private_key (s_wg2), ==, NULL);
+			break;
+
+		case 2:
+			s_wg2 = NM_SETTING_WIREGUARD (nm_connection_get_setting (con2, NM_TYPE_SETTING_WIREGUARD));
+			g_assert (NM_IS_SETTING_WIREGUARD (s_wg2));
+
+			/* the private key was lost due to the secret-flags. Patch it. */
+			if (WG_PRIVATE_KEY_FLAGS != NM_SETTING_SECRET_FLAG_NONE) {
+				g_assert_cmpstr (nm_setting_wireguard_get_private_key (s_wg2), ==, NULL);
+				g_object_set (s_wg2,
+				              NM_SETTING_WIREGUARD_PRIVATE_KEY,
+				              WG_PRIVATE_KEY,
+				              NULL);
+			}
+
+			g_assert_cmpstr (nm_setting_wireguard_get_private_key (s_wg), ==, WG_PRIVATE_KEY);
+			g_assert_cmpstr (nm_setting_wireguard_get_private_key (s_wg2), ==, WG_PRIVATE_KEY);
+
+			_rndt_wg_peers_assert_equal (s_wg2, wg_peers, TRUE, FALSE, FALSE);
+			_rndt_wg_peers_fix_secrets (s_wg2, wg_peers);
+			_rndt_wg_peers_assert_equal (s_wg2, wg_peers, TRUE, TRUE, FALSE);
+			break;
+		}
+
+		nmtst_assert_connection_equals (con, nmtst_get_rand_bool (), con2, nmtst_get_rand_bool ());
+	}
+
+	for (dbus_serialization_flags_idx = 0; dbus_serialization_flags_idx < G_N_ELEMENTS (dbus_serialization_flags); dbus_serialization_flags_idx++) {
+		NMConnectionSerializationFlags flag = dbus_serialization_flags[dbus_serialization_flags_idx];
+		gs_unref_variant GVariant *con_var = NULL;
+		gs_unref_object NMConnection *con2 = NULL;
+		NMSettingWireGuard *s_wg2 = NULL;
+
+		con_var = nm_connection_to_dbus (con, flag);
+		g_assert (g_variant_is_of_type (con_var, NM_VARIANT_TYPE_CONNECTION));
+		g_assert (g_variant_is_floating (con_var));
+		g_variant_ref_sink (con_var);
+
+		if (flag == NM_CONNECTION_SERIALIZE_ALL) {
+			con2 = _connection_new_from_dbus_strict (con_var, TRUE);
+			nmtst_assert_connection_equals (con, nmtst_get_rand_bool (), con2, nmtst_get_rand_bool ());
+
+			{
+				gs_unref_keyfile GKeyFile *kf = NULL;
+
+				kf = nm_keyfile_write (con2, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+				nmtst_assert_success (kf, error);
+				nmtst_keyfile_assert_data (kf, kf_data_arr->pdata[0], -1);
+			}
+		}
+
+		switch (MODE) {
+		case 2:
+			if (flag == NM_CONNECTION_SERIALIZE_ALL) {
+				s_wg2 = NM_SETTING_WIREGUARD (nm_connection_get_setting (con2, NM_TYPE_SETTING_WIREGUARD));
+
+				if (flag == NM_CONNECTION_SERIALIZE_ALL)
+					_rndt_wg_peers_assert_equal (s_wg2, wg_peers, TRUE, TRUE, FALSE);
+				else if (flag == NM_CONNECTION_SERIALIZE_NO_SECRETS)
+					_rndt_wg_peers_assert_equal (s_wg2, wg_peers, FALSE, FALSE, TRUE);
+				else
+					g_assert_not_reached ();
+			}
+			break;
+		}
+	}
+}
+
+/*****************************************************************************/
+
+static NMIPRoutingRule *
+_rr_from_str_get_impl (const char *str, const char *const*aliases)
+{
+	nm_auto_unref_ip_routing_rule NMIPRoutingRule *rr = NULL;
+	gs_free_error GError *error = NULL;
+	gboolean vbool;
+	int addr_family;
+	int i;
+	NMIPRoutingRuleAsStringFlags to_string_flags;
+
+	rr = nm_ip_routing_rule_from_string (str,
+	                                     NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE,
+	                                     NULL,
+	                                     &error);
+	nmtst_assert_success (rr, error);
+
+	addr_family = nm_ip_routing_rule_get_addr_family (rr);
+	g_assert (NM_IN_SET (addr_family, AF_INET, AF_INET6));
+
+	if (addr_family == AF_INET)
+		to_string_flags = NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET;
+	else
+		to_string_flags = NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET6;
+
+	for (i = 0; TRUE; i++) {
+		nm_auto_unref_ip_routing_rule NMIPRoutingRule *rr2 = NULL;
+		gs_free char *str1 = NULL;
+		gs_unref_variant GVariant *variant1 = NULL;
+		const char *cstr1;
+
+		switch (i) {
+		case 0:
+			rr2 = nm_ip_routing_rule_ref (rr);
+			break;
+
+		case 1:
+			rr2 = nm_ip_routing_rule_from_string (str,
+			                                        NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE
+			                                      | (nmtst_get_rand_bool () ? to_string_flags : NM_IP_ROUTING_RULE_AS_STRING_FLAGS_NONE),
+			                                      NULL,
+			                                      &error);
+			nmtst_assert_success (rr, error);
+			break;
+
+		case 2:
+			str1 = nm_ip_routing_rule_to_string (rr,
+			                                       NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE
+			                                      | (nmtst_get_rand_bool () ? to_string_flags : NM_IP_ROUTING_RULE_AS_STRING_FLAGS_NONE),
+			                                     NULL,
+			                                     &error);
+			nmtst_assert_success (str1 && str1[0], error);
+
+			g_assert_cmpstr (str, ==, str1);
+
+			rr2 = nm_ip_routing_rule_from_string (str1,
+			                                        NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE
+			                                      | (nmtst_get_rand_bool () ? to_string_flags : NM_IP_ROUTING_RULE_AS_STRING_FLAGS_NONE),
+			                                      NULL,
+			                                      &error);
+			nmtst_assert_success (rr, error);
+			break;
+
+		case 3:
+			variant1 = nm_ip_routing_rule_to_dbus (rr);
+			g_assert (variant1);
+			g_assert (g_variant_is_floating (variant1));
+			g_assert (g_variant_is_of_type (variant1, G_VARIANT_TYPE_VARDICT));
+
+			rr2 = nm_ip_routing_rule_from_dbus (variant1,
+			                                    TRUE,
+			                                    &error);
+			nmtst_assert_success (rr, error);
+			break;
+
+		default:
+			if (!aliases || !aliases[0])
+				goto done;
+			cstr1 = (aliases++)[0];
+			rr2 = nm_ip_routing_rule_from_string (cstr1,
+			                                        NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE
+			                                      | (nmtst_get_rand_bool () ? to_string_flags : NM_IP_ROUTING_RULE_AS_STRING_FLAGS_NONE),
+			                                      NULL,
+			                                      &error);
+			nmtst_assert_success (rr, error);
+			break;
+		}
+
+		g_assert (rr2);
+		vbool = nm_ip_routing_rule_validate (rr, &error);
+		nmtst_assert_success (vbool, error);
+		vbool = nm_ip_routing_rule_validate (rr2, &error);
+		nmtst_assert_success (vbool, error);
+
+		g_assert_cmpint (nm_ip_routing_rule_cmp (rr, rr2), ==, 0);
+		g_assert_cmpint (nm_ip_routing_rule_cmp (rr2, rr), ==, 0);
+	}
+
+done:
+	return g_steal_pointer (&rr);
+}
+#define _rr_from_str_get(a, ...) _rr_from_str_get_impl (a, &(NM_MAKE_STRV (NULL, ##__VA_ARGS__))[1])
+
+#define _rr_from_str(...) \
+	G_STMT_START { \
+		nm_auto_unref_ip_routing_rule NMIPRoutingRule *_rr = NULL; \
+		\
+		_rr = _rr_from_str_get (__VA_ARGS__); \
+		g_assert (_rr); \
+	} G_STMT_END
+
+static void
+test_routing_rule (gconstpointer test_data)
+{
+	nm_auto_unref_ip_routing_rule NMIPRoutingRule *rr1 = NULL;
+	gboolean success;
+	char ifname_buf[16];
+
+	_rr_from_str ("priority 5 from 0.0.0.0 table 1",
+	              "  from 0.0.0.0  priority  5 lookup 1 ");
+	_rr_from_str ("priority 5 from 0.0.0.0/0 table 4");
+	_rr_from_str ("priority 5 to 0.0.0.0 table 6");
+	_rr_from_str ("priority 5 to 0.0.0.0 table 254",
+	              "priority 5 to 0.0.0.0/32");
+	_rr_from_str ("priority 5 from 1.2.3.4 table 15",
+	              "priority 5 from 1.2.3.4/32 table  0xF ",
+	              "priority 5 from 1.2.3.4/32 to 0.0.0.0/0 lookup 15 ");
+	_rr_from_str ("priority 5 from 1.2.3.4 to 0.0.0.0 table 8");
+	_rr_from_str ("priority 5 to a:b:c:: tos 0x16 table 25",
+	              "priority 5 to a:b:c::/128 table 0x19 tos 16",
+	              "priority 5 to a:b:c::/128 lookup 0x19 dsfield 16",
+	              "priority 5 to a:b:c::/128 lookup 0x19 dsfield 16 fwmark 0/0x00",
+	              "priority 5 to a:b:c:: from all lookup 0x19 dsfield 16 fwmark 0x0/0");
+	_rr_from_str ("priority 5 from :: fwmark 0 table 25",
+	              "priority 5 from ::/128 to all table 0x19 fwmark 0/0xFFFFFFFF",
+	              "priority 5 from :: to ::/0 table 0x19 fwmark 0x00/4294967295");
+	_rr_from_str ("priority 5 from :: iif aab table 25");
+	_rr_from_str ("priority 5 from :: iif aab oif er table 25",
+	              "priority 5 from :: table 0x19 dev aab oif er");
+	_rr_from_str ("priority 5 from :: iif a\\\\303b table 25");
+	_rr_from_str ("priority 5 to 0.0.0.0 sport 10 table 6",
+	              "priority 5 to 0.0.0.0 sport 10-10 table 6");
+	_rr_from_str ("priority 5 not to 0.0.0.0 dport 10-133 table 6",
+	              "not priority 5 to 0.0.0.0 dport 10-133 table 6",
+	              "not priority 5 not to 0.0.0.0 dport 10-133 table 6",
+	              "priority 5 to 0.0.0.0 not dport 10-133 not table 6",
+	              "priority 5 to 0.0.0.0 not dport 10-\\ 133 not table 6");
+	_rr_from_str ("priority 5 to 0.0.0.0 ipproto 10 sport 10 table 6");
+
+	rr1 = _rr_from_str_get ("priority 5 from :: iif aab table 25");
+	g_assert_cmpstr (nm_ip_routing_rule_get_iifname (rr1), ==, "aab");
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, FALSE, ifname_buf);
+	g_assert (!success);
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, TRUE, ifname_buf);
+	g_assert_cmpstr (ifname_buf, ==, "aab");
+	g_assert (success);
+	nm_clear_pointer (&rr1, nm_ip_routing_rule_unref);
+
+	rr1 = _rr_from_str_get ("priority 5 from :: iif a\\\\303\\\\261xb table 254");
+	g_assert_cmpstr (nm_ip_routing_rule_get_iifname (rr1), ==, "a\\303\\261xb");
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, FALSE, ifname_buf);
+	g_assert (!success);
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, TRUE, ifname_buf);
+	g_assert_cmpstr (ifname_buf, ==, "a\303\261xb");
+	g_assert (success);
+	nm_clear_pointer (&rr1, nm_ip_routing_rule_unref);
+
+	rr1 = _rr_from_str_get ("priority 5 from :: oif \\\\101=\\\\303\\\\261xb table 7");
+	g_assert_cmpstr (nm_ip_routing_rule_get_oifname (rr1), ==, "\\101=\\303\\261xb");
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, FALSE, ifname_buf);
+	g_assert_cmpstr (ifname_buf, ==, "A=\303\261xb");
+	g_assert (success);
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, TRUE, ifname_buf);
+	g_assert (!success);
+	nm_clear_pointer (&rr1, nm_ip_routing_rule_unref);
+
+	rr1 = _rr_from_str_get ("priority 5 to 0.0.0.0 tos 0x10 table 7");
+	g_assert_cmpstr (NULL, ==, nm_ip_routing_rule_get_from (rr1));
+	g_assert (!nm_ip_routing_rule_get_from_bin (rr1));
+	g_assert_cmpint (0, ==, nm_ip_routing_rule_get_from_len (rr1));
+	g_assert_cmpstr ("0.0.0.0", ==, nm_ip_routing_rule_get_to (rr1));
+	g_assert (nm_ip_addr_is_null (AF_INET, nm_ip_routing_rule_get_to_bin (rr1)));
+	g_assert_cmpint (32, ==, nm_ip_routing_rule_get_to_len (rr1));
+	g_assert_cmpint (7, ==, nm_ip_routing_rule_get_table (rr1));
+	g_assert_cmpint (0x10, ==, nm_ip_routing_rule_get_tos (rr1));
+	nm_clear_pointer (&rr1, nm_ip_routing_rule_unref);
+
+	rr1 = _rr_from_str_get ("priority 5 from :: iif a\\\\303\\\\261,x;b table 254",
+	                        "priority 5 from :: iif a\\\\303\\\\261,x;b table 254");
+	g_assert_cmpstr (nm_ip_routing_rule_get_iifname (rr1), ==, "a\\303\\261,x;b");
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, FALSE, ifname_buf);
+	g_assert (!success);
+	success = nm_ip_routing_rule_get_xifname_bin (rr1, TRUE, ifname_buf);
+	g_assert_cmpstr (ifname_buf, ==, "a\303\261,x;b");
+	g_assert (success);
+	nm_clear_pointer (&rr1, nm_ip_routing_rule_unref);
+
+}
+
+/*****************************************************************************/
+
+static void
+test_parse_tc_handle (void)
+{
+#define _parse_tc_handle(str, exp) \
+	G_STMT_START { \
+		gs_free_error GError *_error = NULL; \
+		GError **_perror = nmtst_get_rand_bool () ? &_error : NULL; \
+		guint32 _v; \
+		const guint32 _v_exp = (exp); \
+		\
+		_v = _nm_utils_parse_tc_handle (""str"", _perror); \
+		\
+		if (_v != _v_exp) \
+			g_error ("%s:%d: \"%s\" gave %08x but %08x expected.", __FILE__, __LINE__, ""str"", _v, _v_exp); \
+		\
+		if (_v == TC_H_UNSPEC) \
+			g_assert (!_perror || *_perror); \
+		else \
+			g_assert (!_perror || !*_perror); \
+		\
+	} G_STMT_END
+
+#define _parse_tc_handle_inval(str)           _parse_tc_handle (str, TC_H_UNSPEC)
+#define _parse_tc_handle_valid(str, maj, min) _parse_tc_handle (str, TC_H_MAKE (((guint32) (maj)) << 16, ((guint16) (min))))
+
+	_parse_tc_handle_inval ("");
+	_parse_tc_handle_inval (" ");
+	_parse_tc_handle_inval (" \n");
+	_parse_tc_handle_valid ("1", 1, 0);
+	_parse_tc_handle_valid(" 1 ", 1, 0);
+	_parse_tc_handle_valid ("1:", 1, 0);
+	_parse_tc_handle_valid ("1:  ", 1, 0);
+	_parse_tc_handle_valid ("1:0", 1, 0);
+	_parse_tc_handle_valid ("1   :0", 1, 0);
+	_parse_tc_handle_valid ("1   \t\n\f\r:0", 1, 0);
+	_parse_tc_handle_inval ("1   \t\n\f\r\v:0");
+	_parse_tc_handle_valid (" 1 : 0  ", 1, 0);
+	_parse_tc_handle_inval (" \t\v\n1: 0");
+	_parse_tc_handle_valid ("1:2", 1, 2);
+	_parse_tc_handle_valid ("01:02", 1, 2);
+	_parse_tc_handle_inval ("0x01:0x02");
+	_parse_tc_handle_valid ("  01:   02", 1, 2);
+	_parse_tc_handle_valid ("019:   020", 0x19, 0x20);
+	_parse_tc_handle_valid ("FFFF:   020", 0xFFFF, 0x20);
+	_parse_tc_handle_valid ("FfFF:   ffff", 0xFFFF, 0xFFFF);
+	_parse_tc_handle_valid ("FFFF", 0xFFFF, 0);
+	_parse_tc_handle_inval ("0xFFFF");
+	_parse_tc_handle_inval ("10000");
+	_parse_tc_handle_valid ("\t\n\f\r FFFF", 0xFFFF, 0);
+	_parse_tc_handle_inval ("\t\n\f\r \vFFFF");
+}
+
+/*****************************************************************************/
+
+static void
+test_empty_setting (void)
+{
+	gs_unref_object NMConnection *con = NULL;
+	gs_unref_object NMConnection *con2 = NULL;
+	NMSettingBluetooth *s_bt;
+	NMSettingGsm *s_gsm;
+	gs_unref_keyfile GKeyFile *kf = NULL;
+	gs_free_error GError *error = NULL;
+
+	con = nmtst_create_minimal_connection ("bt-empty-gsm", "dca3192a-f2dc-48eb-b806-d0ff788f122c", NM_SETTING_BLUETOOTH_SETTING_NAME, NULL);
+
+	s_bt = _nm_connection_get_setting (con, NM_TYPE_SETTING_BLUETOOTH);
+	g_object_set (s_bt,
+	              NM_SETTING_BLUETOOTH_TYPE, "dun",
+	              NM_SETTING_BLUETOOTH_BDADDR, "aa:bb:cc:dd:ee:ff",
+	              NULL);
+
+	s_gsm = NM_SETTING_GSM (nm_setting_gsm_new ());
+	nm_connection_add_setting (con, NM_SETTING (s_gsm));
+
+	nmtst_connection_normalize (con);
+
+	nmtst_assert_connection_verifies_without_normalization (con);
+
+	kf = nm_keyfile_write (con, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+	nmtst_assert_success (kf, error);
+
+	g_assert (g_key_file_has_group (kf, "gsm"));
+	g_assert_cmpint (nmtst_keyfile_get_num_keys (kf, "gsm"), ==, 0);
+
+	con2 = nm_keyfile_read (kf,
+	                        "/ignored/current/working/directory/for/loading/relative/paths",
+	                        NM_KEYFILE_HANDLER_FLAGS_NONE,
+	                        NULL,
+	                        NULL,
+	                        &error);
+	nmtst_assert_success (con2, error);
+
+	g_assert (nm_connection_get_setting (con2, NM_TYPE_SETTING_GSM));
+
+	nmtst_assert_connection_verifies_without_normalization (con2);
+}
+
+/*****************************************************************************/
+
+static guint
+_PROP_IDX_PACK (NMMetaSettingType meta_type,
+                guint idx)
+{
+	return   (((guint) meta_type) & 0xFFu)
+	       | (idx << 8);
+}
+
+static const char *
+_PROP_IDX_OWNER (GHashTable *h_property_types,
+                 const NMSettInfoPropertType *property_type)
+{
+	const NMSettInfoSetting *sett_info_settings = nmtst_sett_info_settings ();
+	const NMSettInfoSetting *sis;
+	const NMMetaSettingInfo *msi;
+	GArray *arr;
+	guint idx;
+	NMMetaSettingType meta_type;
+	guint prop_idx;
+	char sbuf[300];
+
+	g_assert (h_property_types);
+	g_assert (property_type);
+
+	arr = g_hash_table_lookup (h_property_types, property_type);
+
+	g_assert (arr);
+	g_assert (arr->len > 0);
+
+	idx = g_array_index (arr, guint, 0);
+
+	meta_type = (idx & 0xFFu);
+	prop_idx = idx >> 8;
+
+	g_assert (meta_type < _NM_META_SETTING_TYPE_NUM);
+
+	sis = &sett_info_settings[meta_type];
+	msi = &nm_meta_setting_infos[meta_type];
+
+	g_assert (prop_idx < sis->property_infos_len);
+
+	nm_sprintf_buf (sbuf, "%s.%s", msi->setting_name, sis->property_infos[prop_idx].name);
+
+	return g_intern_string (sbuf);
+}
+
+static void
+test_setting_metadata (void)
+{
+	const NMSettInfoSetting *sett_info_settings = nmtst_sett_info_settings ();
+	NMMetaSettingType meta_type;
+	gs_unref_hashtable GHashTable *h_property_types = NULL;
+
+	G_STATIC_ASSERT (_NM_META_SETTING_TYPE_NUM == NM_META_SETTING_TYPE_UNKNOWN);
+
+	h_property_types = g_hash_table_new_full (nm_direct_hash, NULL, NULL, (GDestroyNotify) g_array_unref);
+
+	for (meta_type = 0; meta_type < _NM_META_SETTING_TYPE_NUM; meta_type++) {
+		const NMMetaSettingInfo *msi = &nm_meta_setting_infos[meta_type];
+		nm_auto_unref_gtypeclass NMSettingClass *klass = NULL;
+		GType gtype;
+
+		g_assert (msi->setting_name);
+		g_assert (msi->get_setting_gtype);
+		g_assert (msi->meta_type == meta_type);
+		g_assert (msi->setting_priority >= NM_SETTING_PRIORITY_CONNECTION);
+		g_assert (msi->setting_priority <= NM_SETTING_PRIORITY_USER);
+
+		if (meta_type > 0)
+			g_assert_cmpint (strcmp (nm_meta_setting_infos[meta_type - 1].setting_name, msi->setting_name), <, 0);
+
+		gtype = msi->get_setting_gtype ();
+
+		g_assert (g_type_is_a (gtype, NM_TYPE_SETTING));
+		g_assert (gtype != NM_TYPE_SETTING);
+
+		klass = g_type_class_ref (gtype);
+		g_assert (klass);
+		g_assert (NM_IS_SETTING_CLASS (klass));
+
+		g_assert (msi == klass->setting_info);
+	}
+
+	g_assert (sett_info_settings);
+
+	for (meta_type = 0; meta_type < _NM_META_SETTING_TYPE_NUM; meta_type++) {
+		const NMSettInfoSetting *sis = &sett_info_settings[meta_type];
+		const NMMetaSettingInfo *msi = &nm_meta_setting_infos[meta_type];
+		gs_unref_hashtable GHashTable *h_properties = NULL;
+		GType gtype;
+		gs_unref_object NMSetting *setting = NULL;
+		guint prop_idx;
+		gs_free GParamSpec **property_specs = NULL;
+		guint n_property_specs;
+
+		g_assert (sis);
+
+		g_assert (NM_IS_SETTING_CLASS (sis->setting_class));
+
+		gtype = msi->get_setting_gtype ();
+
+		g_assert (G_TYPE_FROM_CLASS (sis->setting_class) == gtype);
+
+		setting = g_object_new (gtype, NULL);
+
+		g_assert (NM_IS_SETTING (setting));
+
+		g_assert_cmpint (sis->property_infos_len, >, 0);
+		g_assert (sis->property_infos);
+
+		h_properties = g_hash_table_new (nm_str_hash, g_str_equal);
+
+		for (prop_idx = 0; prop_idx < sis->property_infos_len; prop_idx++) {
+			const NMSettInfoProperty *sip = &sis->property_infos[prop_idx];
+			GArray *property_types_data;
+			guint prop_idx_val;
+
+			g_assert (sip->name);
+
+			if (prop_idx > 0)
+				g_assert_cmpint (strcmp (sis->property_infos[prop_idx - 1].name, sip->name), <, 0);
+
+			g_assert (sip->property_type);
+			g_assert (sip->property_type->dbus_type);
+			g_assert (g_variant_type_string_is_valid ((const char *) sip->property_type->dbus_type));
+
+			g_assert (!sip->property_type->to_dbus_fcn || !sip->property_type->gprop_to_dbus_fcn);
+			g_assert (!sip->property_type->from_dbus_fcn || !sip->property_type->gprop_from_dbus_fcn);
+
+			if (!g_hash_table_insert (h_properties, (char *) sip->name, sip->param_spec))
+				g_assert_not_reached ();
+
+			property_types_data = g_hash_table_lookup (h_property_types, sip->property_type);
+			if (!property_types_data) {
+				property_types_data = g_array_new (FALSE, FALSE, sizeof (guint));
+				if (!g_hash_table_insert (h_property_types, (gpointer) sip->property_type, property_types_data))
+					g_assert_not_reached ();
+			}
+			prop_idx_val = _PROP_IDX_PACK (meta_type, prop_idx);
+			g_array_append_val (property_types_data, prop_idx_val);
+
+			if (sip->param_spec) {
+				nm_auto_unset_gvalue GValue val = G_VALUE_INIT;
+
+				g_assert_cmpstr (sip->name, ==, sip->param_spec->name);
+
+				g_value_init (&val, sip->param_spec->value_type);
+				g_object_get_property (G_OBJECT (setting), sip->name, &val);
+
+				if (sip->param_spec->value_type == G_TYPE_STRING) {
+					const char *default_value;
+
+					default_value = ((const GParamSpecString *) sip->param_spec)->default_value;
+					if (default_value) {
+						/* having a string property with a default != NULL is really ugly. They
+						 * should be best avoided... */
+						if (   meta_type == NM_META_SETTING_TYPE_DCB
+						    && nm_streq (sip->name, NM_SETTING_DCB_APP_FCOE_MODE)) {
+							/* Whitelist the properties that have a non-NULL default value. */
+							g_assert_cmpstr (default_value, ==, NM_SETTING_DCB_FCOE_MODE_FABRIC);
+						} else
+							g_assert_not_reached ();
+					}
+
+					if (nm_streq (sip->name, NM_SETTING_NAME))
+						g_assert_cmpstr (g_value_get_string (&val), ==, msi->setting_name);
+					else
+						g_assert_cmpstr (g_value_get_string (&val), ==, default_value);
+				}
+
+				if (NM_FLAGS_HAS (sip->param_spec->flags, NM_SETTING_PARAM_TO_DBUS_IGNORE_FLAGS))
+					g_assert (sip->property_type->to_dbus_fcn);
+			}
+		}
+
+		/* check that all GObject based properties are tracked by the settings. */
+		property_specs = g_object_class_list_properties (G_OBJECT_CLASS (sis->setting_class),
+		                                                 &n_property_specs);
+		g_assert (property_specs);
+		g_assert_cmpint (n_property_specs, >, 0);
+		for (prop_idx = 0; prop_idx < n_property_specs; prop_idx++) {
+			const GParamSpec *pip = property_specs[prop_idx];
+
+			g_assert (g_hash_table_lookup (h_properties, pip->name) == pip);
+		}
+
+		/* check that property_infos_sorted is as expected. */
+		if (sis->property_infos_sorted) {
+			gs_unref_hashtable GHashTable *h = g_hash_table_new (nm_direct_hash, NULL);
+
+			/* property_infos_sorted is only implemented for [connection] type */
+			g_assert_cmpint (meta_type, ==, NM_META_SETTING_TYPE_CONNECTION);
+
+			/* ensure that there are no duplicates, and that all properties are also
+			 * tracked by sis->property_infos. */
+			for (prop_idx = 0; prop_idx < sis->property_infos_len; prop_idx++) {
+				const NMSettInfoProperty *sip = sis->property_infos_sorted[prop_idx];
+
+				if (!g_hash_table_add (h, (gpointer) sip))
+					g_assert_not_reached ();
+			}
+			for (prop_idx = 0; prop_idx < sis->property_infos_len; prop_idx++) {
+				const NMSettInfoProperty *sip = &sis->property_infos[prop_idx];
+
+				g_assert (g_hash_table_contains (h, sip));
+			}
+		} else
+			g_assert_cmpint (meta_type, !=, NM_META_SETTING_TYPE_CONNECTION);
+
+		/* consistency check for gendata-info. */
+		if (sis->detail.gendata_info) {
+			g_assert_cmpint (meta_type, ==, NM_META_SETTING_TYPE_ETHTOOL);
+			g_assert (sis->detail.gendata_info->get_variant_type);
+
+			/* the gendata info based setting has only one regular property: the "name". */
+			g_assert_cmpint (sis->property_infos_len, ==, 1);
+			g_assert_cmpstr (sis->property_infos[0].name, ==, NM_SETTING_NAME);
+		} else
+			g_assert_cmpint (meta_type, !=, NM_META_SETTING_TYPE_ETHTOOL);
+	}
+
+	{
+		gs_free NMSettInfoPropertType **a_property_types = NULL;
+		guint a_property_types_len;
+		guint prop_idx;
+		guint prop_idx_2;
+
+		a_property_types = (NMSettInfoPropertType **) g_hash_table_get_keys_as_array (h_property_types, &a_property_types_len);
+
+		for (prop_idx = 0; prop_idx < a_property_types_len; prop_idx++) {
+			const NMSettInfoPropertType *pt = a_property_types[prop_idx];
+
+			for (prop_idx_2 = prop_idx + 1; prop_idx_2 < a_property_types_len; prop_idx_2++) {
+				const NMSettInfoPropertType *pt_2 = a_property_types[prop_idx_2];
+
+				if (   !g_variant_type_equal (pt->dbus_type, pt_2->dbus_type)
+				    || pt->to_dbus_fcn != pt_2->to_dbus_fcn
+				    || pt->from_dbus_fcn != pt_2->from_dbus_fcn
+				    || pt->missing_from_dbus_fcn != pt_2->missing_from_dbus_fcn
+				    || pt->gprop_to_dbus_fcn != pt_2->gprop_to_dbus_fcn
+				    || pt->gprop_from_dbus_fcn != pt_2->gprop_from_dbus_fcn)
+					continue;
+
+				if (   (pt   == &nm_sett_info_propert_type_plain_i && pt_2 == &nm_sett_info_propert_type_deprecated_ignore_i)
+				    || (pt_2 == &nm_sett_info_propert_type_plain_i && pt   == &nm_sett_info_propert_type_deprecated_ignore_i)
+				    || (pt   == &nm_sett_info_propert_type_plain_u && pt_2 == &nm_sett_info_propert_type_deprecated_ignore_u)
+				    || (pt_2 == &nm_sett_info_propert_type_plain_u && pt   == &nm_sett_info_propert_type_deprecated_ignore_u)) {
+					/* These are known to be duplicated. This is the case for
+					 *   "gsm.network-type"  and plain properies like "802-11-wireless-security.fils" ("i" D-Bus type)
+					 *   "gsm.allowed-bands" and plain properies like "802-11-olpc-mesh.channel" ("u" D-Bus type)
+					 * While the content/behaviour of the property types are identical, their purpose
+					 * is different. So allowe them.
+					 */
+					continue;
+				}
+
+				/* the property-types with same content should all be shared. Here we have two that
+				 * are the same content, but different instances. Bug. */
+				g_error ("The identical property type for D-Bus type \"%s\" is used by: %s and %s",
+				         (const char *) pt->dbus_type,
+				         _PROP_IDX_OWNER (h_property_types, pt),
+				         _PROP_IDX_OWNER (h_property_types, pt_2));
+			}
+		}
+	}
+}
+
+/*****************************************************************************/
+
 NMTST_DEFINE ();
 
 int
@@ -1976,7 +4028,9 @@ main (int argc, char **argv)
 	g_test_add_func ("/libnm/settings/dcb/priorities", test_dcb_priorities_valid);
 	g_test_add_func ("/libnm/settings/dcb/bandwidth-sums", test_dcb_bandwidth_sums);
 
-	g_test_add_func ("/libnm/settings/ethtool/1", test_ethtool_1);
+	g_test_add_func ("/libnm/settings/ethtool/features", test_ethtool_features);
+	g_test_add_func ("/libnm/settings/ethtool/coalesce", test_ethtool_coalesce);
+	g_test_add_func ("/libnm/settings/ethtool/ring", test_ethtool_ring);
 
 	g_test_add_func ("/libnm/settings/sriov/vf", test_sriov_vf);
 	g_test_add_func ("/libnm/settings/sriov/vf-dup", test_sriov_vf_dup);
@@ -1991,7 +4045,9 @@ main (int argc, char **argv)
 	g_test_add_func ("/libnm/settings/tc_config/setting/duplicates", test_tc_config_setting_duplicates);
 	g_test_add_func ("/libnm/settings/tc_config/dbus", test_tc_config_dbus);
 
-#if WITH_JSON_VALIDATION
+	g_test_add_func ("/libnm/settings/bridge/vlans", test_bridge_vlans);
+	g_test_add_func ("/libnm/settings/bridge/verify", test_bridge_verify);
+
 	g_test_add_func ("/libnm/settings/team/sync_runner_from_config_roundrobin",
 	                 test_runner_roundrobin_sync_from_config);
 	g_test_add_func ("/libnm/settings/team/sync_runner_from_config_broadcast",
@@ -2020,7 +4076,21 @@ main (int argc, char **argv)
 	g_test_add_func ("/libnm/settings/team-port/sync_from_config_lacp_prio", test_team_port_lacp_prio);
 	g_test_add_func ("/libnm/settings/team-port/sync_from_config_lacp_key", test_team_port_lacp_key);
 	g_test_add_func ("/libnm/settings/team-port/sycn_from_config_full", test_team_port_full_config);
-#endif
+
+	g_test_add_data_func ("/libnm/settings/roundtrip-conversion/general/0",   GINT_TO_POINTER (0), test_roundtrip_conversion);
+	g_test_add_data_func ("/libnm/settings/roundtrip-conversion/wireguard/1", GINT_TO_POINTER (1), test_roundtrip_conversion);
+	g_test_add_data_func ("/libnm/settings/roundtrip-conversion/wireguard/2", GINT_TO_POINTER (2), test_roundtrip_conversion);
+	g_test_add_data_func ("/libnm/settings/roundtrip-conversion/general/3",   GINT_TO_POINTER (3), test_roundtrip_conversion);
+
+	g_test_add_data_func ("/libnm/settings/routing-rule/1", GINT_TO_POINTER (0), test_routing_rule);
+
+	g_test_add_func ("/libnm/parse-tc-handle", test_parse_tc_handle);
+
+	g_test_add_func ("/libnm/test_team_setting", test_team_setting);
+
+	g_test_add_func ("/libnm/test_empty_setting", test_empty_setting);
+
+	g_test_add_func ("/libnm/test_setting_metadata", test_setting_metadata);
 
 	return g_test_run ();
 }

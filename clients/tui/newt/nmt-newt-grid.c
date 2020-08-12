@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -41,8 +28,6 @@
  */
 
 #include "nm-default.h"
-
-#include <string.h>
 
 #include "nmt-newt-grid.h"
 
@@ -93,10 +78,10 @@ nmt_newt_grid_finalize (GObject *object)
 	NmtNewtGridPrivate *priv = NMT_NEWT_GRID_GET_PRIVATE (object);
 
 	g_array_unref (priv->children);
-	g_clear_pointer (&priv->row_heights, g_free);
-	g_clear_pointer (&priv->col_widths, g_free);
-	g_clear_pointer (&priv->expand_rows, g_free);
-	g_clear_pointer (&priv->expand_cols, g_free);
+	nm_clear_g_free (&priv->row_heights);
+	nm_clear_g_free (&priv->col_widths);
+	nm_clear_g_free (&priv->expand_rows);
+	nm_clear_g_free (&priv->expand_cols);
 
 	G_OBJECT_CLASS (nmt_newt_grid_parent_class)->finalize (object);
 }

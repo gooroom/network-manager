@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2010 - 2011 Red Hat, Inc.
  */
 
@@ -22,6 +7,8 @@
 #define __NETWORKMANAGER_SECRET_AGENT_H__
 
 #include "nm-connection.h"
+
+#include "c-list/src/c-list.h"
 
 #define NM_TYPE_SECRET_AGENT            (nm_secret_agent_get_type ())
 #define NM_SECRET_AGENT(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_SECRET_AGENT, NMSecretAgent))
@@ -34,6 +21,17 @@
 
 typedef struct _NMSecretAgentClass NMSecretAgentClass;
 typedef struct _NMSecretAgentCallId NMSecretAgentCallId;
+
+struct _NMAuthChain;
+struct _NMSecretAgentPrivate;
+
+struct _NMSecretAgent {
+	GObject parent;
+	CList agent_lst;
+	struct _NMAuthChain *auth_chain;
+	struct _NMSecretAgentPrivate *_priv;
+	bool fully_registered:1;
+};
 
 GType nm_secret_agent_get_type (void);
 
@@ -80,9 +78,6 @@ NMSecretAgentCallId *nm_secret_agent_get_secrets (NMSecretAgent *agent,
                                                   NMSecretAgentCallback callback,
                                                   gpointer callback_data);
 
-void        nm_secret_agent_cancel_secrets (NMSecretAgent *agent,
-                                            NMSecretAgentCallId *call_id);
-
 NMSecretAgentCallId *nm_secret_agent_save_secrets (NMSecretAgent *agent,
                                                    const char *path,
                                                    NMConnection *connection,
@@ -94,5 +89,8 @@ NMSecretAgentCallId *nm_secret_agent_delete_secrets (NMSecretAgent *agent,
                                                      NMConnection *connection,
                                                      NMSecretAgentCallback callback,
                                                      gpointer callback_data);
+
+void nm_secret_agent_cancel_call (NMSecretAgent *self,
+                                  NMSecretAgentCallId *call_id);
 
 #endif /* __NETWORKMANAGER_SECRET_AGENT_H__ */

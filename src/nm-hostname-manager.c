@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * (C) Copyright 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -23,14 +8,12 @@
 #include "nm-hostname-manager.h"
 
 #include <sys/stat.h>
-#include <errno.h>
-#include <string.h>
 
 #if HAVE_SELINUX
 #include <selinux/selinux.h>
 #endif
 
-#include "nm-common-macros.h"
+#include "nm-libnm-core-intern/nm-common-macros.h"
 #include "nm-dbus-interface.h"
 #include "nm-connection.h"
 #include "nm-utils.h"
@@ -133,8 +116,7 @@ read_hostname_slackware (const char *path)
 {
 	gs_free char *contents = NULL;
 	gs_strfreev char **all_lines = NULL;
-	char *tmp;
-	guint i, j = 0;
+	guint i = 0;
 
 	if (!g_file_get_contents (path, &contents, NULL, NULL))
 		return NULL;
@@ -144,17 +126,7 @@ read_hostname_slackware (const char *path)
 		g_strstrip (all_lines[i]);
 		if (all_lines[i][0] == '#' || all_lines[i][0] == '\0')
 			continue;
-		tmp = &all_lines[i][0];
-		/* We only want up to the first '.' -- the rest of the */
-		/* fqdn is defined in /etc/hosts */
-		while (tmp[j] != '\0') {
-			if (tmp[j] == '.') {
-				tmp[j] = '\0';
-				break;
-			}
-			j++;
-		}
-		return g_shell_unquote (tmp, NULL);
+		return g_shell_unquote (&all_lines[i][0], NULL);
 	}
 	return NULL;
 }

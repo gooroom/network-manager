@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -34,14 +19,15 @@
  * necessary for Open vSwitch bridges.
  **/
 
-enum {
-	PROP_0,
+/*****************************************************************************/
+
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
 	PROP_FAIL_MODE,
 	PROP_MCAST_SNOOPING_ENABLE,
 	PROP_RSTP_ENABLE,
 	PROP_STP_ENABLE,
-	LAST_PROP
-};
+	PROP_DATAPATH_TYPE,
+);
 
 /**
  * NMSettingOvsBridge:
@@ -52,9 +38,10 @@ struct _NMSettingOvsBridge {
 	NMSetting parent;
 
 	char *fail_mode;
-	gboolean mcast_snooping_enable;
-	gboolean rstp_enable;
-	gboolean stp_enable;
+	char *datapath_type;
+	bool mcast_snooping_enable:1;
+	bool rstp_enable:1;
+	bool stp_enable:1;
 };
 
 struct _NMSettingOvsBridgeClass {
@@ -129,6 +116,22 @@ nm_setting_ovs_bridge_get_stp_enable (NMSettingOvsBridge *self)
 	return self->stp_enable;
 }
 
+/**
+ * nm_setting_ovs_bridge_get_datapath_type:
+ * @self: the #NMSettingOvsBridge
+ *
+ * Returns: the #NMSettingOvsBridge:datapath_type property of the setting
+ *
+ * Since: 1.20
+ **/
+const char *
+nm_setting_ovs_bridge_get_datapath_type (NMSettingOvsBridge *self)
+{
+	g_return_val_if_fail (NM_IS_SETTING_OVS_BRIDGE (self), NULL);
+
+	return self->datapath_type;
+}
+
 /*****************************************************************************/
 
 static int
@@ -173,6 +176,16 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		return FALSE;
 	}
 
+	if (!NM_IN_STRSET (self->datapath_type, "system", "netdev", NULL)) {
+		g_set_error (error,
+		             NM_CONNECTION_ERROR,
+		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		             _("'%s' is not valid"),
+		             self->datapath_type);
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_OVS_BRIDGE_SETTING_NAME, NM_SETTING_OVS_BRIDGE_DATAPATH_TYPE);
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
@@ -196,6 +209,9 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_STP_ENABLE:
 		g_value_set_boolean (value, self->stp_enable);
+		break;
+	case PROP_DATAPATH_TYPE:
+		g_value_set_string (value, self->datapath_type);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -222,6 +238,10 @@ set_property (GObject *object, guint prop_id,
 		break;
 	case PROP_STP_ENABLE:
 		self->stp_enable = g_value_get_boolean (value);
+		break;
+	case PROP_DATAPATH_TYPE:
+		g_free (self->datapath_type);
+		self->datapath_type = g_value_dup_string (value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -257,6 +277,7 @@ finalize (GObject *object)
 	NMSettingOvsBridge *self = NM_SETTING_OVS_BRIDGE (object);
 
 	g_free (self->fail_mode);
+	g_free (self->datapath_type);
 
 	G_OBJECT_CLASS (nm_setting_ovs_bridge_parent_class)->finalize (object);
 }
@@ -267,8 +288,8 @@ nm_setting_ovs_bridge_class_init (NMSettingOvsBridgeClass *klass)
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
 	NMSettingClass *setting_class = NM_SETTING_CLASS (klass);
 
-	object_class->set_property = set_property;
 	object_class->get_property = get_property;
+	object_class->set_property = set_property;
 	object_class->finalize     = finalize;
 
 	setting_class->verify = verify;
@@ -280,14 +301,12 @@ nm_setting_ovs_bridge_class_init (NMSettingOvsBridgeClass *klass)
 	 *
 	 * Since: 1.10
 	 **/
-	g_object_class_install_property
-	        (object_class, PROP_FAIL_MODE,
-	         g_param_spec_string (NM_SETTING_OVS_BRIDGE_FAIL_MODE, "", "",
-	                              NULL,
-	                              G_PARAM_READWRITE |
-	                              G_PARAM_CONSTRUCT |
-	                              NM_SETTING_PARAM_INFERRABLE |
-	                              G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_FAIL_MODE] =
+	    g_param_spec_string (NM_SETTING_OVS_BRIDGE_FAIL_MODE, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         NM_SETTING_PARAM_INFERRABLE |
+	                         G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingOvsBridge:mcast-snooping-enable:
@@ -296,13 +315,11 @@ nm_setting_ovs_bridge_class_init (NMSettingOvsBridgeClass *klass)
 	 *
 	 * Since: 1.10
 	 **/
-	g_object_class_install_property
-	        (object_class, PROP_MCAST_SNOOPING_ENABLE,
-	         g_param_spec_boolean (NM_SETTING_OVS_BRIDGE_MCAST_SNOOPING_ENABLE, "", "",
-	                               FALSE,
-	                               G_PARAM_READWRITE |
-	                               G_PARAM_CONSTRUCT |
-	                               G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_MCAST_SNOOPING_ENABLE] =
+	    g_param_spec_boolean (NM_SETTING_OVS_BRIDGE_MCAST_SNOOPING_ENABLE, "", "",
+	                          FALSE,
+	                          G_PARAM_READWRITE |
+	                          G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingOvsBridge:rstp-enable:
@@ -311,13 +328,11 @@ nm_setting_ovs_bridge_class_init (NMSettingOvsBridgeClass *klass)
 	 *
 	 * Since: 1.10
 	 **/
-	g_object_class_install_property
-	        (object_class, PROP_RSTP_ENABLE,
-	         g_param_spec_boolean (NM_SETTING_OVS_BRIDGE_RSTP_ENABLE, "", "",
-	                               FALSE,
-	                               G_PARAM_READWRITE |
-	                               G_PARAM_CONSTRUCT |
-	                               G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_RSTP_ENABLE] =
+	    g_param_spec_boolean (NM_SETTING_OVS_BRIDGE_RSTP_ENABLE, "", "",
+	                          FALSE,
+	                          G_PARAM_READWRITE |
+	                          G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingOvsBridge:stp-enable:
@@ -326,13 +341,27 @@ nm_setting_ovs_bridge_class_init (NMSettingOvsBridgeClass *klass)
 	 *
 	 * Since: 1.10
 	 **/
-	g_object_class_install_property
-	        (object_class, PROP_STP_ENABLE,
-	         g_param_spec_boolean (NM_SETTING_OVS_BRIDGE_STP_ENABLE, "", "",
-	                               FALSE,
-	                               G_PARAM_READWRITE |
-	                               G_PARAM_CONSTRUCT |
-	                               G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_STP_ENABLE] =
+	    g_param_spec_boolean (NM_SETTING_OVS_BRIDGE_STP_ENABLE, "", "",
+	                          FALSE,
+	                          G_PARAM_READWRITE |
+	                          G_PARAM_STATIC_STRINGS);
+
+	/**
+	 * NMSettingOvsBridge:datapath-type:
+	 *
+	 * The data path type. One of "system", "netdev" or empty.
+	 *
+	 * Since: 1.20
+	 **/
+	obj_properties[PROP_DATAPATH_TYPE] =
+	    g_param_spec_string (NM_SETTING_OVS_BRIDGE_DATAPATH_TYPE, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         NM_SETTING_PARAM_INFERRABLE |
+	                         G_PARAM_STATIC_STRINGS);
+
+	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 
 	_nm_setting_class_commit (setting_class, NM_META_SETTING_TYPE_OVS_BRIDGE);
 }

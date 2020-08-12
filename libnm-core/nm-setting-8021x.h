@@ -1,23 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
- * Copyright 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
  */
 
 #ifndef __NM_SETTING_8021X_H__
@@ -86,16 +70,18 @@ typedef enum { /*< underscore_name=nm_setting_802_1x_ck_scheme >*/
  * #NMSetting8021xAuthFlags values indicate which authentication settings
  * should be used.
  *
+ * Before 1.22, this was wrongly marked as a enum and not as a flags
+ * type.
+ *
  * Since: 1.8
  */
-typedef enum { /*< underscore_name=nm_setting_802_1x_auth_flags >*/
+typedef enum { /*< flags, underscore_name=nm_setting_802_1x_auth_flags >*/
 	NM_SETTING_802_1X_AUTH_FLAGS_NONE                = 0,
-	NM_SETTING_802_1X_AUTH_FLAGS_TLS_1_0_DISABLE     = (1 << 0),
-	NM_SETTING_802_1X_AUTH_FLAGS_TLS_1_1_DISABLE     = (1 << 1),
-	NM_SETTING_802_1X_AUTH_FLAGS_TLS_1_2_DISABLE     = (1 << 2),
+	NM_SETTING_802_1X_AUTH_FLAGS_TLS_1_0_DISABLE     = 0x1,
+	NM_SETTING_802_1X_AUTH_FLAGS_TLS_1_1_DISABLE     = 0x2,
+	NM_SETTING_802_1X_AUTH_FLAGS_TLS_1_2_DISABLE     = 0x4,
 
-	_NM_SETTING_802_1X_AUTH_FLAGS_LAST, /*< skip >*/
-	NM_SETTING_802_1X_AUTH_FLAGS_ALL                 = (((_NM_SETTING_802_1X_AUTH_FLAGS_LAST - 1) << 1) - 1),
+	NM_SETTING_802_1X_AUTH_FLAGS_ALL                 = 0x7,
 } NMSetting8021xAuthFlags;
 
 #define NM_TYPE_SETTING_802_1X            (nm_setting_802_1x_get_type ())
@@ -118,6 +104,7 @@ typedef enum { /*< underscore_name=nm_setting_802_1x_auth_flags >*/
 #define NM_SETTING_802_1X_SUBJECT_MATCH "subject-match"
 #define NM_SETTING_802_1X_ALTSUBJECT_MATCHES "altsubject-matches"
 #define NM_SETTING_802_1X_DOMAIN_SUFFIX_MATCH "domain-suffix-match"
+#define NM_SETTING_802_1X_DOMAIN_MATCH "domain-match"
 #define NM_SETTING_802_1X_CLIENT_CERT "client-cert"
 #define NM_SETTING_802_1X_CLIENT_CERT_PASSWORD "client-cert-password"
 #define NM_SETTING_802_1X_CLIENT_CERT_PASSWORD_FLAGS "client-cert-password-flags"
@@ -134,6 +121,7 @@ typedef enum { /*< underscore_name=nm_setting_802_1x_auth_flags >*/
 #define NM_SETTING_802_1X_PHASE2_SUBJECT_MATCH "phase2-subject-match"
 #define NM_SETTING_802_1X_PHASE2_ALTSUBJECT_MATCHES "phase2-altsubject-matches"
 #define NM_SETTING_802_1X_PHASE2_DOMAIN_SUFFIX_MATCH "phase2-domain-suffix-match"
+#define NM_SETTING_802_1X_PHASE2_DOMAIN_MATCH "phase2-domain-match"
 #define NM_SETTING_802_1X_PHASE2_CLIENT_CERT "phase2-client-cert"
 #define NM_SETTING_802_1X_PHASE2_CLIENT_CERT_PASSWORD "phase2-client-cert-password"
 #define NM_SETTING_802_1X_PHASE2_CLIENT_CERT_PASSWORD_FLAGS "phase2-client-cert-password-flags"
@@ -151,6 +139,7 @@ typedef enum { /*< underscore_name=nm_setting_802_1x_auth_flags >*/
 #define NM_SETTING_802_1X_PIN_FLAGS "pin-flags"
 #define NM_SETTING_802_1X_SYSTEM_CA_CERTS "system-ca-certs"
 #define NM_SETTING_802_1X_AUTH_TIMEOUT "auth-timeout"
+#define NM_SETTING_802_1X_OPTIONAL "optional"
 
 /* PRIVATE KEY NOTE: when setting PKCS#12 private keys directly via properties
  * using the "blob" scheme, the data must be passed in PKCS#12 binary format.
@@ -243,6 +232,9 @@ void              nm_setting_802_1x_clear_altsubject_matches         (NMSetting8
 NM_AVAILABLE_IN_1_2
 const char *      nm_setting_802_1x_get_domain_suffix_match          (NMSetting8021x *setting);
 
+NM_AVAILABLE_IN_1_24
+const char *      nm_setting_802_1x_get_domain_match                 (NMSetting8021x *setting);
+
 NMSetting8021xCKScheme nm_setting_802_1x_get_client_cert_scheme      (NMSetting8021x *setting);
 GBytes *               nm_setting_802_1x_get_client_cert_blob        (NMSetting8021x *setting);
 const char *           nm_setting_802_1x_get_client_cert_path        (NMSetting8021x *setting);
@@ -299,6 +291,9 @@ gboolean          nm_setting_802_1x_remove_phase2_altsubject_match_by_value (NMS
 void              nm_setting_802_1x_clear_phase2_altsubject_matches         (NMSetting8021x *setting);
 NM_AVAILABLE_IN_1_2
 const char *      nm_setting_802_1x_get_phase2_domain_suffix_match          (NMSetting8021x *setting);
+
+NM_AVAILABLE_IN_1_24
+const char *      nm_setting_802_1x_get_phase2_domain_match                 (NMSetting8021x *setting);
 
 NMSetting8021xCKScheme nm_setting_802_1x_get_phase2_client_cert_scheme   (NMSetting8021x *setting);
 GBytes *               nm_setting_802_1x_get_phase2_client_cert_blob     (NMSetting8021x *setting);
@@ -360,6 +355,8 @@ NM_AVAILABLE_IN_1_8
 NMSetting8021xAuthFlags nm_setting_802_1x_get_phase1_auth_flags          (NMSetting8021x *setting);
 NM_AVAILABLE_IN_1_8
 int                    nm_setting_802_1x_get_auth_timeout                (NMSetting8021x *setting);
+NM_AVAILABLE_IN_1_22
+gboolean               nm_setting_802_1x_get_optional                    (NMSetting8021x *setting);
 
 G_END_DECLS
 

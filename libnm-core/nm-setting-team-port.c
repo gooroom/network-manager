@@ -1,35 +1,21 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
- * Copyright 2013 Jiri Pirko <jiri@resnulli.us>
+ * Copyright (C) 2017 Red Hat, Inc.
+ * Copyright (C) 2013 Jiri Pirko <jiri@resnulli.us>
  */
 
 #include "nm-default.h"
 
-#include <string.h>
+#include "nm-setting-team-port.h"
+
 #include <ctype.h>
 #include <stdlib.h>
 
-#include "nm-setting-team-port.h"
 #include "nm-utils.h"
 #include "nm-utils-private.h"
 #include "nm-connection-private.h"
 #include "nm-setting-connection.h"
+#include "nm-team-utils.h"
 
 /**
  * SECTION:nm-setting-team-port
@@ -39,57 +25,38 @@
  * optional properties that apply to team ports.
  **/
 
+/*****************************************************************************/
+
+static GParamSpec *obj_properties[_NM_TEAM_ATTRIBUTE_PORT_NUM] = { NULL, };
+
+typedef struct {
+	NMTeamSetting *team_setting;
+} NMSettingTeamPortPrivate;
+
 G_DEFINE_TYPE (NMSettingTeamPort, nm_setting_team_port, NM_TYPE_SETTING)
 
 #define NM_SETTING_TEAM_PORT_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_SETTING_TEAM_PORT, NMSettingTeamPortPrivate))
 
-typedef struct {
-	char *config;
-	int queue_id;
-	int prio;
-	gboolean sticky;
-	int lacp_prio;
-	int lacp_key;
-	GPtrArray *link_watchers; /* Array of NMTeamLinkWatcher */
-} NMSettingTeamPortPrivate;
+/*****************************************************************************/
 
-/* Keep aligned with _prop_to_keys[] */
-enum {
-	PROP_0,
-	PROP_CONFIG,
-	PROP_QUEUE_ID,
-	PROP_PRIO,
-	PROP_STICKY,
-	PROP_LACP_PRIO,
-	PROP_LACP_KEY,
-	PROP_LINK_WATCHERS,
-	LAST_PROP
-};
-
-/* Keep aligned with team-port properties enum */
-static const _NMUtilsTeamPropertyKeys _prop_to_keys[LAST_PROP] = {
-	[PROP_0] =             { NULL, NULL, NULL, 0 },
-	[PROP_CONFIG] =        { NULL, NULL, NULL, 0 },
-	[PROP_QUEUE_ID] =      { "queue_id", NULL, NULL, NM_SETTING_TEAM_PORT_QUEUE_ID_DEFAULT },
-	[PROP_PRIO] =          { "prio", NULL, NULL, 0 },
-	[PROP_STICKY] =        { "sticky", NULL, NULL, 0 },
-	[PROP_LACP_PRIO] =     { "lacp_prio", NULL, NULL, NM_SETTING_TEAM_PORT_LACP_PRIO_DEFAULT },
-	[PROP_LACP_KEY] =      { "lacp_key", NULL, NULL, 0 },
-	[PROP_LINK_WATCHERS] = { "link_watch", NULL, NULL, 0 }
-};
-
-/**
- * nm_setting_team_port_new:
- *
- * Creates a new #NMSettingTeamPort object with default values.
- *
- * Returns: (transfer full): the new empty #NMSettingTeamPort object
- **/
-NMSetting *
-nm_setting_team_port_new (void)
+NMTeamSetting *
+_nm_setting_team_port_get_team_setting (NMSettingTeamPort *setting)
 {
-	return (NMSetting *) g_object_new (NM_TYPE_SETTING_TEAM_PORT, NULL);
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting;
 }
+
+/*****************************************************************************/
+
+#define _maybe_changed(self, changed) \
+	nm_team_setting_maybe_changed (NM_SETTING (_NM_ENSURE_TYPE (NMSettingTeamPort *, self)), (const GParamSpec *const*) obj_properties, (changed))
+
+#define _maybe_changed_with_assert(self, changed) \
+	G_STMT_START { \
+		if (!_maybe_changed ((self), (changed))) \
+			nm_assert_not_reached (); \
+	} G_STMT_END
+
+/*****************************************************************************/
 
 /**
  * nm_setting_team_port_get_config:
@@ -102,7 +69,7 @@ nm_setting_team_port_get_config (NMSettingTeamPort *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), NULL);
 
-	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->config;
+	return nm_team_setting_config_get (NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting);
 }
 
 /**
@@ -118,7 +85,7 @@ nm_setting_team_port_get_queue_id (NMSettingTeamPort *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), -1);
 
-	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->queue_id;
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting->d.port.queue_id;
 }
 
 /**
@@ -134,7 +101,7 @@ nm_setting_team_port_get_prio (NMSettingTeamPort *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), 0);
 
-	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->prio;
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting->d.port.prio;
 }
 
 /**
@@ -150,7 +117,7 @@ nm_setting_team_port_get_sticky (NMSettingTeamPort *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), FALSE);
 
-	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->sticky;
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting->d.port.sticky;
 }
 
 /**
@@ -166,7 +133,7 @@ nm_setting_team_port_get_lacp_prio (NMSettingTeamPort *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), 0);
 
-	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->lacp_prio;
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting->d.port.lacp_prio;
 }
 
 /**
@@ -182,7 +149,7 @@ nm_setting_team_port_get_lacp_key (NMSettingTeamPort *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), 0);
 
-	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->lacp_key;
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting->d.port.lacp_key;
 }
 
 /**
@@ -196,11 +163,9 @@ nm_setting_team_port_get_lacp_key (NMSettingTeamPort *setting)
 guint
 nm_setting_team_port_get_num_link_watchers (NMSettingTeamPort *setting)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
-
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), 0);
 
-	return priv->link_watchers->len;
+	return NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting->d.link_watchers->len;
 }
 
 /**
@@ -215,12 +180,15 @@ nm_setting_team_port_get_num_link_watchers (NMSettingTeamPort *setting)
 NMTeamLinkWatcher *
 nm_setting_team_port_get_link_watcher (NMSettingTeamPort *setting, guint idx)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
+	NMSettingTeamPortPrivate *priv;
 
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), NULL);
-	g_return_val_if_fail (idx < priv->link_watchers->len, NULL);
 
-	return priv->link_watchers->pdata[idx];
+	priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
+
+	g_return_val_if_fail (idx < priv->team_setting->d.link_watchers->len, NULL);
+
+	return priv->team_setting->d.link_watchers->pdata[idx];
 }
 
 /**
@@ -239,20 +207,12 @@ gboolean
 nm_setting_team_port_add_link_watcher (NMSettingTeamPort *setting,
                                        NMTeamLinkWatcher *link_watcher)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
-	guint i;
-
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), FALSE);
 	g_return_val_if_fail (link_watcher != NULL, FALSE);
 
-	for (i = 0; i < priv->link_watchers->len; i++) {
-		if (nm_team_link_watcher_equal (priv->link_watchers->pdata[i], link_watcher))
-			return FALSE;
-	}
-
-	g_ptr_array_add (priv->link_watchers, nm_team_link_watcher_dup (link_watcher));
-	g_object_notify (G_OBJECT (setting), NM_SETTING_TEAM_PORT_LINK_WATCHERS);
-	return TRUE;
+	return _maybe_changed (setting,
+	                       nm_team_setting_value_link_watchers_add (NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting,
+	                                                                link_watcher));
 }
 
 /**
@@ -267,13 +227,17 @@ nm_setting_team_port_add_link_watcher (NMSettingTeamPort *setting,
 void
 nm_setting_team_port_remove_link_watcher (NMSettingTeamPort *setting, guint idx)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
+	NMSettingTeamPortPrivate *priv;
 
 	g_return_if_fail (NM_IS_SETTING_TEAM_PORT (setting));
-	g_return_if_fail (idx < priv->link_watchers->len);
 
-	g_ptr_array_remove_index (priv->link_watchers, idx);
-	g_object_notify (G_OBJECT (setting), NM_SETTING_TEAM_PORT_LINK_WATCHERS);
+	priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
+
+	g_return_if_fail (idx < priv->team_setting->d.link_watchers->len);
+
+	_maybe_changed_with_assert (setting,
+	                            nm_team_setting_value_link_watchers_remove (priv->team_setting,
+	                                                                        idx));
 }
 
 /**
@@ -291,19 +255,12 @@ gboolean
 nm_setting_team_port_remove_link_watcher_by_value (NMSettingTeamPort *setting,
                                                    NMTeamLinkWatcher *link_watcher)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
-	guint i;
-
 	g_return_val_if_fail (NM_IS_SETTING_TEAM_PORT (setting), FALSE);
+	g_return_val_if_fail (link_watcher, FALSE);
 
-	for (i = 0; i < priv->link_watchers->len; i++) {
-		if (nm_team_link_watcher_equal (priv->link_watchers->pdata[i], link_watcher)) {
-			g_ptr_array_remove_index (priv->link_watchers, i);
-			g_object_notify (G_OBJECT (setting), NM_SETTING_TEAM_PORT_LINK_WATCHERS);
-			return TRUE;
-		}
-	}
-	return FALSE;
+	return _maybe_changed (setting,
+	                       nm_team_setting_value_link_watchers_remove_by_value (NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting,
+	                                                                            link_watcher));
 }
 
 /**
@@ -317,27 +274,12 @@ nm_setting_team_port_remove_link_watcher_by_value (NMSettingTeamPort *setting,
 void
 nm_setting_team_port_clear_link_watchers (NMSettingTeamPort *setting)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
-
 	g_return_if_fail (NM_IS_SETTING_TEAM_PORT (setting));
 
-	if (priv->link_watchers->len != 0) {
-		g_ptr_array_set_size (priv->link_watchers, 0);
-		g_object_notify (G_OBJECT (setting), NM_SETTING_TEAM_PORT_LINK_WATCHERS);
-	}
-}
-
-static GVariant *
-team_link_watchers_to_dbus (const GValue *prop_value)
-{
-	return _nm_utils_team_link_watchers_to_variant (g_value_get_boxed (prop_value));
-}
-
-static void
-team_link_watchers_from_dbus (GVariant   *dbus_value,
-                              GValue     *prop_value)
-{
-	g_value_take_boxed (prop_value, _nm_utils_team_link_watchers_from_variant (dbus_value));
+	_maybe_changed (setting,
+	                nm_team_setting_value_link_watchers_set_list (NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting,
+	                                                              NULL,
+	                                                              0));
 }
 
 static gboolean
@@ -374,167 +316,98 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		}
 	}
 
-	if (priv->config) {
-		if (strlen (priv->config) > 1*1024*1024) {
-			g_set_error (error, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("team config exceeds size limit"));
-			g_prefix_error (error,
-			                "%s.%s: ",
-			                NM_SETTING_TEAM_PORT_SETTING_NAME,
-			                NM_SETTING_TEAM_PORT_CONFIG);
-			return FALSE;
-		}
-
-		if (!nm_utils_is_json_object (priv->config, error)) {
-			g_prefix_error (error,
-			                "%s.%s: ",
-			                NM_SETTING_TEAM_PORT_SETTING_NAME,
-			                NM_SETTING_TEAM_PORT_CONFIG);
-			/* We treat an empty string as no config for compatibility. */
-			return *priv->config ? FALSE : NM_SETTING_VERIFY_NORMALIZABLE;
-		}
-	}
-
-	/* NOTE: normalizable/normalizable-errors must appear at the end with decreasing severity.
-	 * Take care to properly order statements with priv->config above. */
+	if (!nm_team_setting_verify (priv->team_setting, error))
+		return FALSE;
 
 	return TRUE;
 }
 
-static gboolean
-compare_property (NMSetting *setting,
-                  NMSetting *other,
-                  const GParamSpec *prop_spec,
+static NMTernary
+compare_property (const NMSettInfoSetting *sett_info,
+                  guint property_idx,
+                  NMConnection *con_a,
+                  NMSetting *set_a,
+                  NMConnection *con_b,
+                  NMSetting *set_b,
                   NMSettingCompareFlags flags)
 {
-	NMSettingClass *setting_class;
-	NMSettingTeamPortPrivate *a_priv, *b_priv;
-	guint i, j;
+	NMSettingTeamPortPrivate *a_priv;
+	NMSettingTeamPortPrivate *b_priv;
 
-	/* If we are trying to match a connection in order to assume it (and thus
-	 * @flags contains INFERRABLE), use the "relaxed" matching for team
-	 * configuration. Otherwise, for all other purposes (including connection
-	 * comparison before an update), resort to the default string comparison.
-	 */
-	if (   NM_FLAGS_HAS (flags, NM_SETTING_COMPARE_FLAG_INFERRABLE)
-	    && nm_streq0 (prop_spec->name, NM_SETTING_TEAM_PORT_CONFIG)) {
-		return _nm_utils_team_config_equal (NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->config,
-		                                    NM_SETTING_TEAM_PORT_GET_PRIVATE (other)->config,
+	if (nm_streq (sett_info->property_infos[property_idx].name, NM_SETTING_TEAM_PORT_LINK_WATCHERS)) {
+
+		if (NM_FLAGS_HAS (flags, NM_SETTING_COMPARE_FLAG_INFERRABLE))
+			return NM_TERNARY_DEFAULT;
+		if (!set_b)
+			return TRUE;
+		a_priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (set_a);
+		b_priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (set_b);
+		return nm_team_link_watchers_equal (a_priv->team_setting->d.link_watchers,
+		                                    b_priv->team_setting->d.link_watchers,
 		                                    TRUE);
 	}
-	if (nm_streq0 (prop_spec->name, NM_SETTING_TEAM_PORT_LINK_WATCHERS)) {
-		a_priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
-		b_priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (other);
 
-		if (a_priv->link_watchers->len != b_priv->link_watchers->len)
-			return FALSE;
-		for (i = 0; i < a_priv->link_watchers->len; i++) {
-			for (j = 0; j < b_priv->link_watchers->len; j++) {
-				if (nm_team_link_watcher_equal (a_priv->link_watchers->pdata[i],
-				                                b_priv->link_watchers->pdata[j])) {
-					break;
-				}
+	if (nm_streq (sett_info->property_infos[property_idx].name, NM_SETTING_TEAM_PORT_CONFIG)) {
+		if (set_b) {
+			if (NM_FLAGS_HAS (flags, NM_SETTING_COMPARE_FLAG_INFERRABLE)) {
+				/* If we are trying to match a connection in order to assume it (and thus
+				 * @flags contains INFERRABLE), use the "relaxed" matching for team
+				 * configuration. Otherwise, for all other purposes (including connection
+				 * comparison before an update), resort to the default string comparison. */
+				return TRUE;
 			}
-			if (j == b_priv->link_watchers->len)
-				return FALSE;
+
+			a_priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (set_a);
+			b_priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (set_b);
+
+			return nm_streq0 (nm_team_setting_config_get (a_priv->team_setting),
+			                  nm_team_setting_config_get (b_priv->team_setting));
 		}
+
 		return TRUE;
 	}
 
-	setting_class = NM_SETTING_CLASS (nm_setting_team_port_parent_class);
-	return setting_class->compare_property (setting, other, prop_spec, flags);
+	return NM_SETTING_CLASS (nm_setting_team_port_parent_class)->compare_property (sett_info,
+	                                                                               property_idx,
+	                                                                               con_a,
+	                                                                               set_a,
+	                                                                               con_b,
+	                                                                               set_b,
+	                                                                               flags);
 }
 
 static void
-nm_setting_team_port_init (NMSettingTeamPort *setting)
+duplicate_copy_properties (const NMSettInfoSetting *sett_info,
+                           NMSetting *src,
+                           NMSetting *dst)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
-
-	priv->queue_id = NM_SETTING_TEAM_PORT_QUEUE_ID_DEFAULT;
-	priv->lacp_prio = NM_SETTING_TEAM_PORT_LACP_PRIO_DEFAULT;
-	priv->link_watchers = g_ptr_array_new_with_free_func ((GDestroyNotify) nm_team_link_watcher_unref);
+	_maybe_changed (NM_SETTING_TEAM_PORT (dst),
+	                nm_team_setting_reset (NM_SETTING_TEAM_PORT_GET_PRIVATE (dst)->team_setting,
+	                                       NM_SETTING_TEAM_PORT_GET_PRIVATE (src)->team_setting));
 }
 
-#define JSON_TO_VAL(typ, id)   _nm_utils_json_extract_##typ (priv->config, _prop_to_keys[id], TRUE)
-
-static void
-set_property (GObject *object, guint prop_id,
-              const GValue *value, GParamSpec *pspec)
+static gboolean
+init_from_dbus (NMSetting *setting,
+                GHashTable *keys,
+                GVariant *setting_dict,
+                GVariant *connection_dict,
+                guint /* NMSettingParseFlags */ parse_flags,
+                GError **error)
 {
-	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (object);
-	const GValue *align_value = NULL;
-	gboolean align_config = FALSE;
+	guint32 changed = 0;
+	gboolean success;
 
-	switch (prop_id) {
-	case PROP_CONFIG:
-		g_free (priv->config);
-		priv->config = g_value_dup_string (value);
-		priv->queue_id =  JSON_TO_VAL (int, PROP_QUEUE_ID);
-		priv->prio =      JSON_TO_VAL (int, PROP_PRIO);
-		priv->sticky =    JSON_TO_VAL (boolean, PROP_STICKY);
-		priv->lacp_prio = JSON_TO_VAL (int, PROP_LACP_PRIO);
-		priv->lacp_key =  JSON_TO_VAL (int, PROP_LACP_KEY);
-
-		g_ptr_array_unref (priv->link_watchers);
-		priv->link_watchers = JSON_TO_VAL (ptr_array, PROP_LINK_WATCHERS);
-		break;
-	case PROP_QUEUE_ID:
-		if (priv->queue_id == g_value_get_int (value))
-			break;
-		priv->queue_id = g_value_get_int (value);
-		if (priv->queue_id != NM_SETTING_TEAM_PORT_QUEUE_ID_DEFAULT)
-			align_value = value;
-		align_config = TRUE;
-		break;
-	case PROP_PRIO:
-		if (priv->prio == g_value_get_int (value))
-			break;
-		priv->prio = g_value_get_int (value);
-		if (priv->prio)
-			align_value = value;
-		align_config = TRUE;
-		break;
-	case PROP_STICKY:
-		if (priv->sticky == g_value_get_boolean (value))
-			break;
-		priv->sticky = g_value_get_boolean (value);
-		if (priv->sticky)
-			align_value = value;
-		align_config = TRUE;
-		break;
-	case PROP_LACP_PRIO:
-		if (priv->lacp_prio == g_value_get_int (value))
-			break;
-		priv->lacp_prio = g_value_get_int (value);
-		/* from libteam sources: lacp_prio default value is 0xff */
-		if (priv->lacp_prio != NM_SETTING_TEAM_PORT_LACP_PRIO_DEFAULT)
-			align_value = value;
-		align_config = TRUE;
-		break;
-	case PROP_LACP_KEY:
-		if (priv->lacp_key == g_value_get_int (value))
-			break;
-		priv->lacp_key = g_value_get_int (value);
-		if (priv->lacp_key)
-			align_value = value;
-		align_config = TRUE;
-		break;
-	case PROP_LINK_WATCHERS:
-		g_ptr_array_unref (priv->link_watchers);
-		priv->link_watchers = _nm_utils_copy_array (g_value_get_boxed (value),
-		                                            (NMUtilsCopyFunc) nm_team_link_watcher_dup,
-		                                            (GDestroyNotify) nm_team_link_watcher_unref);
-		if (priv->link_watchers->len)
-			align_value = value;
-		align_config = TRUE;
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
-	if (align_config)
-		_nm_utils_json_append_gvalue (&priv->config, _prop_to_keys[prop_id], align_value);
+	success = nm_team_setting_reset_from_dbus (NM_SETTING_TEAM_PORT_GET_PRIVATE (setting)->team_setting,
+	                                           setting_dict,
+	                                           keys,
+	                                           &changed,
+	                                           parse_flags,
+	                                           error);
+	_maybe_changed (NM_SETTING_TEAM_PORT (setting), changed);
+	return success;
 }
+
+/*****************************************************************************/
 
 static void
 get_property (GObject *object, guint prop_id,
@@ -544,27 +417,26 @@ get_property (GObject *object, guint prop_id,
 	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
 
 	switch (prop_id) {
-	case PROP_CONFIG:
-		g_value_set_string (value, nm_setting_team_port_get_config (setting));
+	case NM_TEAM_ATTRIBUTE_CONFIG:
+		g_value_set_string (value,
+		                    nm_team_setting_config_get (priv->team_setting));
 		break;
-	case PROP_QUEUE_ID:
-		g_value_set_int (value, priv->queue_id);
+	case NM_TEAM_ATTRIBUTE_PORT_STICKY:
+		g_value_set_boolean (value,
+		                     nm_team_setting_value_get_bool (priv->team_setting,
+		                                                     prop_id));
 		break;
-	case PROP_PRIO:
-		g_value_set_int (value, priv->prio);
+	case NM_TEAM_ATTRIBUTE_PORT_QUEUE_ID:
+	case NM_TEAM_ATTRIBUTE_PORT_PRIO:
+	case NM_TEAM_ATTRIBUTE_PORT_LACP_PRIO:
+	case NM_TEAM_ATTRIBUTE_PORT_LACP_KEY:
+		g_value_set_int (value,
+		                 nm_team_setting_value_get_int32 (priv->team_setting,
+		                                                  prop_id));
 		break;
-	case PROP_STICKY:
-		g_value_set_boolean (value, priv->sticky);
-		break;
-	case PROP_LACP_PRIO:
-		g_value_set_int (value, priv->lacp_prio);
-		break;
-	case PROP_LACP_KEY:
-		g_value_set_int (value, priv->lacp_key);
-		break;
-	case PROP_LINK_WATCHERS:
-		g_value_take_boxed (value, _nm_utils_copy_array (priv->link_watchers,
-		                                                 (NMUtilsCopyFunc) nm_team_link_watcher_dup,
+	case NM_TEAM_ATTRIBUTE_LINK_WATCHERS:
+		g_value_take_boxed (value, _nm_utils_copy_array (priv->team_setting->d.link_watchers,
+		                                                 (NMUtilsCopyFunc) _nm_team_link_watcher_ref,
 		                                                 (GDestroyNotify) nm_team_link_watcher_unref));
 		break;
 	default:
@@ -574,12 +446,74 @@ get_property (GObject *object, guint prop_id,
 }
 
 static void
+set_property (GObject *object, guint prop_id,
+              const GValue *value, GParamSpec *pspec)
+{
+	NMSettingTeamPort *setting = NM_SETTING_TEAM_PORT (object);
+	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
+	guint32 changed;
+	const GPtrArray *v_ptrarr;
+
+	switch (prop_id) {
+	case NM_TEAM_ATTRIBUTE_CONFIG:
+		changed = nm_team_setting_config_set (priv->team_setting, g_value_get_string (value));
+		break;
+	case NM_TEAM_ATTRIBUTE_PORT_STICKY:
+		changed = nm_team_setting_value_set_bool (priv->team_setting,
+		                                          prop_id,
+		                                          g_value_get_boolean (value));
+		break;
+	case NM_TEAM_ATTRIBUTE_PORT_QUEUE_ID:
+	case NM_TEAM_ATTRIBUTE_PORT_PRIO:
+	case NM_TEAM_ATTRIBUTE_PORT_LACP_PRIO:
+	case NM_TEAM_ATTRIBUTE_PORT_LACP_KEY:
+		changed = nm_team_setting_value_set_int32 (priv->team_setting,
+		                                           prop_id,
+		                                           g_value_get_int (value));
+		break;
+	case NM_TEAM_ATTRIBUTE_LINK_WATCHERS:
+		v_ptrarr = g_value_get_boxed (value);
+		changed = nm_team_setting_value_link_watchers_set_list (priv->team_setting,
+		                                                        v_ptrarr ? (const NMTeamLinkWatcher *const*) v_ptrarr->pdata : NULL,
+		                                                        v_ptrarr ? v_ptrarr->len                                     : 0u);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+		return;
+	}
+
+	_maybe_changed (setting, changed & ~(((guint32) 1) << prop_id));
+}
+
+/*****************************************************************************/
+
+static void
+nm_setting_team_port_init (NMSettingTeamPort *setting)
+{
+	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (setting);
+
+	priv->team_setting = nm_team_setting_new (TRUE, NULL);
+}
+
+/**
+ * nm_setting_team_port_new:
+ *
+ * Creates a new #NMSettingTeamPort object with default values.
+ *
+ * Returns: (transfer full): the new empty #NMSettingTeamPort object
+ **/
+NMSetting *
+nm_setting_team_port_new (void)
+{
+	return (NMSetting *) g_object_new (NM_TYPE_SETTING_TEAM_PORT, NULL);
+}
+
+static void
 finalize (GObject *object)
 {
 	NMSettingTeamPortPrivate *priv = NM_SETTING_TEAM_PORT_GET_PRIVATE (object);
 
-	g_free (priv->config);
-	g_ptr_array_unref (priv->link_watchers);
+	nm_team_setting_free (priv->team_setting);
 
 	G_OBJECT_CLASS (nm_setting_team_port_parent_class)->finalize (object);
 }
@@ -593,12 +527,14 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 
 	g_type_class_add_private (klass, sizeof (NMSettingTeamPortPrivate));
 
-	object_class->set_property     = set_property;
 	object_class->get_property     = get_property;
+	object_class->set_property     = set_property;
 	object_class->finalize         = finalize;
 
-	setting_class->compare_property = compare_property;
-	setting_class->verify           = verify;
+	setting_class->compare_property          = compare_property;
+	setting_class->verify                    = verify;
+	setting_class->duplicate_copy_properties = duplicate_copy_properties;
+	setting_class->init_from_dbus            = init_from_dbus;
 
 	/**
 	 * NMSettingTeamPort:config:
@@ -614,13 +550,13 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 * description: Team port configuration in JSON. See man teamd.conf for details.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_CONFIG,
-		 g_param_spec_string (NM_SETTING_TEAM_PORT_CONFIG, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      NM_SETTING_PARAM_INFERRABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_CONFIG] =
+	    g_param_spec_string (NM_SETTING_TEAM_PORT_CONFIG, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         NM_SETTING_PARAM_INFERRABLE |
+	                         G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_CONFIG], &nm_sett_info_propert_type_team_s);
 
 	/**
 	 * NMSettingTeamPort:queue-id:
@@ -630,12 +566,12 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 *
 	 * Since: 1.12
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_QUEUE_ID,
-		 g_param_spec_int (NM_SETTING_TEAM_PORT_QUEUE_ID, "", "",
-		                   G_MININT32, G_MAXINT32, 0,
-		                   G_PARAM_READWRITE |
-		                   G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_PORT_QUEUE_ID] =
+	    g_param_spec_int (NM_SETTING_TEAM_PORT_QUEUE_ID, "", "",
+	                      G_MININT32, G_MAXINT32, -1,
+	                      G_PARAM_READWRITE |
+	                      G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_PORT_QUEUE_ID], &nm_sett_info_propert_type_team_i);
 
 	/**
 	 * NMSettingTeamPort:prio:
@@ -644,12 +580,12 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 *
 	 * Since: 1.12
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_PRIO,
-		 g_param_spec_int (NM_SETTING_TEAM_PORT_PRIO, "", "",
-		                   G_MININT32, G_MAXINT32, 0,
-		                   G_PARAM_READWRITE |
-		                   G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_PORT_PRIO] =
+	    g_param_spec_int (NM_SETTING_TEAM_PORT_PRIO, "", "",
+	                      G_MININT32, G_MAXINT32, 0,
+	                      G_PARAM_READWRITE |
+	                      G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_PORT_PRIO], &nm_sett_info_propert_type_team_i);
 
 	/**
 	 * NMSettingTeamPort:sticky:
@@ -658,12 +594,12 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 *
 	 * Since: 1.12
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_STICKY,
-		 g_param_spec_boolean (NM_SETTING_TEAM_PORT_STICKY, "", "",
-		                       FALSE,
-		                       G_PARAM_READWRITE |
-		                       G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_PORT_STICKY] =
+	    g_param_spec_boolean (NM_SETTING_TEAM_PORT_STICKY, "", "",
+	                          FALSE,
+	                          G_PARAM_READWRITE |
+	                          G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_PORT_STICKY], &nm_sett_info_propert_type_team_b);
 
 	/**
 	 * NMSettingTeamPort:lacp-prio:
@@ -672,12 +608,12 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 *
 	 * Since: 1.12
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_LACP_PRIO,
-		 g_param_spec_int (NM_SETTING_TEAM_PORT_LACP_PRIO, "", "",
-		                   G_MININT32, G_MAXINT32, 0,
-		                   G_PARAM_READWRITE |
-		                   G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_PORT_LACP_PRIO] =
+	    g_param_spec_int (NM_SETTING_TEAM_PORT_LACP_PRIO, "", "",
+	                      G_MININT32, G_MAXINT32, -1,
+	                      G_PARAM_READWRITE |
+	                      G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_PORT_LACP_PRIO], &nm_sett_info_propert_type_team_i);
 
 	/**
 	 * NMSettingTeamPort:lacp-key:
@@ -686,12 +622,12 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 *
 	 * Since: 1.12
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_LACP_KEY,
-		 g_param_spec_int (NM_SETTING_TEAM_PORT_LACP_KEY, "", "",
-		                   G_MININT32, G_MAXINT32, 0,
-		                   G_PARAM_READWRITE |
-		                   G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_PORT_LACP_KEY] =
+	    g_param_spec_int (NM_SETTING_TEAM_PORT_LACP_KEY, "", "",
+	                      G_MININT32, G_MAXINT32, -1,
+	                      G_PARAM_READWRITE |
+	                      G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_PORT_LACP_KEY], &nm_sett_info_propert_type_team_i);
 
 	/**
 	 * NMSettingTeamPort:link-watchers: (type GPtrArray(NMTeamLinkWatcher))
@@ -703,23 +639,18 @@ nm_setting_team_port_class_init (NMSettingTeamPortClass *klass)
 	 * Available keys are:   ethtool: 'delay-up', 'delay-down', 'init-wait';
 	 * nsna_ping: 'init-wait', 'interval', 'missed-max', 'target-host';
 	 * arp_ping: all the ones in nsna_ping and 'source-host', 'validate-active',
-	 * 'validate-incative', 'send-always'. See teamd.conf man for more details.
+	 * 'validate-inactive', 'send-always'. See teamd.conf man for more details.
 	 *
 	 * Since: 1.12
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_LINK_WATCHERS,
-		 g_param_spec_boxed (NM_SETTING_TEAM_PORT_LINK_WATCHERS, "", "",
-		                     G_TYPE_PTR_ARRAY,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	obj_properties[NM_TEAM_ATTRIBUTE_LINK_WATCHERS] =
+	    g_param_spec_boxed (NM_SETTING_TEAM_PORT_LINK_WATCHERS, "", "",
+	                        G_TYPE_PTR_ARRAY,
+	                        G_PARAM_READWRITE |
+	                        G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[NM_TEAM_ATTRIBUTE_LINK_WATCHERS], &nm_sett_info_propert_type_team_link_watchers);
 
-	_properties_override_add_transform (properties_override,
-	                                    g_object_class_find_property (G_OBJECT_CLASS (setting_class),
-	                                                                  NM_SETTING_TEAM_PORT_LINK_WATCHERS),
-	                                    G_VARIANT_TYPE ("aa{sv}"),
-	                                    team_link_watchers_to_dbus,
-	                                    team_link_watchers_from_dbus);
+	g_object_class_install_properties (object_class, G_N_ELEMENTS (obj_properties), obj_properties);
 
 	_nm_setting_class_commit_full (setting_class, NM_META_SETTING_TYPE_TEAM_PORT,
 	                               NULL, properties_override);

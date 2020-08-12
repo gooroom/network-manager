@@ -1,33 +1,18 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2008 Novell, Inc.
- * Copyright 2007 - 2015 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2015 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-vpn-service-plugin.h"
 
-#include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
 
-#include "nm-utils/nm-secret-utils.h"
+#include "nm-glib-aux/nm-secret-utils.h"
+#include "nm-glib-aux/nm-dbus-aux.h"
 #include "nm-enum-types.h"
 #include "nm-utils.h"
 #include "nm-connection.h"
@@ -86,14 +71,11 @@ enum {
 
 static guint signals[LAST_SIGNAL] = { 0 };
 
-enum {
-	PROP_0,
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
 	PROP_DBUS_SERVICE_NAME,
 	PROP_DBUS_WATCH_PEER,
 	PROP_STATE,
-
-	LAST_PROP
-};
+);
 
 static GSList *active_plugins = NULL;
 
@@ -218,7 +200,7 @@ nm_vpn_service_plugin_disconnect (NMVpnServicePlugin *plugin, GError **err)
 		break;
 	case NM_VPN_SERVICE_STATE_STARTING:
 		_emit_failure (plugin, NM_VPN_PLUGIN_FAILURE_CONNECT_FAILED);
-		/* fall through */
+		/* fall-through */
 	case NM_VPN_SERVICE_STATE_STARTED:
 		nm_vpn_service_plugin_set_state (plugin, NM_VPN_SERVICE_STATE_STOPPING);
 		ret = NM_VPN_SERVICE_PLUGIN_GET_CLASS (plugin)->disconnect (plugin, err);
@@ -500,16 +482,11 @@ watch_peer (NMVpnServicePlugin *plugin,
 	GDBusConnection *connection = g_dbus_method_invocation_get_connection (context);
 	const char *peer = g_dbus_message_get_sender (g_dbus_method_invocation_get_message (context));
 
-	return g_dbus_connection_signal_subscribe (connection,
-	                                           "org.freedesktop.DBus",
-	                                           "org.freedesktop.DBus",
-	                                           "NameOwnerChanged",
-	                                           "/org/freedesktop/DBus",
-	                                           peer,
-	                                           G_DBUS_SIGNAL_FLAGS_NONE,
-	                                           peer_vanished,
-	                                           plugin,
-	                                           NULL);
+	return nm_dbus_connection_signal_subscribe_name_owner_changed (connection,
+	                                                               peer,
+	                                                               peer_vanished,
+	                                                               plugin,
+	                                                               NULL);
 }
 
 static void
@@ -787,9 +764,12 @@ nm_vpn_service_plugin_read_vpn_details (int fd,
 	gs_unref_hashtable GHashTable *data = NULL;
 	gs_unref_hashtable GHashTable *secrets = NULL;
 	gboolean success = FALSE;
-	char *key = NULL, *val = NULL;
+	GHashTable *hash = NULL;
+	GString *key = NULL, *val = NULL;
 	nm_auto_free_gstring GString *line = NULL;
 	char c;
+
+	GString *str = NULL;
 
 	if (out_data)
 		g_return_val_if_fail (*out_data == NULL, FALSE);
@@ -804,49 +784,79 @@ nm_vpn_service_plugin_read_vpn_details (int fd,
 	/* Read stdin for data and secret items until we get a DONE */
 	while (1) {
 		ssize_t nr;
-		GHashTable *hash = NULL;
 
-		errno = 0;
 		nr = read (fd, &c, 1);
-		if (nr == -1) {
+		if (nr < 0) {
 			if (errno == EAGAIN) {
 				g_usleep (100);
 				continue;
 			}
 			break;
 		}
-
-		if (c != '\n') {
+		if (nr > 0 && c != '\n') {
 			g_string_append_c (line, c);
 			continue;
 		}
 
-		/* Check for the finish marker */
-		if (strcmp (line->str, "DONE") == 0)
-			break;
-
-		/* Otherwise it's a data/secret item */
-		if (strncmp (line->str, DATA_KEY_TAG, strlen (DATA_KEY_TAG)) == 0) {
-			hash = data;
-			key = g_strdup (line->str + strlen (DATA_KEY_TAG));
-		} else if (strncmp (line->str, DATA_VAL_TAG, strlen (DATA_VAL_TAG)) == 0) {
-			hash = data;
-			val = g_strdup (line->str + strlen (DATA_VAL_TAG));
-		} else if (strncmp (line->str, SECRET_KEY_TAG, strlen (SECRET_KEY_TAG)) == 0) {
-			hash = secrets;
-			key = g_strdup (line->str + strlen (SECRET_KEY_TAG));
-		} else if (strncmp (line->str, SECRET_VAL_TAG, strlen (SECRET_VAL_TAG)) == 0) {
-			hash = secrets;
-			val = g_strdup (line->str + strlen (SECRET_VAL_TAG));
-		}
-		g_string_truncate (line, 0);
-
-		if (key && val && hash) {
-			g_hash_table_insert (hash, key, val);
+		if (str && *line->str == '=') {
+			/* continuation */
+			g_string_append_c (str, '\n');
+			g_string_append (str, line->str + 1);
+		} else if (key && val) {
+			/* done a line */
+			g_return_val_if_fail (hash, FALSE);
+			g_hash_table_insert (hash,
+			                     g_string_free (key, FALSE),
+			                     g_string_free (val, FALSE));
 			key = NULL;
 			val = NULL;
+			hash = NULL;
 			success = TRUE;  /* Got at least one value */
 		}
+
+		if (strcmp (line->str, "DONE") == 0) {
+			/* finish marker */
+			break;
+		} else if (strncmp (line->str, DATA_KEY_TAG, strlen (DATA_KEY_TAG)) == 0) {
+			if (key != NULL) {
+				g_warning ("a value expected");
+				g_string_free (key, TRUE);
+			}
+			key = g_string_new (line->str + strlen (DATA_KEY_TAG));
+			str = key;
+			hash = data;
+		} else if (strncmp (line->str, DATA_VAL_TAG, strlen (DATA_VAL_TAG)) == 0) {
+			if (val != NULL)
+				g_string_free (val, TRUE);
+			if (val || !key || hash != data) {
+				g_warning ("%s not preceded by %s", DATA_VAL_TAG, DATA_KEY_TAG);
+				break;
+			}
+			val = g_string_new (line->str + strlen (DATA_VAL_TAG));
+			str = val;
+		} else if (strncmp (line->str, SECRET_KEY_TAG, strlen (SECRET_KEY_TAG)) == 0) {
+			if (key != NULL) {
+				g_warning ("a value expected");
+				g_string_free (key, TRUE);
+			}
+			key = g_string_new (line->str + strlen (SECRET_KEY_TAG));
+			str = key;
+			hash = secrets;
+		} else if (strncmp (line->str, SECRET_VAL_TAG, strlen (SECRET_VAL_TAG)) == 0) {
+			if (val != NULL)
+				g_string_free (val, TRUE);
+			if (val || !key || hash != secrets) {
+				g_warning ("%s not preceded by %s", SECRET_VAL_TAG, SECRET_KEY_TAG);
+				break;
+			}
+			val = g_string_new (line->str + strlen (SECRET_VAL_TAG));
+			str = val;
+		}
+
+		g_string_truncate (line, 0);
+
+		if (nr == 0)
+			break;
 	}
 
 	if (success) {
@@ -1135,10 +1145,10 @@ finalize (GObject *object)
 	nm_vpn_service_plugin_set_connection (plugin, NULL);
 	g_free (priv->dbus_service_name);
 
-	g_clear_pointer (&priv->banner, g_variant_unref);
-	g_clear_pointer (&priv->tundev, g_variant_unref);
-	g_clear_pointer (&priv->gateway, g_variant_unref);
-	g_clear_pointer (&priv->mtu, g_variant_unref);
+	nm_clear_pointer (&priv->banner, g_variant_unref);
+	nm_clear_pointer (&priv->tundev, g_variant_unref);
+	nm_clear_pointer (&priv->gateway, g_variant_unref);
+	nm_clear_pointer (&priv->mtu, g_variant_unref);
 
 	G_OBJECT_CLASS (nm_vpn_service_plugin_parent_class)->finalize (object);
 }
@@ -1158,11 +1168,8 @@ state_changed (NMVpnServicePlugin *plugin, NMVpnServiceState state)
 			nm_vpn_service_plugin_emit_quit (plugin);
 		else
 			schedule_quit_timer (plugin);
-		if (priv->peer_watch_id) {
-			g_dbus_connection_signal_unsubscribe (nm_vpn_service_plugin_get_connection (plugin),
-			                                      priv->peer_watch_id);
-			priv->peer_watch_id = 0;
-		}
+		nm_clear_g_dbus_connection_signal (nm_vpn_service_plugin_get_connection (plugin),
+		                                   &priv->peer_watch_id);
 		break;
 	default:
 		/* Clean up all timers we might have set up. */
@@ -1180,15 +1187,12 @@ nm_vpn_service_plugin_class_init (NMVpnServicePluginClass *plugin_class)
 
 	g_type_class_add_private (object_class, sizeof (NMVpnServicePluginPrivate));
 
-	/* virtual methods */
-	object_class->set_property = set_property;
 	object_class->get_property = get_property;
+	object_class->set_property = set_property;
 	object_class->dispose      = dispose;
 	object_class->finalize     = finalize;
 
 	plugin_class->state_changed = state_changed;
-
-	/* properties */
 
 	/**
 	 * NMVpnServicePlugin:service-name:
@@ -1197,13 +1201,12 @@ nm_vpn_service_plugin_class_init (NMVpnServicePluginClass *plugin_class)
 	 *
 	 * Since: 1.2
 	 */
-	g_object_class_install_property
-		(object_class, PROP_DBUS_SERVICE_NAME,
-		 g_param_spec_string (NM_VPN_SERVICE_PLUGIN_DBUS_SERVICE_NAME, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_CONSTRUCT_ONLY |
-		                      G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_DBUS_SERVICE_NAME] =
+	    g_param_spec_string (NM_VPN_SERVICE_PLUGIN_DBUS_SERVICE_NAME, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         G_PARAM_CONSTRUCT_ONLY |
+	                         G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMVpnServicePlugin:watch-peer:
@@ -1212,12 +1215,12 @@ nm_vpn_service_plugin_class_init (NMVpnServicePluginClass *plugin_class)
 	 *
 	 * Since: 1.2
 	 */
-	g_object_class_install_property
-		(object_class, PROP_DBUS_WATCH_PEER,
-		 g_param_spec_boolean (NM_VPN_SERVICE_PLUGIN_DBUS_WATCH_PEER, "", "",
-		                       FALSE,
-		                       G_PARAM_READWRITE |
-		                       G_PARAM_CONSTRUCT_ONLY));
+	obj_properties[PROP_DBUS_WATCH_PEER] =
+	    g_param_spec_boolean (NM_VPN_SERVICE_PLUGIN_DBUS_WATCH_PEER, "", "",
+	                          FALSE,
+	                          G_PARAM_READWRITE |
+	                          G_PARAM_CONSTRUCT_ONLY |
+	                          G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMVpnServicePlugin:state:
@@ -1226,92 +1229,92 @@ nm_vpn_service_plugin_class_init (NMVpnServicePluginClass *plugin_class)
 	 *
 	 * Since: 1.2
 	 */
-	g_object_class_install_property
-		(object_class, PROP_STATE,
-		 g_param_spec_enum (NM_VPN_SERVICE_PLUGIN_STATE, "", "",
-		                    NM_TYPE_VPN_SERVICE_STATE,
-		                    NM_VPN_SERVICE_STATE_INIT,
-		                    G_PARAM_READWRITE |
-		                    G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_STATE] =
+	    g_param_spec_enum (NM_VPN_SERVICE_PLUGIN_STATE, "", "",
+	                       NM_TYPE_VPN_SERVICE_STATE,
+	                       NM_VPN_SERVICE_STATE_INIT,
+	                       G_PARAM_READWRITE |
+	                       G_PARAM_STATIC_STRINGS);
 
-	/* signals */
+	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
+
 	signals[STATE_CHANGED] =
-		g_signal_new ("state-changed",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, state_changed),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 1,
-		              G_TYPE_UINT);
+	    g_signal_new ("state-changed",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, state_changed),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 1,
+	                  G_TYPE_UINT);
 
 	signals[SECRETS_REQUIRED] =
-		g_signal_new ("secrets-required",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              0, NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 2, G_TYPE_STRING, G_TYPE_STRV);
+	    g_signal_new ("secrets-required",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  0, NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 2, G_TYPE_STRING, G_TYPE_STRV);
 
 	signals[CONFIG] =
-		g_signal_new ("config",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, config),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 1,
-		              G_TYPE_VARIANT);
+	    g_signal_new ("config",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, config),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 1,
+	                  G_TYPE_VARIANT);
 
 	signals[IP4_CONFIG] =
-		g_signal_new ("ip4-config",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, ip4_config),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 1,
-		              G_TYPE_VARIANT);
+	    g_signal_new ("ip4-config",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, ip4_config),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 1,
+	                  G_TYPE_VARIANT);
 
 	signals[IP6_CONFIG] =
-		g_signal_new ("ip6-config",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, ip6_config),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 1,
-		              G_TYPE_VARIANT);
+	    g_signal_new ("ip6-config",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, ip6_config),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 1,
+	                  G_TYPE_VARIANT);
 
 	signals[LOGIN_BANNER] =
-		g_signal_new ("login-banner",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, login_banner),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 1,
-		              G_TYPE_STRING);
+	    g_signal_new ("login-banner",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, login_banner),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 1,
+	                  G_TYPE_STRING);
 
 	signals[FAILURE] =
-		g_signal_new ("failure",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, failure),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 1,
-		              G_TYPE_UINT);
+	    g_signal_new ("failure",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, failure),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 1,
+	                  G_TYPE_UINT);
 
 	signals[QUIT] =
-		g_signal_new ("quit",
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMVpnServicePluginClass, quit),
-		              NULL, NULL,
-		              NULL,
-		              G_TYPE_NONE, 0,
-		              G_TYPE_NONE);
+	    g_signal_new ("quit",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMVpnServicePluginClass, quit),
+	                  NULL, NULL,
+	                  NULL,
+	                  G_TYPE_NONE, 0,
+	                  G_TYPE_NONE);
 
 	setup_unix_signal_handler ();
 }
@@ -1325,7 +1328,7 @@ nm_vpn_service_plugin_initable_iface_init (GInitableIface *iface)
 /*****************************************************************************/
 
 /* this header is intended to be copied to users of nm_vpn_editor_plugin_call(),
- * to simplify invocation of generic functions. Include it here, to complile
+ * to simplify invocation of generic functions. Include it here, to compile
  * the code. */
 #include "nm-utils/nm-vpn-editor-plugin-call.h"
 

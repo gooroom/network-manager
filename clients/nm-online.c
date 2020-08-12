@@ -1,22 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
  * Copyright (C) 2006 - 2008 Novell, Inc.
  * Copyright (C) 2008 - 2014 Red Hat, Inc.
- *
  */
 
 /*
@@ -37,6 +22,8 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <locale.h>
+
+#include "nm-libnm-aux/nm-libnm-aux.h"
 
 #define PROGRESS_STEPS 15
 
@@ -213,13 +200,16 @@ got_client (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
 	OnlineData *data = user_data;
 	gs_free_error GError *error = NULL;
-	NMClient *client;
+
+	nm_assert (NM_IS_CLIENT (source_object));
+	nm_assert (NM_CLIENT (source_object) == data->client);
 
 	nm_clear_g_source (&data->client_new_timeout_id);
 	g_clear_object (&data->client_new_cancellable);
 
-	client = nm_client_new_finish (res, &error);
-	if (!client) {
+	if (!g_async_initable_init_finish (G_ASYNC_INITABLE (source_object),
+	                                   res,
+	                                   &error)) {
 		if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
 			return;
 		data->quiet = TRUE;
@@ -228,8 +218,6 @@ got_client (GObject *source_object, GAsyncResult *res, gpointer user_data)
 		_return (data, EXIT_FAILURE_ERROR);
 		return;
 	}
-
-	data->client = client;
 
 	if (quit_if_connected (data))
 		return;
@@ -245,14 +233,14 @@ main (int argc, char *argv[])
 	OnlineData data = {
 		.retval = EXIT_FAILURE_UNSPECIFIED,
 	};
-	int t_secs = 30;
+	int t_secs;
 	GOptionContext *opt_ctx = NULL;
 	gboolean success;
 	GOptionEntry options[] = {
-		{"timeout", 't', 0, G_OPTION_ARG_INT, &t_secs, N_("Time to wait for a connection, in seconds (without the option, default value is 30)"), "<timeout>"},
-		{"exit", 'x', 0, G_OPTION_ARG_NONE, &data.exit_no_nm, N_("Exit immediately if NetworkManager is not running or connecting"), NULL},
 		{"quiet", 'q', 0, G_OPTION_ARG_NONE, &data.quiet, N_("Don't print anything"), NULL},
 		{"wait-for-startup", 's', 0, G_OPTION_ARG_NONE, &data.wait_startup, N_("Wait for NetworkManager startup instead of a connection"), NULL},
+		{"timeout", 't', 0, G_OPTION_ARG_INT, &t_secs, N_("Time to wait for a connection, in seconds (without the option, default value is 30)"), "<timeout>"},
+		{"exit", 'x', 0, G_OPTION_ARG_NONE, &data.exit_no_nm, N_("Exit immediately if NetworkManager is not running or connecting"), NULL},
 		{ NULL },
 	};
 
@@ -262,6 +250,8 @@ main (int argc, char *argv[])
 	bindtextdomain (GETTEXT_PACKAGE, NMLOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 	textdomain (GETTEXT_PACKAGE);
+
+	t_secs = _nm_utils_ascii_str_to_int64 (g_getenv ("NM_ONLINE_TIMEOUT"), 10, 0, G_MAXINT, 30);
 
 	data.start_timestamp_ms = _now_ms ();
 
@@ -300,7 +290,12 @@ main (int argc, char *argv[])
 	data.client_new_cancellable = g_cancellable_new ();
 
 	data.client_new_timeout_id = g_timeout_add_seconds (30, got_client_timeout, &data);
-	nm_client_new_async (data.client_new_cancellable, got_client, &data);
+
+	data.client = nmc_client_new_async (data.client_new_cancellable,
+	                                    got_client,
+	                                    &data,
+	                                    NM_CLIENT_INSTANCE_FLAGS, (guint) NM_CLIENT_INSTANCE_FLAGS_NO_AUTO_FETCH_PERMISSIONS,
+	                                    NULL);
 
 	g_main_loop_run (data.loop);
 
@@ -310,7 +305,7 @@ main (int argc, char *argv[])
 	nm_clear_g_signal_handler (data.client, &data.client_notify_id);
 	g_clear_object (&data.client);
 
-	g_clear_pointer (&data.loop, g_main_loop_unref);
+	nm_clear_pointer (&data.loop, g_main_loop_unref);
 
 	if (!data.quiet)
 		_print_progress (data.wait_startup, -1, NM_MAX (0, data.end_timestamp_ms - _now_ms ()), data.retval);

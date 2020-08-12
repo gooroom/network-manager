@@ -1,33 +1,6 @@
+# SPDX-License-Identifier: LGPL-2.1+
+
 sources = files(
-  'sd-adapt/nm-sd-adapt.c',
-  'src/basic/alloc-util.c',
-  'src/basic/escape.c',
-  'src/basic/env-util.c',
-  'src/basic/ether-addr-util.c',
-  'src/basic/extract-word.c',
-  'src/basic/fd-util.c',
-  'src/basic/fileio.c',
-  'src/basic/fs-util.c',
-  'src/basic/hash-funcs.c',
-  'src/basic/hashmap.c',
-  'src/basic/hexdecoct.c',
-  'src/basic/hostname-util.c',
-  'src/basic/in-addr-util.c',
-  'src/basic/io-util.c',
-  'src/basic/mempool.c',
-  'src/basic/parse-util.c',
-  'src/basic/path-util.c',
-  'src/basic/prioq.c',
-  'src/basic/process-util.c',
-  'src/basic/random-util.c',
-  'src/basic/socket-util.c',
-  'src/basic/stat-util.c',
-  'src/basic/string-table.c',
-  'src/basic/string-util.c',
-  'src/basic/strv.c',
-  'src/basic/time-util.c',
-  'src/basic/utf8.c',
-  'src/basic/util.c',
   'src/libsystemd-network/arp-util.c',
   'src/libsystemd-network/dhcp-identifier.c',
   'src/libsystemd-network/dhcp-network.c',
@@ -45,29 +18,33 @@ sources = files(
   'src/libsystemd-network/sd-ipv4acd.c',
   'src/libsystemd-network/sd-ipv4ll.c',
   'src/libsystemd-network/sd-lldp.c',
+  'src/libsystemd/sd-event/event-util.c',
   'src/libsystemd/sd-event/sd-event.c',
   'src/libsystemd/sd-id128/id128-util.c',
   'src/libsystemd/sd-id128/sd-id128.c',
-  'src/shared/dns-domain.c',
   'nm-sd.c',
-  'nm-sd-utils.c',
+  'nm-sd-utils-core.c',
+  'nm-sd-utils-dhcp.c',
+  'sd-adapt-core/nm-sd-adapt-core.c',
 )
 
-incs = [
-  src_inc,
-  include_directories(
-    'sd-adapt',
-    'src/basic',
-    'src/libsystemd-network',
-    'src/shared',
-    'src/systemd'
-  )
+incs = include_directories(
+  'sd-adapt-core',
+  'src/libsystemd-network',
+  'src/libsystemd/sd-event',
+  'src/systemd',
+)
+
+deps = [
+  daemon_nm_default_dep,
+  libnm_systemd_shared_dep,
 ]
 
-libsystemd_nm = static_library(
-  'systemd-nm',
+libnm_systemd_core = static_library(
+  'nm-systemd-core',
   sources: sources,
   include_directories: incs,
-  dependencies: nm_core_dep,
-  c_args: '-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_SYSTEMD'
+  dependencies: deps,
+  c_args: '-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_SYSTEMD',
+  link_with: libc_siphash,
 )

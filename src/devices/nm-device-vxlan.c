@@ -1,28 +1,11 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2013 - 2015 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2013 - 2015 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-device-vxlan.h"
-
-#include <string.h>
 
 #include "nm-device-private.h"
 #include "nm-manager.h"
@@ -34,6 +17,7 @@
 #include "settings/nm-settings.h"
 #include "nm-act-request.h"
 #include "nm-ip4-config.h"
+#include "nm-core-internal.h"
 
 #include "nm-device-logging.h"
 _LOG_DECLARE_SELF(NMDeviceVxlan);
@@ -73,7 +57,7 @@ struct _NMDeviceVxlanClass {
 
 G_DEFINE_TYPE (NMDeviceVxlan, nm_device_vxlan, NM_TYPE_DEVICE)
 
-#define NM_DEVICE_VXLAN_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDeviceVxlan, NM_IS_DEVICE_VXLAN)
+#define NM_DEVICE_VXLAN_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDeviceVxlan, NM_IS_DEVICE_VXLAN, NMDevice)
 
 /*****************************************************************************/
 
@@ -170,11 +154,11 @@ create_and_realize (NMDevice *device,
                     GError **error)
 {
 	const char *iface = nm_device_get_iface (device);
-	NMPlatformError plerr;
 	NMPlatformLnkVxlan props = { };
 	NMSettingVxlan *s_vxlan;
 	const char *str;
 	int ret;
+	int r;
 
 	s_vxlan = nm_connection_get_setting_vxlan (connection);
 	g_assert (s_vxlan);
@@ -213,13 +197,13 @@ create_and_realize (NMDevice *device,
 	props.l2miss = nm_setting_vxlan_get_l2_miss (s_vxlan);
 	props.l3miss = nm_setting_vxlan_get_l3_miss (s_vxlan);
 
-	plerr = nm_platform_link_vxlan_add (nm_device_get_platform (device), iface, &props, out_plink);
-	if (plerr != NM_PLATFORM_ERROR_SUCCESS) {
+	r = nm_platform_link_vxlan_add (nm_device_get_platform (device), iface, &props, out_plink);
+	if (r < 0) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
 		             "Failed to create VXLAN interface '%s' for '%s': %s",
 		             iface,
 		             nm_connection_get_id (connection),
-		             nm_platform_error_to_string_a (plerr));
+		             nm_strerror (r));
 		return FALSE;
 	}
 
@@ -248,7 +232,7 @@ address_matches (const char *str, in_addr_t addr4, struct in6_addr *addr6)
 static gboolean
 check_connection_compatible (NMDevice *device, NMConnection *connection, GError **error)
 {
-	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE ((NMDeviceVxlan *) device);
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (device);
 	NMSettingVxlan *s_vxlan;
 	const char *parent;
 
@@ -369,6 +353,7 @@ complete_connection (NMDevice *device,
 	                           NULL,
 	                           _("VXLAN connection"),
 	                           NULL,
+	                           NULL,
 	                           TRUE);
 
 	s_vxlan = nm_connection_get_setting_vxlan (connection);
@@ -384,8 +369,9 @@ complete_connection (NMDevice *device,
 static void
 update_connection (NMDevice *device, NMConnection *connection)
 {
-	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE ((NMDeviceVxlan *) device);
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (device);
 	NMSettingVxlan *s_vxlan = nm_connection_get_setting_vxlan (connection);
+	char sbuf[NM_UTILS_INET_ADDRSTRLEN];
 
 	if (!s_vxlan) {
 		s_vxlan = (NMSettingVxlan *) nm_setting_vxlan_new ();
@@ -404,11 +390,11 @@ update_connection (NMDevice *device, NMConnection *connection)
 	if (!address_matches (nm_setting_vxlan_get_remote (s_vxlan), priv->props.group, &priv->props.group6)) {
 		if (priv->props.group) {
 			g_object_set (s_vxlan, NM_SETTING_VXLAN_REMOTE,
-			              nm_utils_inet4_ntop (priv->props.group, NULL),
+			              _nm_utils_inet4_ntop (priv->props.group, sbuf),
 			              NULL);
 		} else {
 			g_object_set (s_vxlan, NM_SETTING_VXLAN_REMOTE,
-			              nm_utils_inet6_ntop (&priv->props.group6, NULL),
+			              _nm_utils_inet6_ntop (&priv->props.group6, sbuf),
 			              NULL);
 		}
 	}
@@ -416,11 +402,11 @@ update_connection (NMDevice *device, NMConnection *connection)
 	if (!address_matches (nm_setting_vxlan_get_local (s_vxlan), priv->props.local, &priv->props.local6)) {
 		if (priv->props.local) {
 			g_object_set (s_vxlan, NM_SETTING_VXLAN_LOCAL,
-			              nm_utils_inet4_ntop (priv->props.local, NULL),
+			              _nm_utils_inet4_ntop (priv->props.local, sbuf),
 			              NULL);
 		} else if (memcmp (&priv->props.local6, &in6addr_any, sizeof (in6addr_any))) {
 			g_object_set (s_vxlan, NM_SETTING_VXLAN_LOCAL,
-			              nm_utils_inet6_ntop (&priv->props.local6, NULL),
+			              _nm_utils_inet6_ntop (&priv->props.local6, sbuf),
 			              NULL);
 		}
 	}
@@ -481,28 +467,13 @@ update_connection (NMDevice *device, NMConnection *connection)
 	}
 }
 
-static NMActStageReturn
-act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
-{
-	NMActStageReturn ret;
-
-	ret = NM_DEVICE_CLASS (nm_device_vxlan_parent_class)->act_stage1_prepare (device, out_failure_reason);
-	if (ret != NM_ACT_STAGE_RETURN_SUCCESS)
-		return ret;
-
-	if (!nm_device_hw_addr_set_cloned (device, nm_device_get_applied_connection (device), FALSE))
-		return NM_ACT_STAGE_RETURN_FAILURE;
-
-	return NM_ACT_STAGE_RETURN_SUCCESS;
-}
-
 /*****************************************************************************/
 
 static void
 get_property (GObject *object, guint prop_id,
               GValue *value, GParamSpec *pspec)
 {
-	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE ((NMDeviceVxlan *) object);
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (object);
 
 	switch (prop_id) {
 	case PROP_ID:
@@ -510,15 +481,15 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_GROUP:
 		if (priv->props.group)
-			g_value_set_string (value, nm_utils_inet4_ntop (priv->props.group, NULL));
+			g_value_take_string (value, nm_utils_inet4_ntop_dup (priv->props.group));
 		else if (!IN6_IS_ADDR_UNSPECIFIED (&priv->props.group6))
-			g_value_set_string (value, nm_utils_inet6_ntop (&priv->props.group6, NULL));
+			g_value_take_string (value, nm_utils_inet6_ntop_dup (&priv->props.group6));
 		break;
 	case PROP_LOCAL:
 		if (priv->props.local)
-			g_value_set_string (value, nm_utils_inet4_ntop (priv->props.local, NULL));
+			g_value_take_string (value, nm_utils_inet4_ntop_dup (priv->props.local));
 		else if (!IN6_IS_ADDR_UNSPECIFIED (&priv->props.local6))
-			g_value_set_string (value, nm_utils_inet6_ntop (&priv->props.local6, NULL));
+			g_value_take_string (value, nm_utils_inet6_ntop_dup (&priv->props.local6));
 		break;
 	case PROP_TOS:
 		g_value_set_uchar (value, priv->props.tos);
@@ -620,7 +591,7 @@ nm_device_vxlan_class_init (NMDeviceVxlanClass *klass)
 	device_class->complete_connection = complete_connection;
 	device_class->get_generic_capabilities = get_generic_capabilities;
 	device_class->update_connection = update_connection;
-	device_class->act_stage1_prepare = act_stage1_prepare;
+	device_class->act_stage1_prepare_set_hwaddr_ethernet = TRUE;
 	device_class->get_configured_mtu = nm_device_get_configured_mtu_for_wired;
 
 	obj_properties[PROP_ID] =

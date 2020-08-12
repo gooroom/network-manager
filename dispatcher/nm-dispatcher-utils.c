@@ -1,26 +1,11 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2008 - 2011 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
+#include "nm-dispatcher-utils.h"
 
 #include "nm-dbus-interface.h"
 #include "nm-connection.h"
@@ -28,10 +13,8 @@
 #include "nm-setting-ip6-config.h"
 #include "nm-setting-connection.h"
 
-#include "nm-dispatcher-api.h"
+#include "nm-libnm-core-aux/nm-dispatcher-api.h"
 #include "nm-utils.h"
-
-#include "nm-dispatcher-utils.h"
 
 /*****************************************************************************/
 
@@ -384,6 +367,8 @@ construct_device_dhcp_items (GPtrArray *items, int addr_family, GVariant *dhcp_c
 	const char *key;
 	GVariant *val;
 	char four_or_six;
+	gboolean found_unknown_245 = FALSE;
+	gs_unref_variant GVariant *private_245_val = NULL;
 
 	if (!dhcp_config)
 		return;
@@ -405,9 +390,42 @@ construct_device_dhcp_items (GPtrArray *items, int addr_family, GVariant *dhcp_c
 				                   four_or_six,
 				                   ucased,
 				                   g_variant_get_string (val, NULL));
+
+				/* MS Azure sends the server endpoint in the dhcp private
+				 * option 245. cloud-init searches the Azure server endpoint
+				 * value looking for the standard dhclient label used for
+				 * that option, which is "unknown_245".
+				 * The 11-dhclient script shipped with Fedora and RHEL dhcp
+				 * package converts our dispatcher environment vars to the
+				 * dhclient ones (new_<some_option>) and calls dhclient hook
+				 * scripts.
+				 * Let's make cloud-init happy and let's duplicate the dhcp
+				 * option 245 with the legacy name of the default dhclient
+				 * label also when using the internal client.
+				 * Note however that the dhclient plugin will have unknown_
+				 * labels represented as ascii string when possible, falling
+				 * back to hex string otherwise.
+				 * private_ labels instead are always in hex string format.
+				 * This shouldn't affect the MS Azure server endpoint value,
+				 * as it usually belongs to the 240.0.0.0/4 network and so
+				 * is always represented as an hex string. Moreover, cloudinit
+				 * code checks just for an hex value in unknown_245.
+				 */
+				if (addr_family == AF_INET) {
+					if (nm_streq (key, "private_245"))
+						private_245_val = g_variant_ref (val);
+					else if (nm_streq (key, "unknown_245"))
+						found_unknown_245 = true;
+				}
 			}
 		}
 		g_variant_unref (val);
+	}
+
+	if (private_245_val != NULL && !found_unknown_245) {
+		_items_add_printf (items,
+		                   "DHCP4_UNKNOWN_245=%s",
+		                   g_variant_get_string (private_245_val, NULL));
 	}
 }
 
@@ -458,12 +476,8 @@ nm_dispatcher_utils_construct_envp (const char *action,
 		goto done;
 
 	/* Connection properties */
-	if (!g_variant_lookup (connection_props, NMD_CONNECTION_PROPS_PATH, "&o", &path)) {
-		*out_error_message = "Missing or invalid required value " NMD_CONNECTION_PROPS_PATH "!";
-		return NULL;
-	}
-
-	_items_add_key (items, NULL, "CONNECTION_DBUS_PATH", path);
+	if (g_variant_lookup (connection_props, NMD_CONNECTION_PROPS_PATH, "&o", &path))
+		_items_add_key (items, NULL, "CONNECTION_DBUS_PATH", path);
 
 	if (g_variant_lookup (connection_props, NMD_CONNECTION_PROPS_EXTERNAL, "b", &external) && external)
 		_items_add_str (items, "CONNECTION_EXTERNAL=1");
@@ -537,7 +551,7 @@ nm_dispatcher_utils_construct_envp (const char *action,
 		_items_add_key0 (items, NULL, "DEVICE_IP_IFACE", ip_iface);
 	}
 
-	/* Device it's aren't valid if the device isn't activated */
+	/* Device items aren't valid if the device isn't activated */
 	if (   iface
 	    && dev_state == NM_DEVICE_STATE_ACTIVATED) {
 		construct_proxy_items (items, device_proxy_props, NULL);

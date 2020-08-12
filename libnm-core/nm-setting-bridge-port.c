@@ -1,31 +1,15 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2012 - 2013 Red Hat, Inc.
+ * Copyright (C) 2012 - 2013 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
+#include "nm-setting-bridge-port.h"
+
 #include <ctype.h>
 #include <stdlib.h>
 
-#include "nm-setting-bridge-port.h"
 #include "nm-utils.h"
 #include "nm-utils-private.h"
 #include "nm-connection-private.h"
@@ -40,23 +24,61 @@
  * optional properties that apply to bridge ports.
  **/
 
+/*****************************************************************************/
+
+NM_GOBJECT_PROPERTIES_DEFINE (NMSettingBridgePort,
+	PROP_PRIORITY,
+	PROP_PATH_COST,
+	PROP_HAIRPIN_MODE,
+	PROP_VLANS,
+);
+
+typedef struct {
+	GPtrArray *vlans;
+	guint16 priority;
+	guint16 path_cost;
+	bool hairpin_mode:1;
+} NMSettingBridgePortPrivate;
+
 G_DEFINE_TYPE (NMSettingBridgePort, nm_setting_bridge_port, NM_TYPE_SETTING)
 
 #define NM_SETTING_BRIDGE_PORT_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_SETTING_BRIDGE_PORT, NMSettingBridgePortPrivate))
 
-typedef struct {
-	guint16 priority;
-	guint16 path_cost;
-	gboolean hairpin_mode;
-} NMSettingBridgePortPrivate;
+static int
+vlan_ptr_cmp (gconstpointer a, gconstpointer b)
+{
+	const NMBridgeVlan *vlan_a = *(const NMBridgeVlan **) a;
+	const NMBridgeVlan *vlan_b = *(const NMBridgeVlan **) b;
 
-enum {
-	PROP_0,
-	PROP_PRIORITY,
-	PROP_PATH_COST,
-	PROP_HAIRPIN_MODE,
-	LAST_PROP
-};
+	return nm_bridge_vlan_cmp (vlan_a, vlan_b);
+}
+
+gboolean
+_nm_setting_bridge_port_sort_vlans (NMSettingBridgePort *setting)
+{
+	NMSettingBridgePortPrivate *priv;
+	gboolean need_sort = FALSE;
+	guint i;
+
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	for (i = 1; i < priv->vlans->len; i++) {
+		NMBridgeVlan *vlan_prev = priv->vlans->pdata[i - 1];
+		NMBridgeVlan *vlan = priv->vlans->pdata[i];
+
+		if (nm_bridge_vlan_cmp (vlan_prev, vlan) > 0) {
+			need_sort = TRUE;
+			break;
+		}
+	}
+
+	if (need_sort) {
+		g_ptr_array_sort (priv->vlans, vlan_ptr_cmp);
+		_notify (setting, PROP_VLANS);
+	}
+
+	return need_sort;
+}
 
 /*****************************************************************************/
 
@@ -102,11 +124,173 @@ nm_setting_bridge_port_get_hairpin_mode (NMSettingBridgePort *setting)
 	return NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting)->hairpin_mode;
 }
 
+/**
+ * nm_setting_bridge_port_add_vlan:
+ * @setting: the #NMSettingBridgePort
+ * @vlan: the vlan to add
+ *
+ * Appends a new vlan and associated information to the setting.  The
+ * given vlan gets sealed and a reference to it is added.
+ *
+ * Since: 1.18
+ **/
+void
+nm_setting_bridge_port_add_vlan (NMSettingBridgePort *setting,
+                                 NMBridgeVlan *vlan)
+{
+	NMSettingBridgePortPrivate *priv;
+
+	g_return_if_fail (NM_IS_SETTING_BRIDGE_PORT (setting));
+	g_return_if_fail (vlan);
+
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	nm_bridge_vlan_seal (vlan);
+	nm_bridge_vlan_ref (vlan);
+
+	g_ptr_array_add (priv->vlans, vlan);
+	_notify (setting, PROP_VLANS);
+}
+
+/**
+ * nm_setting_bridge_port_get_num_vlans:
+ * @setting: the #NMSettingBridgePort
+ *
+ * Returns: the number of VLANs
+ *
+ * Since: 1.18
+ **/
+guint
+nm_setting_bridge_port_get_num_vlans (NMSettingBridgePort *setting)
+{
+	NMSettingBridgePortPrivate *priv;
+
+	g_return_val_if_fail (NM_IS_SETTING_BRIDGE_PORT (setting), 0);
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	return priv->vlans->len;
+}
+
+/**
+ * nm_setting_bridge_port_get_vlan:
+ * @setting: the #NMSettingBridgePort
+ * @idx: index number of the VLAN to return
+ *
+ * Returns: (transfer none): the VLAN at index @idx
+ *
+ * Since: 1.18
+ **/
+NMBridgeVlan *
+nm_setting_bridge_port_get_vlan (NMSettingBridgePort *setting, guint idx)
+{
+	NMSettingBridgePortPrivate *priv;
+
+	g_return_val_if_fail (NM_IS_SETTING_BRIDGE_PORT (setting), NULL);
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	g_return_val_if_fail (idx < priv->vlans->len, NULL);
+
+	return priv->vlans->pdata[idx];
+}
+
+/**
+ * nm_setting_bridge_port_remove_vlan:
+ * @setting: the #NMSettingBridgePort
+ * @idx: index number of the VLAN.
+ *
+ * Removes the vlan at index @idx.
+ *
+ * Since: 1.18
+ **/
+void
+nm_setting_bridge_port_remove_vlan (NMSettingBridgePort *setting, guint idx)
+{
+	NMSettingBridgePortPrivate *priv;
+
+	g_return_if_fail (NM_IS_SETTING_BRIDGE_PORT (setting));
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	g_return_if_fail (idx < priv->vlans->len);
+
+	g_ptr_array_remove_index (priv->vlans, idx);
+	_notify (setting, PROP_VLANS);
+}
+
+/**
+ * nm_setting_bridge_port_remove_vlan_by_vid:
+ * @setting: the #NMSettingBridgePort
+ * @vid_start: the vlan start index
+ * @vid_end: the vlan end index
+ *
+ * Remove the VLAN with range @vid_start to @vid_end.
+ * If @vid_end is zero, it is assumed to be equal to @vid_start
+ * and so the single-id VLAN with id @vid_start is removed.
+ *
+ * Returns: %TRUE if the vlan was found and removed; %FALSE otherwise
+ *
+ * Since: 1.18
+ **/
+gboolean
+nm_setting_bridge_port_remove_vlan_by_vid (NMSettingBridgePort *setting,
+                                           guint16 vid_start,
+                                           guint16 vid_end)
+{
+	NMSettingBridgePortPrivate *priv;
+	guint i;
+
+	if (vid_end == 0)
+		vid_end = vid_start;
+
+	g_return_val_if_fail (NM_IS_SETTING_BRIDGE_PORT (setting), FALSE);
+
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	for (i = 0; i < priv->vlans->len; i++) {
+		NMBridgeVlan *vlan = priv->vlans->pdata[i];
+		guint16 v_start = 0;
+		guint16 v_end = 0;
+
+		nm_bridge_vlan_get_vid_range (vlan, &v_start, &v_end);
+		if (v_start == vid_start && v_end == vid_end) {
+			g_ptr_array_remove_index (priv->vlans, i);
+			_notify (setting, PROP_VLANS);
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+/**
+ * nm_setting_bridge_port_clear_vlans:
+ * @setting: the #NMSettingBridgePort
+ *
+ * Removes all configured VLANs.
+ *
+ * Since: 1.18
+ **/
+void
+nm_setting_bridge_port_clear_vlans (NMSettingBridgePort *setting)
+{
+	NMSettingBridgePortPrivate *priv;
+
+	g_return_if_fail (NM_IS_SETTING_BRIDGE_PORT (setting));
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	if (priv->vlans->len != 0) {
+		g_ptr_array_set_size (priv->vlans, 0);
+		_notify (setting, PROP_VLANS);
+	}
+}
+
 /*****************************************************************************/
 
 static gboolean
 verify (NMSetting *setting, NMConnection *connection, GError **error)
 {
+	NMSettingBridgePortPrivate *priv;
+
+	priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
 	if (connection) {
 		NMSettingConnection *s_con;
 		const char *slave_type;
@@ -136,27 +320,89 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		}
 	}
 
+	if (!_nm_utils_bridge_vlan_verify_list (priv->vlans,
+	                                        FALSE,
+	                                        error,
+	                                        NM_SETTING_BRIDGE_PORT_SETTING_NAME,
+	                                        NM_SETTING_BRIDGE_PORT_VLANS))
+		return FALSE;
+
+	/* Failures from here on are NORMALIZABLE... */
+
+	if (!_nm_utils_bridge_vlan_verify_list (priv->vlans,
+	                                        TRUE,
+	                                        error,
+	                                        NM_SETTING_BRIDGE_PORT_SETTING_NAME,
+	                                        NM_SETTING_BRIDGE_PORT_VLANS))
+		return NM_SETTING_VERIFY_NORMALIZABLE;
+
 	return TRUE;
+}
+
+static NMTernary
+compare_property (const NMSettInfoSetting *sett_info,
+                  guint property_idx,
+                  NMConnection *con_a,
+                  NMSetting *set_a,
+                  NMConnection *con_b,
+                  NMSetting *set_b,
+                  NMSettingCompareFlags flags)
+{
+	NMSettingBridgePortPrivate *priv_a;
+	NMSettingBridgePortPrivate *priv_b;
+	guint i;
+
+	if (nm_streq (sett_info->property_infos[property_idx].name, NM_SETTING_BRIDGE_PORT_VLANS)) {
+		if (set_b) {
+			priv_a = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (set_a);
+			priv_b = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (set_b);
+
+			if (priv_a->vlans->len != priv_b->vlans->len)
+				return FALSE;
+			for (i = 0; i < priv_a->vlans->len; i++) {
+				if (nm_bridge_vlan_cmp (priv_a->vlans->pdata[i], priv_b->vlans->pdata[i]))
+					return FALSE;
+			}
+		}
+		return TRUE;
+	}
+
+	return NM_SETTING_CLASS (nm_setting_bridge_port_parent_class)->compare_property (sett_info,
+	                                                                                 property_idx,
+	                                                                                 con_a,
+	                                                                                 set_a,
+	                                                                                 con_b,
+	                                                                                 set_b,
+	                                                                                 flags);
 }
 
 /*****************************************************************************/
 
-/**
- * nm_setting_bridge_port_new:
- *
- * Creates a new #NMSettingBridgePort object with default values.
- *
- * Returns: (transfer full): the new empty #NMSettingBridgePort object
- **/
-NMSetting *
-nm_setting_bridge_port_new (void)
-{
-	return (NMSetting *) g_object_new (NM_TYPE_SETTING_BRIDGE_PORT, NULL);
-}
-
 static void
-nm_setting_bridge_port_init (NMSettingBridgePort *setting)
+get_property (GObject *object, guint prop_id,
+              GValue *value, GParamSpec *pspec)
 {
+	NMSettingBridgePortPrivate *priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (object);
+
+	switch (prop_id) {
+	case PROP_PRIORITY:
+		g_value_set_uint (value, priv->priority);
+		break;
+	case PROP_PATH_COST:
+		g_value_set_uint (value, priv->path_cost);
+		break;
+	case PROP_HAIRPIN_MODE:
+		g_value_set_boolean (value, priv->hairpin_mode);
+		break;
+	case PROP_VLANS:
+		g_value_take_boxed (value, _nm_utils_copy_array (priv->vlans,
+		                                                 (NMUtilsCopyFunc) nm_bridge_vlan_ref,
+		                                                 (GDestroyNotify) nm_bridge_vlan_unref));
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+		break;
+	}
 }
 
 static void
@@ -175,32 +421,52 @@ set_property (GObject *object, guint prop_id,
 	case PROP_HAIRPIN_MODE:
 		priv->hairpin_mode = g_value_get_boolean (value);
 		break;
+	case PROP_VLANS:
+		g_ptr_array_unref (priv->vlans);
+		priv->vlans = _nm_utils_copy_array (g_value_get_boxed (value),
+		                                    (NMUtilsCopyFunc) _nm_bridge_vlan_dup_and_seal,
+		                                    (GDestroyNotify) nm_bridge_vlan_unref);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
 	}
 }
 
+/*****************************************************************************/
+
 static void
-get_property (GObject *object, guint prop_id,
-              GValue *value, GParamSpec *pspec)
+nm_setting_bridge_port_init (NMSettingBridgePort *setting)
+{
+	NMSettingBridgePortPrivate *priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (setting);
+
+	priv->vlans = g_ptr_array_new_with_free_func ((GDestroyNotify) nm_bridge_vlan_unref);
+
+	priv->priority = NM_BRIDGE_PORT_PRIORITY_DEF;
+	priv->path_cost = NM_BRIDGE_PORT_PATH_COST_DEF;
+}
+
+/**
+ * nm_setting_bridge_port_new:
+ *
+ * Creates a new #NMSettingBridgePort object with default values.
+ *
+ * Returns: (transfer full): the new empty #NMSettingBridgePort object
+ **/
+NMSetting *
+nm_setting_bridge_port_new (void)
+{
+	return (NMSetting *) g_object_new (NM_TYPE_SETTING_BRIDGE_PORT, NULL);
+}
+
+static void
+finalize (GObject *object)
 {
 	NMSettingBridgePortPrivate *priv = NM_SETTING_BRIDGE_PORT_GET_PRIVATE (object);
 
-	switch (prop_id) {
-	case PROP_PRIORITY:
-		g_value_set_uint (value, priv->priority);
-		break;
-	case PROP_PATH_COST:
-		g_value_set_uint (value, priv->path_cost);
-		break;
-	case PROP_HAIRPIN_MODE:
-		g_value_set_boolean (value, priv->hairpin_mode);
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
+	g_ptr_array_unref (priv->vlans);
+
+	G_OBJECT_CLASS (nm_setting_bridge_port_parent_class)->finalize (object);
 }
 
 static void
@@ -208,12 +474,15 @@ nm_setting_bridge_port_class_init (NMSettingBridgePortClass *klass)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
 	NMSettingClass *setting_class = NM_SETTING_CLASS (klass);
+	GArray *properties_override = _nm_sett_info_property_override_create_array ();
 
 	g_type_class_add_private (klass, sizeof (NMSettingBridgePortPrivate));
 
-	object_class->set_property = set_property;
+	object_class->finalize = finalize;
 	object_class->get_property = get_property;
+	object_class->set_property = set_property;
 
+	setting_class->compare_property = compare_property;
 	setting_class->verify = verify;
 
 	/**
@@ -229,14 +498,12 @@ nm_setting_bridge_port_class_init (NMSettingBridgePortClass *klass)
 	 * description: STP priority.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PRIORITY,
-		 g_param_spec_uint (NM_SETTING_BRIDGE_PORT_PRIORITY, "", "",
-		                    0, NM_BR_PORT_MAX_PRIORITY, NM_BR_PORT_DEF_PRIORITY,
-		                    G_PARAM_READWRITE |
-		                    G_PARAM_CONSTRUCT |
-		                    NM_SETTING_PARAM_INFERRABLE |
-		                    G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_PRIORITY] =
+	    g_param_spec_uint (NM_SETTING_BRIDGE_PORT_PRIORITY, "", "",
+	                       NM_BRIDGE_PORT_PRIORITY_MIN, NM_BRIDGE_PORT_PRIORITY_MAX, NM_BRIDGE_PORT_PRIORITY_DEF,
+	                       G_PARAM_READWRITE |
+	                       NM_SETTING_PARAM_INFERRABLE |
+	                       G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingBridgePort:path-cost:
@@ -252,13 +519,11 @@ nm_setting_bridge_port_class_init (NMSettingBridgePortClass *klass)
 	 * description: STP cost.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PATH_COST,
-		 g_param_spec_uint (NM_SETTING_BRIDGE_PORT_PATH_COST, "", "",
-		                    0, NM_BR_PORT_MAX_PATH_COST, 100,
-		                    G_PARAM_READWRITE |
-		                    G_PARAM_CONSTRUCT |
-		                    G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_PATH_COST] =
+	    g_param_spec_uint (NM_SETTING_BRIDGE_PORT_PATH_COST, "", "",
+	                       NM_BRIDGE_PORT_PATH_COST_MIN, NM_BRIDGE_PORT_PATH_COST_MAX, NM_BRIDGE_PORT_PATH_COST_DEF,
+	                       G_PARAM_READWRITE |
+	                       G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingBridgePort:hairpin-mode:
@@ -273,13 +538,48 @@ nm_setting_bridge_port_class_init (NMSettingBridgePortClass *klass)
 	 * description: Hairpin mode of the bridge port.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_HAIRPIN_MODE,
-		 g_param_spec_boolean (NM_SETTING_BRIDGE_PORT_HAIRPIN_MODE, "", "",
-		                       FALSE,
-		                       G_PARAM_READWRITE |
-		                       NM_SETTING_PARAM_INFERRABLE |
-		                       G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_HAIRPIN_MODE] =
+	    g_param_spec_boolean (NM_SETTING_BRIDGE_PORT_HAIRPIN_MODE, "", "",
+	                          FALSE,
+	                          G_PARAM_READWRITE |
+	                          NM_SETTING_PARAM_INFERRABLE |
+	                          G_PARAM_STATIC_STRINGS);
 
-	_nm_setting_class_commit (setting_class, NM_META_SETTING_TYPE_BRIDGE_PORT);
+	/**
+	 * NMSettingBridgePort:vlans: (type GPtrArray(NMBridgeVlan))
+	 *
+	 * Array of bridge VLAN objects. In addition to the VLANs
+	 * specified here, the port will also have the default-pvid
+	 * VLAN configured on the bridge by the bridge.vlan-default-pvid
+	 * property.
+	 *
+	 * In nmcli the VLAN list can be specified with the following
+	 * syntax:
+	 *
+	 *  $vid [pvid] [untagged] [, $vid [pvid] [untagged]]...
+	 *
+	 * where $vid is either a single id between 1 and 4094 or a
+	 * range, represented as a couple of ids separated by a dash.
+	 *
+	 * Since: 1.18
+	 **/
+	/* ---ifcfg-rh---
+	 * property: vlans
+	 * variable: BRIDGE_PORT_VLANS
+	 * description: List of VLANs on the bridge port
+	 * example: BRIDGE_PORT_VLANS="1 pvid untagged,20,300-400 untagged"
+	 * ---end---
+	 */
+	obj_properties[PROP_VLANS] =
+	    g_param_spec_boxed (NM_SETTING_BRIDGE_PORT_VLANS, "", "",
+	                        G_TYPE_PTR_ARRAY,
+	                        G_PARAM_READWRITE |
+	                        NM_SETTING_PARAM_INFERRABLE |
+	                        G_PARAM_STATIC_STRINGS);
+	_nm_properties_override_gobj (properties_override, obj_properties[PROP_VLANS], &nm_sett_info_propert_type_bridge_vlans);
+
+	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
+
+	_nm_setting_class_commit_full (setting_class, NM_META_SETTING_TYPE_BRIDGE_PORT,
+	                               NULL, properties_override);
 }

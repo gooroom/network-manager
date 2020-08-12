@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-dhcp-dhclient.c - dhclient specific hooks for NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2005 - 2012 Red Hat, Inc.
  */
 
@@ -29,19 +14,16 @@
 
 #if WITH_DHCLIENT
 
-#include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctype.h>
 
-#include "nm-utils/nm-dedup-multi.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 
 #include "nm-utils.h"
-#include "nm-config.h"
 #include "nm-dhcp-dhclient-utils.h"
 #include "nm-dhcp-manager.h"
 #include "NetworkManagerUtils.h"
@@ -121,35 +103,14 @@ get_dhclient_leasefile (int addr_family,
                         const char *uuid,
                         char **out_preferred_path)
 {
-	gs_free char *rundir_path = NULL;
 	gs_free char *path = NULL;
 
-	/* First, see if the lease file is in /run */
-	rundir_path = g_strdup_printf (NMRUNDIR "/dhclient%s-%s-%s.lease",
-	                               _addr_family_to_path_part (addr_family),
-	                               uuid,
-	                               iface);
-
-	if (g_file_test (rundir_path, G_FILE_TEST_EXISTS)) {
-		NM_SET_OUT (out_preferred_path, g_strdup (rundir_path));
-		return g_steal_pointer (&rundir_path);
-	}
-
-	/* /var/lib/NetworkManager is the preferred leasefile path */
-	path = g_strdup_printf (NMSTATEDIR "/dhclient%s-%s-%s.lease",
-	                        _addr_family_to_path_part (addr_family),
-	                        uuid,
-	                        iface);
-
-	if (g_file_test (path, G_FILE_TEST_EXISTS)) {
+	if (nm_dhcp_utils_get_leasefile_path (addr_family, "dhclient", iface, uuid, &path)) {
 		NM_SET_OUT (out_preferred_path, g_strdup (path));
 		return g_steal_pointer (&path);
 	}
 
-	if (nm_config_get_configure_and_quit (nm_config_get ()) == NM_CONFIG_CONFIGURE_AND_QUIT_INITRD)
-		NM_SET_OUT (out_preferred_path, g_steal_pointer (&rundir_path));
-	else
-		NM_SET_OUT (out_preferred_path, g_steal_pointer (&path));
+	NM_SET_OUT (out_preferred_path, g_steal_pointer (&path));
 
 	/* If the leasefile we're looking for doesn't exist yet in the new location
 	 * (eg, /var/lib/NetworkManager) then look in old locations to maintain
@@ -185,6 +146,8 @@ merge_dhclient_config (NMDhcpDhclient *self,
                        const char *hostname,
                        guint32 timeout,
                        gboolean use_fqdn,
+                       NMDhcpHostnameFlags hostname_flags,
+                       const char *mud_url,
                        const char *orig_path,
                        GBytes **out_new_client_id,
                        GError **error)
@@ -213,10 +176,12 @@ merge_dhclient_config (NMDhcpDhclient *self,
 	                                      hostname,
 	                                      timeout,
 	                                      use_fqdn,
+	                                      hostname_flags,
+	                                      mud_url,
 	                                      orig_path,
 	                                      orig,
 	                                      out_new_client_id);
-	g_assert (new);
+	nm_assert (new);
 
 	return g_file_set_contents (conf_file,
 	                            new,
@@ -304,6 +269,8 @@ create_dhclient_config (NMDhcpDhclient *self,
                         const char *hostname,
                         guint32 timeout,
                         gboolean use_fqdn,
+                        NMDhcpHostnameFlags hostname_flags,
+                        const char *mud_url,
                         GBytes **out_new_client_id)
 {
 	gs_free char *orig = NULL;
@@ -331,6 +298,8 @@ create_dhclient_config (NMDhcpDhclient *self,
 	                            hostname,
 	                            timeout,
 	                            use_fqdn,
+	                            hostname_flags,
+	                            mud_url,
 	                            orig,
 	                            out_new_client_id,
 	                            &error)) {
@@ -378,7 +347,7 @@ dhclient_start (NMDhcpClient *client,
 	iface = nm_dhcp_client_get_iface (client);
 	uuid = nm_dhcp_client_get_uuid (client);
 
-	pid_file = g_strdup_printf (RUNSTATEDIR "/dhclient%s-%s.pid",
+	pid_file = g_strdup_printf (NMRUNDIR "/dhclient%s-%s.pid",
 	                            _addr_family_to_path_part (addr_family),
 	                            iface);
 
@@ -530,6 +499,8 @@ ip4_start (NMDhcpClient *client,
 	                                          nm_dhcp_client_get_hostname (client),
 	                                          nm_dhcp_client_get_timeout (client),
 	                                          nm_dhcp_client_get_use_fqdn (client),
+	                                          nm_dhcp_client_get_hostname_flags (client),
+	                                          nm_dhcp_client_get_mud_url (client),
 	                                          &new_client_id);
 	if (!priv->conf_file) {
 		nm_utils_error_set_literal (error,
@@ -561,6 +532,9 @@ ip6_start (NMDhcpClient *client,
 	NMDhcpDhclient *self = NM_DHCP_DHCLIENT (client);
 	NMDhcpDhclientPrivate *priv = NM_DHCP_DHCLIENT_GET_PRIVATE (self);
 
+	if (nm_dhcp_client_get_iaid_explicit (client))
+		_LOGW ("dhclient does not support specifying an IAID for DHCPv6, it will be ignored");
+
 	priv->conf_file = create_dhclient_config (self,
 	                                          AF_INET6,
 	                                          nm_dhcp_client_get_iface (client),
@@ -570,6 +544,8 @@ ip6_start (NMDhcpClient *client,
 	                                          nm_dhcp_client_get_hostname (client),
 	                                          nm_dhcp_client_get_timeout (client),
 	                                          TRUE,
+	                                          nm_dhcp_client_get_hostname_flags (client),
+	                                          nm_dhcp_client_get_mud_url (client),
 	                                          NULL);
 	if (!priv->conf_file) {
 		nm_utils_error_set_literal (error,
@@ -593,17 +569,19 @@ stop (NMDhcpClient *client, gboolean release)
 {
 	NMDhcpDhclient *self = NM_DHCP_DHCLIENT (client);
 	NMDhcpDhclientPrivate *priv = NM_DHCP_DHCLIENT_GET_PRIVATE (self);
+	int errsv;
 
 	NM_DHCP_CLIENT_CLASS (nm_dhcp_dhclient_parent_class)->stop (client, release);
 
 	if (priv->conf_file)
-		if (remove (priv->conf_file) == -1)
-			_LOGD ("could not remove dhcp config file \"%s\": %d (%s)", priv->conf_file, errno, g_strerror (errno));
+		if (remove (priv->conf_file) == -1) {
+			errsv = errno;
+			_LOGD ("could not remove dhcp config file \"%s\": %d (%s)", priv->conf_file, errsv, nm_strerror_native (errsv));
+		}
 	if (priv->pid_file) {
 		if (remove (priv->pid_file) == -1) {
-			int errsv = errno;
-
-			_LOGD ("could not remove dhcp pid file \"%s\": %s (%d)", priv->pid_file, g_strerror (errsv), errsv);
+			errsv = errno;
+			_LOGD ("could not remove dhcp pid file \"%s\": %s (%d)", priv->pid_file, nm_strerror_native (errsv), errsv);
 		}
 		nm_clear_g_free (&priv->pid_file);
 	}
@@ -693,7 +671,7 @@ nm_dhcp_dhclient_init (NMDhcpDhclient *self)
 static void
 dispose (GObject *object)
 {
-	NMDhcpDhclientPrivate *priv = NM_DHCP_DHCLIENT_GET_PRIVATE ((NMDhcpDhclient *) object);
+	NMDhcpDhclientPrivate *priv = NM_DHCP_DHCLIENT_GET_PRIVATE (object);
 
 	if (priv->dhcp_listener) {
 		g_signal_handlers_disconnect_by_func (priv->dhcp_listener,
@@ -724,7 +702,7 @@ nm_dhcp_dhclient_class_init (NMDhcpDhclientClass *dhclient_class)
 }
 
 const NMDhcpClientFactory _nm_dhcp_client_factory_dhclient = {
-	.name = "dhclient",
+	.name     = "dhclient",
 	.get_type = nm_dhcp_dhclient_get_type,
 	.get_path = nm_dhcp_dhclient_get_path,
 };

@@ -1,23 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
- * Copyright 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
  */
 
 #ifndef __NM_SETTING_CONNECTION_H__
@@ -67,6 +51,8 @@ G_BEGIN_DECLS
 #define NM_SETTING_CONNECTION_AUTH_RETRIES   "auth-retries"
 #define NM_SETTING_CONNECTION_MDNS           "mdns"
 #define NM_SETTING_CONNECTION_LLMNR          "llmnr"
+#define NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT "wait-device-timeout"
+#define NM_SETTING_CONNECTION_MUD_URL        "mud-url"
 
 /* Types for property values */
 /**
@@ -215,6 +201,12 @@ NM_AVAILABLE_IN_1_12
 NMSettingConnectionMdns   nm_setting_connection_get_mdns (NMSettingConnection *setting);
 NM_AVAILABLE_IN_1_14
 NMSettingConnectionLlmnr  nm_setting_connection_get_llmnr (NMSettingConnection *setting);
+
+NM_AVAILABLE_IN_1_20
+gint32 nm_setting_connection_get_wait_device_timeout (NMSettingConnection *setting);
+
+NM_AVAILABLE_IN_1_26
+const char *nm_setting_connection_get_mud_url (NMSettingConnection *setting);
 
 G_END_DECLS
 

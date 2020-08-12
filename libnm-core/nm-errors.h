@@ -1,20 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2004 - 2014 Red Hat, Inc.
+ * Copyright (C) 2004 - 2014 Red Hat, Inc.
  */
 
 #ifndef __NM_ERRORS_H__
@@ -145,6 +131,7 @@ GQuark nm_crypto_error_quark (void);
  * @NM_DEVICE_ERROR_VERSION_ID_MISMATCH: the version id did not match.
  * @NM_DEVICE_ERROR_MISSING_DEPENDENCIES: the requested operation could not
  *   be completed due to missing dependencies.
+ * @NM_DEVICE_ERROR_INVALID_ARGUMENT: invalid argument. Since: 1.16
  *
  * Device-related errors.
  *
@@ -163,6 +150,7 @@ typedef enum {
 	NM_DEVICE_ERROR_SPECIFIC_OBJECT_NOT_FOUND, /*< nick=SpecificObjectNotFound >*/
 	NM_DEVICE_ERROR_VERSION_ID_MISMATCH,       /*< nick=VersionIdMismatch >*/
 	NM_DEVICE_ERROR_MISSING_DEPENDENCIES,      /*< nick=MissingDependencies >*/
+	NM_DEVICE_ERROR_INVALID_ARGUMENT,          /*< nick=InvalidArgument >*/
 } NMDeviceError;
 
 #define NM_DEVICE_ERROR nm_device_error_quark ()

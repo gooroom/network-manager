@@ -8,7 +8,7 @@ Before=network.target @DISTRO_NETWORK_SERVICE@
 [Service]
 Type=dbus
 BusName=org.freedesktop.NetworkManager
-ExecReload=/usr/bin/dbus-send --print-reply --system --type=method_call --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager.Reload uint32:0
+ExecReload=/usr/bin/busctl call org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager Reload u 0
 #ExecReload=/bin/kill -HUP $MAINPID
 ExecStart=@sbindir@/NetworkManager --no-daemon
 Restart=on-failure
@@ -16,15 +16,11 @@ Restart=on-failure
 KillMode=process
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID CAP_SYS_MODULE CAP_AUDIT_WRITE CAP_KILL CAP_SYS_CHROOT
 
-# ibft settings plugin calls iscsiadm which needs CAP_SYS_ADMIN
-#CapabilityBoundingSet=CAP_SYS_ADMIN
-
 ProtectSystem=true
 ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target
-Alias=dbus-org.freedesktop.NetworkManager.service
 Also=NetworkManager-dispatcher.service
 
 # We want to enable NetworkManager-wait-online.service whenever this service

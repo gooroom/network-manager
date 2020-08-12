@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2009 - 2014 Red Hat, Inc.
  * Copyright (C) 2009 Novell, Inc.
  */
@@ -24,7 +9,6 @@
 #include "nm-modem.h"
 
 #include <fcntl.h>
-#include <string.h>
 #include <termios.h>
 #include <linux/rtnetlink.h>
 
@@ -53,6 +37,8 @@ NM_GOBJECT_PROPERTIES_DEFINE (NMModem,
 	PROP_SIM_ID,
 	PROP_IP_TYPES,
 	PROP_SIM_OPERATOR_ID,
+	PROP_OPERATOR_CODE,
+	PROP_APN,
 );
 
 enum {
@@ -91,6 +77,8 @@ typedef struct _NMModemPrivate {
 	char *sim_id;
 	NMModemIPType ip_types;
 	char *sim_operator_id;
+	char *operator_code;
+	char *apn;
 
 	NMPPPManager *ppp_manager;
 
@@ -108,6 +96,8 @@ typedef struct _NMModemPrivate {
 	/* PPP stats */
 	guint32 in_bytes;
 	guint32 out_bytes;
+
+	bool claimed:1;
 } NMModemPrivate;
 
 G_DEFINE_TYPE (NMModem, nm_modem, G_TYPE_OBJECT)
@@ -184,6 +174,53 @@ nm_modem_state_to_string (NMModemState state)
 		return state_table[state];
 	return NULL;
 }
+
+/*****************************************************************************/
+
+gboolean
+nm_modem_is_claimed (NMModem *self)
+{
+	g_return_val_if_fail (NM_IS_MODEM (self), FALSE);
+
+	return NM_MODEM_GET_PRIVATE (self)->claimed;
+}
+
+NMModem *
+nm_modem_claim (NMModem *self)
+{
+	NMModemPrivate *priv;
+
+	g_return_val_if_fail (NM_IS_MODEM (self), NULL);
+
+	priv = NM_MODEM_GET_PRIVATE (self);
+
+	g_return_val_if_fail (!priv->claimed, NULL);
+
+	priv->claimed = TRUE;
+	return g_object_ref (self);
+}
+
+void
+nm_modem_unclaim (NMModem *self)
+{
+	NMModemPrivate *priv;
+
+	g_return_if_fail (NM_IS_MODEM (self));
+
+	priv = NM_MODEM_GET_PRIVATE (self);
+
+	g_return_if_fail (priv->claimed);
+
+	/* we don't actually unclaim the instance. This instance should not be re-used
+	 * by another owner, that is because we only claim modems as we receive them.
+	 * There is no mechanism that somebody else would later re-use them again.
+	 *
+	 * // priv->claimed = FALSE; */
+
+	g_object_unref (self);
+}
+
+/*****************************************************************************/
 
 NMModemState
 nm_modem_get_state (NMModem *self)
@@ -345,7 +382,8 @@ nm_modem_get_connection_ip_type (NMModem *self,
 	s_ip6 = nm_connection_get_setting_ip6_config (connection);
 	if (s_ip6) {
 		method = nm_setting_ip_config_get_method (s_ip6);
-		if (g_strcmp0 (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE) == 0)
+		if (NM_IN_STRSET (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE,
+		                          NM_SETTING_IP6_CONFIG_METHOD_DISABLED))
 			ip6 = FALSE;
 		ip6_may_fail = nm_setting_ip_config_get_may_fail (s_ip6);
 	}
@@ -435,6 +473,18 @@ const char *
 nm_modem_get_sim_operator_id (NMModem *self)
 {
 	return NM_MODEM_GET_PRIVATE (self)->sim_operator_id;
+}
+
+const char *
+nm_modem_get_operator_code (NMModem *self)
+{
+	return NM_MODEM_GET_PRIVATE (self)->operator_code;
+}
+
+const char *
+nm_modem_get_apn (NMModem *self)
+{
+	return NM_MODEM_GET_PRIVATE (self)->apn;
 }
 
 /*****************************************************************************/
@@ -706,13 +756,13 @@ nm_modem_stage3_ip4_config_start (NMModem *self,
 
 	nm_modem_set_route_parameters_from_device (self, device);
 
-	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP4_CONFIG);
+	method = nm_utils_get_ip_config_method (connection, AF_INET);
 
 	/* Only Disabled and Auto methods make sense for WWAN */
-	if (strcmp (method, NM_SETTING_IP4_CONFIG_METHOD_DISABLED) == 0)
+	if (nm_streq (method, NM_SETTING_IP4_CONFIG_METHOD_DISABLED))
 		return NM_ACT_STAGE_RETURN_SUCCESS;
 
-	if (strcmp (method, NM_SETTING_IP4_CONFIG_METHOD_AUTO) != 0) {
+	if (!nm_streq (method, NM_SETTING_IP4_CONFIG_METHOD_AUTO)) {
 		_LOGE ("unhandled WWAN IPv4 method '%s'; will fail", method);
 		NM_SET_OUT (out_failure_reason, NM_DEVICE_STATE_REASON_IP_METHOD_UNSUPPORTED);
 		return NM_ACT_STAGE_RETURN_FAILURE;
@@ -729,7 +779,7 @@ nm_modem_stage3_ip4_config_start (NMModem *self,
 		break;
 	case NM_MODEM_IP_METHOD_AUTO:
 		_LOGD ("MODEM_IP_METHOD_AUTO");
-		ret = device_class->act_stage3_ip4_config_start (device, NULL, out_failure_reason);
+		ret = device_class->act_stage3_ip_config_start (device, AF_INET, NULL, out_failure_reason);
 		break;
 	default:
 		_LOGI ("IPv4 configuration disabled");
@@ -823,13 +873,14 @@ nm_modem_stage3_ip6_config_start (NMModem *self,
 
 	nm_modem_set_route_parameters_from_device (self, device);
 
-	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP6_CONFIG);
+	method = nm_utils_get_ip_config_method (connection, AF_INET6);
 
-	/* Only Ignore and Auto methods make sense for WWAN */
-	if (strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE) == 0)
+	/* Only Ignore, Disabled and Auto methods make sense for WWAN */
+	if (NM_IN_STRSET (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE,
+	                          NM_SETTING_IP6_CONFIG_METHOD_DISABLED))
 		return NM_ACT_STAGE_RETURN_IP_DONE;
 
-	if (strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_AUTO) != 0) {
+	if (!nm_streq (method, NM_SETTING_IP6_CONFIG_METHOD_AUTO)) {
 		_LOGW ("unhandled WWAN IPv6 method '%s'; will fail",
 		       method);
 		NM_SET_OUT (out_failure_reason, NM_DEVICE_STATE_REASON_IP_CONFIG_UNAVAILABLE);
@@ -859,7 +910,9 @@ nm_modem_stage3_ip6_config_start (NMModem *self,
 }
 
 guint32
-nm_modem_get_configured_mtu (NMDevice *self, NMDeviceMtuSource *out_source)
+nm_modem_get_configured_mtu (NMDevice *self,
+                             NMDeviceMtuSource *out_source,
+                             gboolean *out_force)
 {
 	NMConnection *connection;
 	NMSetting *setting;
@@ -886,7 +939,7 @@ nm_modem_get_configured_mtu (NMDevice *self, NMDeviceMtuSource *out_source)
 		}
 
 		property_name = NM_IS_SETTING_GSM (setting) ? "gsm.mtu" : "cdma.mtu";
-		mtu_default = nm_device_get_configured_mtu_from_connection_default (self, property_name);
+		mtu_default = nm_device_get_configured_mtu_from_connection_default (self, property_name, G_MAXUINT32);
 		if (mtu_default >= 0) {
 			*out_source = NM_DEVICE_MTU_SOURCE_CONNECTION;
 			return (guint32) mtu_default;
@@ -922,7 +975,8 @@ modem_secrets_cb (NMActRequest *req,
 
 	priv->secrets_id = NULL;
 
-	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED) ||
+	    g_error_matches (error, NM_AGENT_MANAGER_ERROR, NM_AGENT_MANAGER_ERROR_NO_SECRETS))
 		return;
 
 	if (error)
@@ -948,7 +1002,7 @@ nm_modem_get_secrets (NMModem *self,
 	                                               FALSE,
 	                                               setting_name,
 	                                               flags,
-	                                               hint,
+	                                               NM_MAKE_STRV (hint),
 	                                               modem_secrets_cb,
 	                                               self);
 	g_return_if_fail (priv->secrets_id);
@@ -958,9 +1012,9 @@ nm_modem_get_secrets (NMModem *self,
 /*****************************************************************************/
 
 static NMActStageReturn
-act_stage1_prepare (NMModem *modem,
-                    NMConnection *connection,
-                    NMDeviceStateReason *out_failure_reason)
+modem_act_stage1_prepare (NMModem *modem,
+                          NMConnection *connection,
+                          NMDeviceStateReason *out_failure_reason)
 {
 	NM_SET_OUT (out_failure_reason, NM_DEVICE_STATE_REASON_UNKNOWN);
 	return NM_ACT_STAGE_RETURN_FAILURE;
@@ -977,6 +1031,8 @@ nm_modem_act_stage1_prepare (NMModem *self,
 	NMSecretAgentGetSecretsFlags flags = NM_SECRET_AGENT_GET_SECRETS_FLAG_ALLOW_INTERACTION;
 	NMConnection *connection;
 
+	g_return_val_if_fail (NM_IS_ACT_REQUEST (req), NM_ACT_STAGE_RETURN_FAILURE);
+
 	if (priv->act_request)
 		g_object_unref (priv->act_request);
 	priv->act_request = g_object_ref (req);
@@ -986,20 +1042,22 @@ nm_modem_act_stage1_prepare (NMModem *self,
 
 	setting_name = nm_connection_need_secrets (connection, &hints);
 	if (!setting_name) {
-		/* Ready to connect */
-		g_assert (!hints);
-		return NM_MODEM_GET_CLASS (self)->act_stage1_prepare (self, connection, out_failure_reason);
+		nm_assert (!hints);
+		return NM_MODEM_GET_CLASS (self)->modem_act_stage1_prepare (self, connection, out_failure_reason);
 	}
 
 	/* Secrets required... */
 	if (priv->secrets_tries++)
 		flags |= NM_SECRET_AGENT_GET_SECRETS_FLAG_REQUEST_NEW;
 
+	if (hints)
+		g_ptr_array_add (hints, NULL);
+
 	priv->secrets_id = nm_act_request_get_secrets (req,
 	                                               FALSE,
 	                                               setting_name,
 	                                               flags,
-	                                               hints ? g_ptr_array_index (hints, 0) : NULL,
+	                                               hints ? (const char *const*) hints->pdata : NULL,
 	                                               modem_secrets_cb,
 	                                               self);
 	g_return_val_if_fail (priv->secrets_id, NM_ACT_STAGE_RETURN_FAILURE);
@@ -1009,19 +1067,18 @@ nm_modem_act_stage1_prepare (NMModem *self,
 
 /*****************************************************************************/
 
-NMActStageReturn
-nm_modem_act_stage2_config (NMModem *self,
-                            NMActRequest *req,
-                            NMDeviceStateReason *out_failure_reason)
+void
+nm_modem_act_stage2_config (NMModem *self)
 {
-	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
+	NMModemPrivate *priv;
 
+	g_return_if_fail (NM_IS_MODEM (self));
+
+	priv = NM_MODEM_GET_PRIVATE (self);
 	/* Clear secrets tries counter since secrets were successfully used
 	 * already if we get here.
 	 */
 	priv->secrets_tries = 0;
-
-	return NM_ACT_STAGE_RETURN_SUCCESS;
 }
 
 /*****************************************************************************/
@@ -1085,6 +1142,7 @@ nm_modem_check_connection_compatible (NMModem *self, NMConnection *connection, G
 
 gboolean
 nm_modem_complete_connection (NMModem *self,
+                              const char *iface,
                               NMConnection *connection,
                               NMConnection *const*existing_connections,
                               GError **error)
@@ -1099,13 +1157,15 @@ nm_modem_complete_connection (NMModem *self,
 		return FALSE;
 	}
 
-	return klass->complete_connection (self, connection, existing_connections, error);
+	return klass->complete_connection (self, iface, connection, existing_connections, error);
 }
 
 /*****************************************************************************/
 
 static void
-deactivate_cleanup (NMModem *self, NMDevice *device)
+deactivate_cleanup (NMModem *self,
+                    NMDevice *device,
+                    gboolean stop_ppp_manager)
 {
 	NMModemPrivate *priv;
 	int ifindex;
@@ -1126,7 +1186,8 @@ deactivate_cleanup (NMModem *self, NMDevice *device)
 
 	if (priv->ppp_manager) {
 		g_signal_handlers_disconnect_by_data (priv->ppp_manager, self);
-		nm_ppp_manager_stop (priv->ppp_manager, NULL, NULL);
+		if (stop_ppp_manager)
+			nm_ppp_manager_stop (priv->ppp_manager, NULL, NULL, NULL);
 		g_clear_object (&priv->ppp_manager);
 	}
 
@@ -1157,189 +1218,109 @@ deactivate_cleanup (NMModem *self, NMDevice *device)
 
 /*****************************************************************************/
 
-typedef enum {
-	DEACTIVATE_CONTEXT_STEP_FIRST,
-	DEACTIVATE_CONTEXT_STEP_CLEANUP,
-	DEACTIVATE_CONTEXT_STEP_PPP_MANAGER_STOP,
-	DEACTIVATE_CONTEXT_STEP_MM_DISCONNECT,
-	DEACTIVATE_CONTEXT_STEP_LAST
-} DeactivateContextStep;
-
 typedef struct {
 	NMModem *self;
 	NMDevice *device;
 	GCancellable *cancellable;
-	GSimpleAsyncResult *result;
-	DeactivateContextStep step;
-	NMPPPManager *ppp_manager;
-	NMPPPManagerStopHandle *ppp_stop_handle;
-	gulong ppp_stop_cancellable_id;
+	NMModemDeactivateCallback callback;
+	gpointer callback_user_data;
 } DeactivateContext;
 
 static void
-deactivate_context_complete (DeactivateContext *ctx)
+deactivate_context_complete (DeactivateContext *ctx, GError *error)
 {
-	if (ctx->ppp_stop_handle)
-		nm_ppp_manager_stop_cancel (ctx->ppp_stop_handle);
+	NMModem *self = ctx->self;
 
-	nm_assert (!ctx->ppp_stop_handle);
-	nm_assert (ctx->ppp_stop_cancellable_id == 0);
+	_LOGD ("modem deactivation finished %s%s%s",
+	       NM_PRINT_FMT_QUOTED (error, "with failure: ", error->message, "", "successfully"));
 
-	if (ctx->ppp_manager)
-		g_object_unref (ctx->ppp_manager);
-	if (ctx->cancellable)
-		g_object_unref (ctx->cancellable);
-	g_simple_async_result_complete_in_idle (ctx->result);
-	g_object_unref (ctx->result);
+	if (ctx->callback)
+		ctx->callback (ctx->self, error, ctx->callback_user_data);
+	nm_g_object_unref (ctx->cancellable);
 	g_object_unref (ctx->device);
 	g_object_unref (ctx->self);
 	g_slice_free (DeactivateContext, ctx);
 }
 
-gboolean
-nm_modem_deactivate_async_finish (NMModem *self,
-                                  GAsyncResult *res,
-                                  GError **error)
-{
-	return !g_simple_async_result_propagate_error (G_SIMPLE_ASYNC_RESULT (res), error);
-}
-
-static void deactivate_step (DeactivateContext *ctx);
-
 static void
-disconnect_ready (NMModem *self,
-                  GAsyncResult *res,
-                  DeactivateContext *ctx)
+_deactivate_call_disconnect_cb (NMModem *self,
+                                GError *error,
+                                gpointer user_data)
 {
-	GError *error = NULL;
-
-	if (!NM_MODEM_GET_CLASS (self)->disconnect_finish (self, res, &error)) {
-		g_simple_async_result_take_error (ctx->result, error);
-		deactivate_context_complete (ctx);
-		return;
-	}
-
-	/* Go on */
-	ctx->step++;
-	deactivate_step (ctx);
+	deactivate_context_complete (user_data, error);
 }
 
 static void
-ppp_manager_stop_ready (NMPPPManager *ppp_manager,
-                        NMPPPManagerStopHandle *handle,
-                        gboolean was_cancelled,
-                        gpointer user_data)
+_deactivate_call_disconnect (DeactivateContext *ctx)
+{
+	NM_MODEM_GET_CLASS (ctx->self)->disconnect (ctx->self,
+	                                            FALSE,
+	                                            ctx->cancellable,
+	                                            _deactivate_call_disconnect_cb,
+	                                            ctx);
+}
+
+static void
+_deactivate_ppp_manager_stop_cb (NMPPPManager *ppp_manager,
+                                 NMPPPManagerStopHandle *handle,
+                                 gboolean was_cancelled,
+                                 gpointer user_data)
 {
 	DeactivateContext *ctx = user_data;
 
-	nm_assert (ctx->ppp_stop_handle == handle);
-	ctx->ppp_stop_handle = NULL;
+	g_object_unref (ppp_manager);
 
-	if (ctx->ppp_stop_cancellable_id) {
-		g_cancellable_disconnect (ctx->cancellable,
-		                          nm_steal_int (&ctx->ppp_stop_cancellable_id));
-	}
+	if (was_cancelled) {
+		gs_free_error GError *error = NULL;
 
-	if (was_cancelled)
-		return;
-
-	ctx->step++;
-	deactivate_step (ctx);
-}
-
-static void
-ppp_manager_stop_cancelled (GCancellable *cancellable,
-                            gpointer user_data)
-{
-	DeactivateContext *ctx = user_data;
-
-	nm_ppp_manager_stop_cancel (ctx->ppp_stop_handle);
-}
-
-static void
-deactivate_step (DeactivateContext *ctx)
-{
-	NMModem *self = ctx->self;
-	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
-	GError *error = NULL;
-
-	/* Check cancellable in each step */
-	if (g_cancellable_set_error_if_cancelled (ctx->cancellable, &error)) {
-		g_simple_async_result_take_error (ctx->result, error);
-		deactivate_context_complete (ctx);
+		if (!g_cancellable_set_error_if_cancelled (ctx->cancellable, &error))
+			nm_assert_not_reached ();
+		deactivate_context_complete (ctx, error);
 		return;
 	}
 
-	switch (ctx->step) {
-	case DEACTIVATE_CONTEXT_STEP_FIRST:
-		ctx->step++;
-		/* fall through */
-	case DEACTIVATE_CONTEXT_STEP_CLEANUP:
-		/* Make sure we keep a ref to the PPP manager if there is one */
-		if (priv->ppp_manager)
-			ctx->ppp_manager = g_object_ref (priv->ppp_manager);
-		/* Run cleanup */
-		NM_MODEM_GET_CLASS (self)->deactivate_cleanup (self, ctx->device);
-		ctx->step++;
-		/* fall through */
-	case DEACTIVATE_CONTEXT_STEP_PPP_MANAGER_STOP:
-		/* If we have a PPP manager, stop it */
-		if (ctx->ppp_manager) {
-			nm_assert (!ctx->ppp_stop_handle);
-			if (ctx->cancellable) {
-				ctx->ppp_stop_cancellable_id = g_cancellable_connect (ctx->cancellable,
-				                                                      G_CALLBACK (ppp_manager_stop_cancelled),
-				                                                      ctx,
-				                                                      NULL);
-			}
-			ctx->ppp_stop_handle = nm_ppp_manager_stop (ctx->ppp_manager,
-			                                            ppp_manager_stop_ready,
-			                                            ctx);
-			return;
-		}
-		ctx->step++;
-		/* fall through */
-	case DEACTIVATE_CONTEXT_STEP_MM_DISCONNECT:
-		/* Disconnect asynchronously */
-		NM_MODEM_GET_CLASS (self)->disconnect (self,
-		                                       FALSE,
-		                                       ctx->cancellable,
-		                                       (GAsyncReadyCallback) disconnect_ready,
-		                                       ctx);
-		return;
-
-	case DEACTIVATE_CONTEXT_STEP_LAST:
-		_LOGD ("modem deactivation finished");
-		deactivate_context_complete (ctx);
-		return;
-	}
-
-	g_assert_not_reached ();
+	nm_assert (!g_cancellable_is_cancelled (ctx->cancellable));
+	_deactivate_call_disconnect (ctx);
 }
 
 void
 nm_modem_deactivate_async (NMModem *self,
                            NMDevice *device,
                            GCancellable *cancellable,
-                           GAsyncReadyCallback callback,
+                           NMModemDeactivateCallback callback,
                            gpointer user_data)
 {
+	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
 	DeactivateContext *ctx;
+	NMPPPManager *ppp_manager;
 
-	ctx = g_slice_new0 (DeactivateContext);
+	g_return_if_fail (NM_IS_MODEM (self));
+	g_return_if_fail (NM_IS_DEVICE (device));
+	g_return_if_fail (G_IS_CANCELLABLE (cancellable));
+
+	ctx = g_slice_new (DeactivateContext);
 	ctx->self = g_object_ref (self);
 	ctx->device = g_object_ref (device);
-	ctx->result = g_simple_async_result_new (G_OBJECT (self),
-	                                         callback,
-	                                         user_data,
-	                                         nm_modem_deactivate_async);
-	/* FIXME(shutdown): we always require a cancellable, otherwise we cannot
-	 * do a coordinated shutdown. */
-	ctx->cancellable = nm_g_object_ref (cancellable);
+	ctx->cancellable = g_object_ref (cancellable);
+	ctx->callback = callback;
+	ctx->callback_user_data = user_data;
 
-	/* Start */
-	ctx->step = DEACTIVATE_CONTEXT_STEP_FIRST;
-	deactivate_step (ctx);
+	ppp_manager = nm_g_object_ref (priv->ppp_manager);
+
+	NM_MODEM_GET_CLASS (self)->deactivate_cleanup (self, ctx->device, FALSE);
+
+	if (ppp_manager) {
+		/* If we have a PPP manager, stop it.
+		 *
+		 * Pass on the reference in @ppp_manager. */
+		nm_ppp_manager_stop (ppp_manager,
+		                     ctx->cancellable,
+		                     _deactivate_ppp_manager_stop_cb,
+		                     ctx);
+		return;
+	}
+
+	_deactivate_call_disconnect (ctx);
 }
 
 /*****************************************************************************/
@@ -1348,7 +1329,7 @@ void
 nm_modem_deactivate (NMModem *self, NMDevice *device)
 {
 	/* First cleanup */
-	NM_MODEM_GET_CLASS (self)->deactivate_cleanup (self, device);
+	NM_MODEM_GET_CLASS (self)->deactivate_cleanup (self, device, TRUE);
 	/* Then disconnect without waiting */
 	NM_MODEM_GET_CLASS (self)->disconnect (self, FALSE, NULL, NULL, NULL);
 }
@@ -1387,7 +1368,7 @@ nm_modem_device_state_changed (NMModem *self,
 			if (new_state == NM_DEVICE_STATE_FAILED || new_state == NM_DEVICE_STATE_DISCONNECTED)
 				warn = FALSE;
 			/* First cleanup */
-			NM_MODEM_GET_CLASS (self)->deactivate_cleanup (self, NULL);
+			NM_MODEM_GET_CLASS (self)->deactivate_cleanup (self, NULL, TRUE);
 			NM_MODEM_GET_CLASS (self)->disconnect (self, warn, NULL, NULL, NULL);
 		}
 		break;
@@ -1632,9 +1613,9 @@ nm_modem_set_route_parameters_from_device (NMModem *self,
 	g_return_if_fail (NM_IS_DEVICE (device));
 
 	nm_modem_set_route_parameters (self,
-	                               nm_device_get_route_table (device, AF_INET, TRUE),
+	                               nm_device_get_route_table (device, AF_INET),
 	                               nm_device_get_route_metric (device, AF_INET),
-	                               nm_device_get_route_table (device, AF_INET6, TRUE),
+	                               nm_device_get_route_table (device, AF_INET6),
 	                               nm_device_get_route_metric (device, AF_INET6));
 }
 
@@ -1651,6 +1632,30 @@ nm_modem_get_capabilities (NMModem *self,
 }
 
 /*****************************************************************************/
+
+void
+_nm_modem_set_operator_code (NMModem *self, const char *operator_code)
+{
+	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
+
+	if (g_strcmp0 (priv->operator_code, operator_code) != 0) {
+		g_free (priv->operator_code);
+		priv->operator_code = g_strdup (operator_code);
+		_notify (self, PROP_OPERATOR_CODE);
+	}
+}
+
+void
+_nm_modem_set_apn (NMModem *self, const char *apn)
+{
+	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
+
+	if (g_strcmp0 (priv->apn, apn) != 0) {
+		g_free (priv->apn);
+		priv->apn = g_strdup (apn);
+		_notify (self, PROP_APN);
+	}
+}
 
 static void
 get_property (GObject *object, guint prop_id,
@@ -1690,6 +1695,12 @@ get_property (GObject *object, guint prop_id,
 	case PROP_SIM_OPERATOR_ID:
 		g_value_set_string (value, priv->sim_operator_id);
 		break;
+	case PROP_OPERATOR_CODE:
+		g_value_set_string (value, priv->operator_code);
+		break;
+	case PROP_APN:
+		g_value_set_string (value, priv->apn);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -1700,7 +1711,7 @@ static void
 set_property (GObject *object, guint prop_id,
               const GValue *value, GParamSpec *pspec)
 {
-	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE ((NMModem *) object);
+	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (object);
 	const char *s;
 
 	switch (prop_id) {
@@ -1737,10 +1748,14 @@ set_property (GObject *object, guint prop_id,
 		priv->ip_types = g_value_get_uint (value);
 		break;
 	case PROP_SIM_OPERATOR_ID:
-		g_clear_pointer (&priv->sim_operator_id, g_free);
+		nm_clear_g_free (&priv->sim_operator_id);
 		s = g_value_get_string (value);
 		if (s && s[0])
 			priv->sim_operator_id = g_strdup (s);
+		break;
+	case PROP_OPERATOR_CODE:
+		/* construct-only */
+		priv->operator_code = g_value_dup_string (value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1782,7 +1797,7 @@ constructed (GObject *object)
 static void
 dispose (GObject *object)
 {
-	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE ((NMModem *) object);
+	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (object);
 
 	g_clear_object (&priv->act_request);
 
@@ -1792,7 +1807,7 @@ dispose (GObject *object)
 static void
 finalize (GObject *object)
 {
-	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE ((NMModem *) object);
+	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (object);
 
 	g_free (priv->uid);
 	g_free (priv->path);
@@ -1803,6 +1818,8 @@ finalize (GObject *object)
 	g_free (priv->device_id);
 	g_free (priv->sim_id);
 	g_free (priv->sim_operator_id);
+	g_free (priv->operator_code);
+	g_free (priv->apn);
 
 	G_OBJECT_CLASS (nm_modem_parent_class)->finalize (object);
 }
@@ -1820,7 +1837,7 @@ nm_modem_class_init (NMModemClass *klass)
 	object_class->dispose = dispose;
 	object_class->finalize = finalize;
 
-	klass->act_stage1_prepare = act_stage1_prepare;
+	klass->modem_act_stage1_prepare = modem_act_stage1_prepare;
 	klass->stage3_ip6_config_request = stage3_ip6_config_request;
 	klass->deactivate_cleanup = deactivate_cleanup;
 
@@ -1884,6 +1901,18 @@ nm_modem_class_init (NMModemClass *klass)
 	     g_param_spec_string (NM_MODEM_SIM_OPERATOR_ID, "", "",
 	                          NULL,
 	                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT |
+	                          G_PARAM_STATIC_STRINGS);
+
+	obj_properties[PROP_OPERATOR_CODE] =
+	     g_param_spec_string (NM_MODEM_OPERATOR_CODE, "", "",
+	                          NULL,
+	                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT |
+	                          G_PARAM_STATIC_STRINGS);
+
+	obj_properties[PROP_APN] =
+	     g_param_spec_string (NM_MODEM_APN, "", "",
+	                          NULL,
+	                          G_PARAM_READABLE |
 	                          G_PARAM_STATIC_STRINGS);
 
 	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);

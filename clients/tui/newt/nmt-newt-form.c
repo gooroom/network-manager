@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -27,7 +14,6 @@
 #include "nm-default.h"
 
 #include <fcntl.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "nmt-newt-form.h"
@@ -326,9 +312,9 @@ static GSList *form_stack;
 static GSource *keypress_source;
 
 static gboolean
-nmt_newt_form_keypress_callback (int          fd,
+nmt_newt_form_keypress_callback (int fd,
                                  GIOCondition condition,
-                                 gpointer     user_data)
+                                 gpointer user_data)
 {
 	g_return_val_if_fail (form_stack != NULL, FALSE);
 
@@ -354,16 +340,14 @@ static void
 nmt_newt_form_real_show (NmtNewtForm *form)
 {
 	if (!keypress_source) {
-		GIOChannel *io;
-
-		io = g_io_channel_unix_new (STDIN_FILENO);
-		keypress_source = g_io_create_watch (io, G_IO_IN);
+		keypress_source = nm_g_unix_fd_source_new (STDIN_FILENO,
+		                                           G_IO_IN,
+		                                           G_PRIORITY_DEFAULT,
+		                                           nmt_newt_form_keypress_callback,
+		                                           NULL,
+		                                           NULL);
 		g_source_set_can_recurse (keypress_source, TRUE);
-		g_source_set_callback (keypress_source,
-		                       (GSourceFunc)(void (*) (void)) nmt_newt_form_keypress_callback,
-		                       NULL, NULL);
 		g_source_attach (keypress_source, NULL);
-		g_io_channel_unref (io);
 	}
 
 	nmt_newt_form_build (form);
@@ -430,10 +414,8 @@ nmt_newt_form_quit (NmtNewtForm *form)
 
 	if (form_stack)
 		nmt_newt_form_iterate (form_stack->data);
-	else if (keypress_source) {
-		g_source_destroy (keypress_source);
-		g_clear_pointer (&keypress_source, g_source_unref);
-	}
+	else
+		nm_clear_g_source_inst (&keypress_source);
 
 	g_signal_emit (form, signals[QUIT], 0);
 	g_object_unref (form);

@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2016 Red Hat, Inc.
  */
 
@@ -24,7 +9,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <errno.h>
 
 #include "nm-manager.h"
 #include "nm-core-utils.h"
@@ -126,12 +110,13 @@ nm_ppp_manager_start (NMPPPManager *self,
 
 NMPPPManagerStopHandle *
 nm_ppp_manager_stop (NMPPPManager *self,
+                     GCancellable *cancellable,
                      NMPPPManagerStopCallback callback,
                      gpointer user_data)
 {
 	g_return_val_if_fail (ppp_ops, NULL);
 
-	return ppp_ops->stop (self, callback, user_data);
+	return ppp_ops->stop (self, cancellable, callback, user_data);
 }
 
 void

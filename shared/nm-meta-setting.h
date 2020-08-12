@@ -1,22 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 - 2018 Red Hat, Inc.
+ * Copyright (C) 2017 - 2018 Red Hat, Inc.
  */
 
 #ifndef __NM_META_SETTING_H__
@@ -89,7 +73,20 @@ typedef struct {
 	const char *           (*uri_func)    (NMSetting8021x *setting);
 	const char *           (*passwd_func) (NMSetting8021x *setting);
 	NMSettingSecretFlags   (*pwflag_func) (NMSetting8021x *setting);
+	gboolean (*set_cert_func) (NMSetting8021x *setting,
+	                           const char *value,
+	                           NMSetting8021xCKScheme scheme,
+	                           NMSetting8021xCKFormat *out_format,
+	                           GError **error);
+	gboolean (*set_private_key_func) (NMSetting8021x *setting,
+	                                  const char *value,
+	                                  const char *password,
+	                                  NMSetting8021xCKScheme scheme,
+	                                  NMSetting8021xCKFormat *out_format,
+	                                  GError **error);
 	const char *file_suffix;
+	NMSetting8021xSchemeType scheme_type;
+	bool is_secret:1;
 } NMSetting8021xSchemeVtable;
 
 extern const NMSetting8021xSchemeVtable nm_setting_8021x_scheme_vtable[_NM_SETTING_802_1X_SCHEME_TYPE_NUM + 1];
@@ -129,6 +126,7 @@ typedef enum {
 	NM_META_SETTING_TYPE_MACVLAN,
 	NM_META_SETTING_TYPE_MATCH,
 	NM_META_SETTING_TYPE_OVS_BRIDGE,
+	NM_META_SETTING_TYPE_OVS_DPDK,
 	NM_META_SETTING_TYPE_OVS_INTERFACE,
 	NM_META_SETTING_TYPE_OVS_PATCH,
 	NM_META_SETTING_TYPE_OVS_PORT,
@@ -144,8 +142,11 @@ typedef enum {
 	NM_META_SETTING_TYPE_USER,
 	NM_META_SETTING_TYPE_VLAN,
 	NM_META_SETTING_TYPE_VPN,
+	NM_META_SETTING_TYPE_VRF,
 	NM_META_SETTING_TYPE_VXLAN,
+	NM_META_SETTING_TYPE_WIFI_P2P,
 	NM_META_SETTING_TYPE_WIMAX,
+	NM_META_SETTING_TYPE_WIREGUARD,
 	NM_META_SETTING_TYPE_WPAN,
 
 	NM_META_SETTING_TYPE_UNKNOWN,

@@ -1,20 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2014 - 2016 Red Hat, Inc.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2014 - 2016 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -24,9 +10,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <unistd.h>
 
 #include "nm-dhcp-helper-api.h"
@@ -41,7 +25,7 @@
 
 /*****************************************************************************/
 
-const NMDhcpClientFactory *const _nm_dhcp_manager_factories[4] = {
+const NMDhcpClientFactory *const _nm_dhcp_manager_factories[6] = {
 	/* the order here matters, as we will try the plugins in this order to find
 	 * the first available plugin. */
 
@@ -55,15 +39,17 @@ const NMDhcpClientFactory *const _nm_dhcp_manager_factories[4] = {
 	&_nm_dhcp_client_factory_dhcpcd,
 #endif
 	&_nm_dhcp_client_factory_internal,
+	&_nm_dhcp_client_factory_systemd,
+	&_nm_dhcp_client_factory_nettools,
 };
 
 /*****************************************************************************/
 
 typedef struct {
-	NMDBusManager *      dbus_mgr;
-	gulong              new_conn_id;
-	gulong              dis_conn_id;
-	GHashTable *        connections;
+	NMDBusManager *dbus_mgr;
+	gulong         new_conn_id;
+	gulong         dis_conn_id;
+	GHashTable    *connections;
 } NMDhcpListenerPrivate;
 
 struct _NMDhcpListener {
@@ -284,7 +270,7 @@ nm_dhcp_listener_init (NMDhcpListener *self)
 	/* Maps GDBusConnection :: signal-id */
 	priv->connections = g_hash_table_new (nm_direct_hash, NULL);
 
-	priv->dbus_mgr = nm_dbus_manager_get ();
+	priv->dbus_mgr = g_object_ref (nm_dbus_manager_get ());
 
 	/* Register the socket our DHCP clients will return lease info on */
 	nm_dbus_manager_private_server_register (priv->dbus_mgr, PRIV_SOCK_PATH, PRIV_SOCK_TAG);
@@ -301,13 +287,14 @@ nm_dhcp_listener_init (NMDhcpListener *self)
 static void
 dispose (GObject *object)
 {
-	NMDhcpListenerPrivate *priv = NM_DHCP_LISTENER_GET_PRIVATE ((NMDhcpListener *) object);
+	NMDhcpListenerPrivate *priv = NM_DHCP_LISTENER_GET_PRIVATE (object);
 
 	nm_clear_g_signal_handler (priv->dbus_mgr, &priv->new_conn_id);
 	nm_clear_g_signal_handler (priv->dbus_mgr, &priv->dis_conn_id);
-	priv->dbus_mgr = NULL;
 
-	g_clear_pointer (&priv->connections, g_hash_table_destroy);
+	nm_clear_pointer (&priv->connections, g_hash_table_destroy);
+
+	g_clear_object (&priv->dbus_mgr);
 
 	G_OBJECT_CLASS (nm_dhcp_listener_parent_class)->dispose (object);
 }

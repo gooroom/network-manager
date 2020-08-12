@@ -1,26 +1,10 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* ndisc.c - test program
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2013 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
 #include <syslog.h>
 
 #include "ndisc/nm-ndisc.h"
@@ -68,6 +52,7 @@ main (int argc, char **argv)
 	                           "8ce666e8-d34d-4fb1-b858-f15a7al28086",
 	                           NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_EUI64,
 	                           NM_NDISC_NODE_TYPE_HOST,
+	                           0,
 	                           &error);
 	if (!ndisc) {
 		g_print ("Failed to create NMNDisc instance: %s\n", error->message);

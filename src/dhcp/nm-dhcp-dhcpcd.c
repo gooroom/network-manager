@@ -1,32 +1,14 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-dhcp-dhcpcd.c - dhcpcd specific hooks for NetworkManager
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2008 Roy Marples
  * Copyright (C) 2010 Dan Williams <dcbw@redhat.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
  */
 
 #include "nm-default.h"
 
 #if WITH_DHCPCD
 
-#include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -102,9 +84,9 @@ ip4_start (NMDhcpClient *client,
 	iface = nm_dhcp_client_get_iface (client);
 
 	/* dhcpcd does not allow custom pidfiles; the pidfile is always
-	 * RUNDIR "dhcpcd-<ifname>.pid".
+	 * RUNSTATEDIR "dhcpcd-<ifname>.pid".
 	 */
-	priv->pid_file = g_strdup_printf (RUNDIR "/dhcpcd-%s.pid", iface);
+	priv->pid_file = g_strdup_printf (RUNSTATEDIR "/dhcpcd-%s.pid", iface);
 
 	dhcpcd_path = nm_dhcp_dhcpcd_get_path ();
 	if (!dhcpcd_path) {
@@ -182,29 +164,20 @@ ip4_start (NMDhcpClient *client,
 	return TRUE;
 }
 
-static gboolean
-ip6_start (NMDhcpClient *client,
-           const char *dhcp_anycast_addr,
-           const struct in6_addr *ll_addr,
-           NMSettingIP6ConfigPrivacy privacy,
-           guint needed_prefixes,
-           GError **error)
-{
-	nm_utils_error_set_literal (error, NM_UTILS_ERROR_UNKNOWN, "dhcpcd plugin does not support IPv6");
-	return FALSE;
-}
-
 static void
 stop (NMDhcpClient *client, gboolean release)
 {
 	NMDhcpDhcpcd *self = NM_DHCP_DHCPCD (client);
 	NMDhcpDhcpcdPrivate *priv = NM_DHCP_DHCPCD_GET_PRIVATE (self);
+	int errsv;
 
 	NM_DHCP_CLIENT_CLASS (nm_dhcp_dhcpcd_parent_class)->stop (client, release);
 
 	if (priv->pid_file) {
-		if (remove (priv->pid_file) == -1)
-			_LOGD ("could not remove dhcp pid file \"%s\": %d (%s)", priv->pid_file, errno, g_strerror (errno));
+		if (remove (priv->pid_file) == -1) {
+			errsv = errno;
+			_LOGD ("could not remove dhcp pid file \"%s\": %d (%s)", priv->pid_file, errsv, nm_strerror_native (errsv));
+		}
 	}
 
 	/* FIXME: implement release... */
@@ -227,7 +200,7 @@ nm_dhcp_dhcpcd_init (NMDhcpDhcpcd *self)
 static void
 dispose (GObject *object)
 {
-	NMDhcpDhcpcdPrivate *priv = NM_DHCP_DHCPCD_GET_PRIVATE ((NMDhcpDhcpcd *) object);
+	NMDhcpDhcpcdPrivate *priv = NM_DHCP_DHCPCD_GET_PRIVATE (object);
 
 	if (priv->dhcp_listener) {
 		g_signal_handlers_disconnect_by_func (priv->dhcp_listener,
@@ -250,12 +223,11 @@ nm_dhcp_dhcpcd_class_init (NMDhcpDhcpcdClass *dhcpcd_class)
 	object_class->dispose = dispose;
 
 	client_class->ip4_start = ip4_start;
-	client_class->ip6_start = ip6_start;
 	client_class->stop = stop;
 }
 
 const NMDhcpClientFactory _nm_dhcp_client_factory_dhcpcd = {
-	.name = "dhcpcd",
+	.name     = "dhcpcd",
 	.get_type = nm_dhcp_dhcpcd_get_type,
 	.get_path = nm_dhcp_dhcpcd_get_path,
 };

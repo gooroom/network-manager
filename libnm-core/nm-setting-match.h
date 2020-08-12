@@ -1,15 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program. If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * Copyright 2018 Red Hat, Inc.
+ * Copyright (C) 2018 Red Hat, Inc.
  */
 
 #ifndef NM_SETTING_MATCH_H
@@ -32,7 +23,10 @@ G_BEGIN_DECLS
 
 #define NM_SETTING_MATCH_SETTING_NAME      "match"
 
-#define NM_SETTING_MATCH_INTERFACE_NAME    "interface-name"
+#define NM_SETTING_MATCH_INTERFACE_NAME      "interface-name"
+#define NM_SETTING_MATCH_KERNEL_COMMAND_LINE "kernel-command-line"
+#define NM_SETTING_MATCH_DRIVER              "driver"
+#define NM_SETTING_MATCH_PATH                "path"
 
 typedef struct _NMSettingMatchClass NMSettingMatchClass;
 
@@ -58,6 +52,61 @@ NM_AVAILABLE_IN_1_14
 void nm_setting_match_clear_interface_names (NMSettingMatch *setting);
 NM_AVAILABLE_IN_1_14
 const char *const *nm_setting_match_get_interface_names (NMSettingMatch *setting, guint *length);
+
+
+NM_AVAILABLE_IN_1_26
+guint nm_setting_match_get_num_kernel_command_lines (NMSettingMatch *setting);
+NM_AVAILABLE_IN_1_26
+const char *nm_setting_match_get_kernel_command_line (NMSettingMatch *setting, guint idx);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_remove_kernel_command_line (NMSettingMatch *setting, guint idx);
+NM_AVAILABLE_IN_1_26
+gboolean nm_setting_match_remove_kernel_command_line_by_value (NMSettingMatch *setting,
+                                                               const char *kernel_command_line);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_add_kernel_command_line (NMSettingMatch *setting,
+                                               const char *kernel_command_line);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_clear_kernel_command_lines (NMSettingMatch *setting);
+NM_AVAILABLE_IN_1_26
+const char *const *nm_setting_match_get_kernel_command_lines (NMSettingMatch *setting, guint *length);
+
+
+NM_AVAILABLE_IN_1_26
+guint nm_setting_match_get_num_drivers (NMSettingMatch *setting);
+NM_AVAILABLE_IN_1_26
+const char *nm_setting_match_get_driver (NMSettingMatch *setting, guint idx);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_remove_driver (NMSettingMatch *setting, guint idx);
+NM_AVAILABLE_IN_1_26
+gboolean nm_setting_match_remove_driver_by_value (NMSettingMatch *setting,
+                                                  const char *driver);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_add_driver (NMSettingMatch *setting,
+                                  const char *driver);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_clear_drivers (NMSettingMatch *setting);
+NM_AVAILABLE_IN_1_26
+const char *const *nm_setting_match_get_drivers (NMSettingMatch *setting, guint *length);
+
+
+NM_AVAILABLE_IN_1_26
+guint nm_setting_match_get_num_paths (NMSettingMatch *setting);
+NM_AVAILABLE_IN_1_26
+const char *nm_setting_match_get_path (NMSettingMatch *setting, guint idx);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_remove_path (NMSettingMatch *setting, guint idx);
+NM_AVAILABLE_IN_1_26
+gboolean nm_setting_match_remove_path_by_value (NMSettingMatch *setting,
+                                                const char *path);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_add_path (NMSettingMatch *setting,
+                                const char *path);
+NM_AVAILABLE_IN_1_26
+void nm_setting_match_clear_paths (NMSettingMatch *setting);
+NM_AVAILABLE_IN_1_26
+const char *const *nm_setting_match_get_paths (NMSettingMatch *setting, guint *length);
+
 G_END_DECLS
 
 #endif /* NM_SETTING_MATCH_H */

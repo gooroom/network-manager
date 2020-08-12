@@ -1,33 +1,18 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2005 - 2010 Red Hat, Inc.
- *
  */
 
 #include "nm-default.h"
 
-#include <string.h>
-#include <errno.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#include "nm-utils/nm-dedup-multi.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 
 #include "nm-dhcp-utils.h"
 #include "nm-utils.h"
+#include "nm-config.h"
 #include "NetworkManagerUtils.h"
 #include "platform/nm-platform.h"
 #include "nm-dhcp-client-logging.h"
@@ -102,67 +87,56 @@ out:
 	return have_routes;
 }
 
-static const char **
-process_dhclient_rfc3442_route (const char **octets,
-                                NMPlatformIP4Route *route,
-                                gboolean *success)
+static gboolean
+process_dhclient_rfc3442_route (const char *const**p_octets,
+                                NMPlatformIP4Route *route)
 {
-	const char **o = octets;
-	int addr_len = 0, i = 0;
-	long int tmp;
-	char *next_hop;
-	guint32 tmp_addr;
+	const char *const*o = *p_octets;
+	gs_free char *next_hop = NULL;
+	int addr_len;
+	int v_plen;
+	in_addr_t tmp_addr;
+	in_addr_t v_network = 0;
 
-	*success = FALSE;
-
-	if (!*o)
-		return o; /* no prefix */
-
-	tmp = strtol (*o, NULL, 10);
-	if (tmp < 0 || tmp > 32)  /* 32 == max IP4 prefix length */
-		return o;
-
-	memset (route, 0, sizeof (*route));
-	route->plen = tmp;
+	v_plen = _nm_utils_ascii_str_to_int64 (*o, 10, 0, 32, -1);
+	if (v_plen == -1)
+		return FALSE;
 	o++;
 
-	if (tmp > 0)
-		addr_len = ((tmp - 1) / 8) + 1;
+	addr_len =   v_plen > 0
+	           ? ((v_plen - 1) / 8) + 1
+	           : 0;
 
 	/* ensure there's at least the address + next hop left */
-	if (g_strv_length ((char **) o) < addr_len + 4)
-		goto error;
+	if (NM_PTRARRAY_LEN (o) < addr_len + 4)
+		return FALSE;
 
-	if (tmp) {
+	if (v_plen > 0) {
 		const char *addr[4] = { "0", "0", "0", "0" };
-		char *str_addr;
+		gs_free char *str_addr = NULL;
+		int i;
 
 		for (i = 0; i < addr_len; i++)
 			addr[i] = *o++;
 
 		str_addr = g_strjoin (".", addr[0], addr[1], addr[2], addr[3], NULL);
-		if (inet_pton (AF_INET, str_addr, &tmp_addr) <= 0) {
-			g_free (str_addr);
-			goto error;
-		}
-		g_free (str_addr);
-		route->network = nm_utils_ip4_address_clear_host_address (tmp_addr, tmp);
+		if (inet_pton (AF_INET, str_addr, &tmp_addr) <= 0)
+			return FALSE;
+		v_network = nm_utils_ip4_address_clear_host_address (tmp_addr, v_plen);
 	}
 
-	/* Handle next hop */
 	next_hop = g_strjoin (".", o[0], o[1], o[2], o[3], NULL);
-	if (inet_pton (AF_INET, next_hop, &tmp_addr) <= 0) {
-		g_free (next_hop);
-		goto error;
-	}
-	route->gateway = tmp_addr;
-	g_free (next_hop);
+	o += 4;
+	if (inet_pton (AF_INET, next_hop, &tmp_addr) <= 0)
+		return FALSE;
 
-	*success = TRUE;
-	return o + 4; /* advance to past the next hop */
-
-error:
-	return o;
+	*route = (NMPlatformIP4Route) {
+		.network = v_network,
+		.plen    = v_plen,
+		.gateway = tmp_addr,
+	};
+	*p_octets = o;
+	return TRUE;
 }
 
 static gboolean
@@ -173,23 +147,23 @@ ip4_process_dhclient_rfc3442_routes (const char *iface,
                                      NMIP4Config *ip4_config,
                                      guint32 *gwaddr)
 {
-	char **octets, **o;
+	gs_free const char **octets = NULL;
+	const char *const*o;
 	gboolean have_routes = FALSE;
-	NMPlatformIP4Route route;
-	gboolean success;
 
-	o = octets = g_strsplit_set (str, " .", 0);
-	if (g_strv_length (octets) < 5) {
+	octets = nm_utils_strsplit_set_with_empty (str, " .");
+	if (NM_PTRARRAY_LEN (octets) < 5) {
 		_LOG2W (LOGD_DHCP4, iface, "ignoring invalid classless static routes '%s'", str);
-		goto out;
+		return FALSE;
 	}
 
+	o = octets;
 	while (*o) {
-		memset (&route, 0, sizeof (route));
-		o = (char **) process_dhclient_rfc3442_route ((const char **) o, &route, &success);
-		if (!success) {
+		NMPlatformIP4Route route;
+
+		if (!process_dhclient_rfc3442_route (&o, &route)) {
 			_LOG2W (LOGD_DHCP4, iface, "ignoring invalid classless static routes");
-			break;
+			return have_routes;
 		}
 
 		have_routes = TRUE;
@@ -197,7 +171,8 @@ ip4_process_dhclient_rfc3442_routes (const char *iface,
 			/* gateway passed as classless static route */
 			*gwaddr = route.gateway;
 		} else {
-			char addr[INET_ADDRSTRLEN];
+			char b1[INET_ADDRSTRLEN];
+			char b2[INET_ADDRSTRLEN];
 
 			/* normal route */
 			route.rt_source = NM_IP_CONFIG_SOURCE_DHCP;
@@ -206,13 +181,12 @@ ip4_process_dhclient_rfc3442_routes (const char *iface,
 			nm_ip4_config_add_route (ip4_config, &route, NULL);
 
 			_LOG2I (LOGD_DHCP4, iface, "  classless static route %s/%d gw %s",
-			        nm_utils_inet4_ntop (route.network, addr), route.plen,
-			        nm_utils_inet4_ntop (route.gateway, NULL));
+			        _nm_utils_inet4_ntop (route.network, b1),
+			        route.plen,
+			        _nm_utils_inet4_ntop (route.gateway, b2));
 		}
 	}
 
-out:
-	g_strfreev (octets);
 	return have_routes;
 }
 
@@ -408,12 +382,13 @@ nm_dhcp_utils_ip4_config_from_options (NMDedupMultiIndex *multi_idx,
 	gboolean gateway_has = FALSE;
 	guint32 gateway = 0;
 	guint8 plen = 0;
+	char sbuf[NM_UTILS_INET_ADDRSTRLEN];
 
 	g_return_val_if_fail (options != NULL, NULL);
 
 	ip4_config = nm_ip4_config_new (multi_idx, ifindex);
 	memset (&address, 0, sizeof (address));
-	address.timestamp = nm_utils_get_monotonic_timestamp_s ();
+	address.timestamp = nm_utils_get_monotonic_timestamp_sec ();
 
 	str = g_hash_table_lookup (options, "ip_address");
 	if (str && (inet_pton (AF_INET, str, &addr) > 0))
@@ -439,7 +414,7 @@ nm_dhcp_utils_ip4_config_from_options (NMDedupMultiIndex *multi_idx,
 		process_classful_routes (iface, options, route_table, route_metric, ip4_config);
 
 	if (gateway) {
-		_LOG2I (LOGD_DHCP4, iface, "  gateway %s", nm_utils_inet4_ntop (gateway, NULL));
+		_LOG2I (LOGD_DHCP4, iface, "  gateway %s", _nm_utils_inet4_ntop (gateway, sbuf));
 		gateway_has = TRUE;
 	} else {
 		/* If the gateway wasn't provided as a classless static route with a
@@ -465,10 +440,10 @@ nm_dhcp_utils_ip4_config_from_options (NMDedupMultiIndex *multi_idx,
 
 	if (gateway_has) {
 		const NMPlatformIP4Route r = {
-			.rt_source = NM_IP_CONFIG_SOURCE_DHCP,
-			.gateway = gateway,
+			.rt_source     = NM_IP_CONFIG_SOURCE_DHCP,
+			.gateway       = gateway,
 			.table_coerced = nm_platform_route_table_coerce (route_table),
-			.metric = route_metric,
+			.metric        = route_metric,
 		};
 
 		nm_ip4_config_add_route (ip4_config, &r, NULL);
@@ -543,7 +518,7 @@ nm_dhcp_utils_ip4_config_from_options (NMDedupMultiIndex *multi_idx,
 
 		errno = 0;
 		int_mtu = strtol (str, NULL, 10);
-		if ((errno == EINVAL) || (errno == ERANGE))
+		if (NM_IN_SET (errno, EINVAL, ERANGE))
 			goto error;
 
 		if (int_mtu > 576)
@@ -626,7 +601,7 @@ nm_dhcp_utils_ip6_prefix_from_options (GHashTable *options)
 	address.address = tmp_addr;
 	address.addr_source = NM_IP_CONFIG_SOURCE_DHCP;
 	address.plen = prefix;
-	address.timestamp = nm_utils_get_monotonic_timestamp_s ();
+	address.timestamp = nm_utils_get_monotonic_timestamp_sec ();
 
 	str = g_hash_table_lookup (options, "max_life");
 	if (str)
@@ -655,7 +630,7 @@ nm_dhcp_utils_ip6_config_from_options (NMDedupMultiIndex *multi_idx,
 
 	memset (&address, 0, sizeof (address));
 	address.plen = 128;
-	address.timestamp = nm_utils_get_monotonic_timestamp_s ();
+	address.timestamp = nm_utils_get_monotonic_timestamp_sec ();
 
 	ip6_config = nm_ip6_config_new (multi_idx, ifindex);
 
@@ -729,7 +704,7 @@ nm_dhcp_utils_duid_to_string (GBytes *duid)
 	g_return_val_if_fail (duid, NULL);
 
 	data = g_bytes_get_data (duid, &len);
-	return _nm_utils_bin2hexstr_full (data, len, ':', FALSE, NULL);
+	return nm_utils_bin2hexstr_full (data, len, ':', FALSE, NULL);
 }
 
 /**
@@ -775,3 +750,55 @@ nm_dhcp_utils_client_id_string_to_bytes (const char *client_id)
 	return bytes;
 }
 
+/**
+ * nm_dhcp_utils_get_leasefile_path:
+ * @addr_family: the IP address family
+ * @plugin_name: the name of the plugin part of the lease file name
+ * @iface: the interface name to which the lease relates to
+ * @uuid: uuid of the connection to which the lease relates to
+ * @out_leasefile_path: will store the computed lease file path
+ *
+ * Constructs the lease file name on the basis of the calling plugin,
+ * interface name and connection uuid. Then returns in @out_leasefile_path
+ * the full path of the lease filename.
+ *
+ * Returns: TRUE if the lease file already exists, FALSE otherwise.
+ */
+gboolean
+nm_dhcp_utils_get_leasefile_path (int addr_family,
+                                  const char *plugin_name,
+                                  const char *iface,
+                                  const char *uuid,
+                                  char **out_leasefile_path)
+{
+	gs_free char *rundir_path = NULL;
+	gs_free char *statedir_path = NULL;
+
+	rundir_path = g_strdup_printf (NMRUNDIR "/%s%s-%s-%s.lease",
+	                               plugin_name,
+	                               addr_family == AF_INET6 ? "6" : "",
+	                               uuid,
+	                               iface);
+
+	if (g_file_test (rundir_path, G_FILE_TEST_EXISTS)) {
+		*out_leasefile_path = g_steal_pointer (&rundir_path);
+		return TRUE;
+	}
+
+	statedir_path = g_strdup_printf (NMSTATEDIR "/%s%s-%s-%s.lease",
+	                                 plugin_name,
+	                                 addr_family == AF_INET6 ? "6" : "",
+	                                 uuid,
+	                                 iface);
+
+	if (g_file_test (statedir_path, G_FILE_TEST_EXISTS)) {
+		*out_leasefile_path = g_steal_pointer (&statedir_path);
+		return TRUE;
+	}
+
+	if (nm_config_get_configure_and_quit (nm_config_get ()) == NM_CONFIG_CONFIGURE_AND_QUIT_INITRD)
+		*out_leasefile_path = g_steal_pointer (&rundir_path);
+	else
+		*out_leasefile_path = g_steal_pointer (&statedir_path);
+	return FALSE;
+}

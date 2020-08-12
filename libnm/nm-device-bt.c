@@ -1,70 +1,63 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2008 Novell, Inc.
- * Copyright 2007 - 2012 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2012 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
+#include "nm-device-bt.h"
 
 #include "nm-setting-connection.h"
 #include "nm-setting-bluetooth.h"
 #include "nm-utils.h"
-
-#include "nm-device-bt.h"
 #include "nm-object-private.h"
 #include "nm-enum-types.h"
 
-G_DEFINE_TYPE (NMDeviceBt, nm_device_bt, NM_TYPE_DEVICE)
+/*****************************************************************************/
 
-#define NM_DEVICE_BT_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_BT, NMDeviceBtPrivate))
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
+	PROP_NAME,
+	PROP_BT_CAPABILITIES,
+);
 
 typedef struct {
-	char *hw_address;
 	char *name;
 	guint32 bt_capabilities;
 } NMDeviceBtPrivate;
 
-enum {
-	PROP_0,
-	PROP_HW_ADDRESS,
-	PROP_NAME,
-	PROP_BT_CAPABILITIES,
-
-	LAST_PROP
+struct _NMDeviceBt {
+	NMDevice parent;
+	NMDeviceBtPrivate _priv;
 };
 
+struct _NMDeviceBtClass {
+	NMDeviceClass parent;
+};
+
+G_DEFINE_TYPE (NMDeviceBt, nm_device_bt, NM_TYPE_DEVICE)
+
+#define NM_DEVICE_BT_GET_PRIVATE(self) _NM_GET_PRIVATE(self, NMDeviceBt, NM_IS_DEVICE_BT, NMObject, NMDevice)
+
+/*****************************************************************************/
+
 /**
- * nm_device_bt_get_hw_address:
+ * nm_device_bt_get_hw_address: (skip)
  * @device: a #NMDeviceBt
  *
  * Gets the hardware (MAC) address of the #NMDeviceBt
  *
  * Returns: the hardware address. This is the internal string used by the
  * device, and must not be modified.
+ *
+ * Deprecated: 1.24: Use nm_device_get_hw_address() instead.
  **/
 const char *
 nm_device_bt_get_hw_address (NMDeviceBt *device)
 {
 	g_return_val_if_fail (NM_IS_DEVICE_BT (device), NULL);
 
-	return nm_str_not_empty (NM_DEVICE_BT_GET_PRIVATE (device)->hw_address);
+	return nm_device_get_hw_address (NM_DEVICE (device));
 }
 
 /**
@@ -145,7 +138,7 @@ connection_compatible (NMDevice *device, NMConnection *connection, GError **erro
 	}
 
 	/* Check BT address */
-	hw_addr = nm_device_bt_get_hw_address (NM_DEVICE_BT (device));
+	hw_addr = nm_device_get_hw_address (device);
 	if (hw_addr) {
 		if (!nm_utils_hwaddr_valid (hw_addr, ETH_ALEN)) {
 			g_set_error_literal (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_FAILED,
@@ -177,12 +170,6 @@ get_setting_type (NMDevice *device)
 	return NM_TYPE_SETTING_BLUETOOTH;
 }
 
-static const char *
-get_hw_address (NMDevice *device)
-{
-	return nm_device_bt_get_hw_address (NM_DEVICE_BT (device));
-}
-
 /*****************************************************************************/
 
 static void
@@ -191,29 +178,10 @@ nm_device_bt_init (NMDeviceBt *device)
 }
 
 static void
-init_dbus (NMObject *object)
-{
-	NMDeviceBtPrivate *priv = NM_DEVICE_BT_GET_PRIVATE (object);
-	const NMPropertiesInfo property_info[] = {
-		{ NM_DEVICE_BT_HW_ADDRESS,   &priv->hw_address },
-		{ NM_DEVICE_BT_NAME,         &priv->name },
-		{ NM_DEVICE_BT_CAPABILITIES, &priv->bt_capabilities },
-		{ NULL },
-	};
-
-	NM_OBJECT_CLASS (nm_device_bt_parent_class)->init_dbus (object);
-
-	_nm_object_register_properties (object,
-	                                NM_DBUS_INTERFACE_DEVICE_BLUETOOTH,
-	                                property_info);
-}
-
-static void
 finalize (GObject *object)
 {
 	NMDeviceBtPrivate *priv = NM_DEVICE_BT_GET_PRIVATE (object);
 
-	g_free (priv->hw_address);
 	g_free (priv->name);
 
 	G_OBJECT_CLASS (nm_device_bt_parent_class)->finalize (object);
@@ -228,9 +196,6 @@ get_property (GObject *object,
 	NMDeviceBt *device = NM_DEVICE_BT (object);
 
 	switch (prop_id) {
-	case PROP_HW_ADDRESS:
-		g_value_set_string (value, nm_device_bt_get_hw_address (device));
-		break;
 	case PROP_NAME:
 		g_value_set_string (value, nm_device_bt_get_name (device));
 		break;
@@ -243,62 +208,51 @@ get_property (GObject *object,
 	}
 }
 
+const NMLDBusMetaIface _nml_dbus_meta_iface_nm_device_bluetooth = NML_DBUS_META_IFACE_INIT_PROP (
+	NM_DBUS_INTERFACE_DEVICE_BLUETOOTH,
+	nm_device_bt_get_type,
+	NML_DBUS_META_INTERFACE_PRIO_INSTANTIATE_HIGH,
+	NML_DBUS_META_IFACE_DBUS_PROPERTIES (
+		NML_DBUS_META_PROPERTY_INIT_U   ("BtCapabilities", PROP_BT_CAPABILITIES, NMDeviceBt, _priv.bt_capabilities                    ),
+		NML_DBUS_META_PROPERTY_INIT_FCN ("HwAddress",      0,                    "s",        _nm_device_notify_update_prop_hw_address ),
+		NML_DBUS_META_PROPERTY_INIT_S   ("Name",           PROP_NAME,            NMDeviceBt, _priv.name                               ),
+	),
+);
+
 static void
 nm_device_bt_class_init (NMDeviceBtClass *bt_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (bt_class);
-	NMObjectClass *nm_object_class = NM_OBJECT_CLASS (bt_class);
 	NMDeviceClass *device_class = NM_DEVICE_CLASS (bt_class);
 
-	g_type_class_add_private (bt_class, sizeof (NMDeviceBtPrivate));
-
-	/* virtual methods */
-	object_class->finalize = finalize;
 	object_class->get_property = get_property;
-
-	nm_object_class->init_dbus = init_dbus;
+	object_class->finalize     = finalize;
 
 	device_class->connection_compatible = connection_compatible;
-	device_class->get_setting_type = get_setting_type;
-	device_class->get_hw_address = get_hw_address;
-
-	/* properties */
-
-	/**
-	 * NMDeviceBt:hw-address:
-	 *
-	 * The hardware (MAC) address of the device.
-	 **/
-	g_object_class_install_property
-		(object_class, PROP_HW_ADDRESS,
-		 g_param_spec_string (NM_DEVICE_BT_HW_ADDRESS, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	device_class->get_setting_type      = get_setting_type;
 
 	/**
 	 * NMDeviceBt:name:
 	 *
 	 * The name of the bluetooth device.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_NAME,
-		 g_param_spec_string (NM_DEVICE_BT_NAME, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_NAME] =
+	    g_param_spec_string (NM_DEVICE_BT_NAME, "", "",
+	                         NULL,
+	                         G_PARAM_READABLE |
+	                         G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMDeviceBt:bt-capabilities:
 	 *
 	 * The device's bluetooth capabilities, a combination of #NMBluetoothCapabilities.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_BT_CAPABILITIES,
-		 g_param_spec_flags (NM_DEVICE_BT_CAPABILITIES, "", "",
-		                     NM_TYPE_BLUETOOTH_CAPABILITIES,
-		                     NM_BT_CAPABILITY_NONE,
-		                     G_PARAM_READABLE |
-		                     G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_BT_CAPABILITIES] =
+	    g_param_spec_flags (NM_DEVICE_BT_CAPABILITIES, "", "",
+	                        NM_TYPE_BLUETOOTH_CAPABILITIES,
+	                        NM_BT_CAPABILITY_NONE,
+	                        G_PARAM_READABLE |
+	                        G_PARAM_STATIC_STRINGS);
 
+	_nml_dbus_meta_class_init_with_properties (object_class, &_nml_dbus_meta_iface_nm_device_bluetooth);
 }

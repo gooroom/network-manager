@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -36,12 +23,12 @@
 
 #include "nm-default.h"
 
-#include <string.h>
+#include "nmt-device-entry.h"
+
 #include <sys/socket.h>
 #include <linux/if_arp.h>
 
 #include "nmtui.h"
-#include "nmt-device-entry.h"
 
 G_DEFINE_TYPE (NmtDeviceEntry, nmt_device_entry, NMT_TYPE_EDITOR_GRID)
 
@@ -116,7 +103,7 @@ device_entry_parse (NmtDeviceEntry  *deventry,
 		return TRUE;
 
 	if (priv->hardware_type == G_TYPE_NONE && !priv->device_filter) {
-		if (nm_utils_is_valid_iface_name (text, NULL)) {
+		if (nm_utils_ifname_valid_kernel (text, NULL)) {
 			*interface_name = g_strdup (text);
 			return TRUE;
 		} else
@@ -140,12 +127,12 @@ device_entry_parse (NmtDeviceEntry  *deventry,
 
 	len = nm_utils_hwaddr_len (priv->arptype);
 	if (   nm_utils_hwaddr_aton (words[0], buf, len)
-	    && (!words[1] || nm_utils_is_valid_iface_name (words[1], NULL))) {
+	    && (!words[1] || nm_utils_ifname_valid_kernel (words[1], NULL))) {
 		*mac_address = words[0];
 		*interface_name = NULL;
 		g_free (words);
 		return TRUE;
-	} else if (   nm_utils_is_valid_iface_name (words[0], NULL)
+	} else if (   nm_utils_ifname_valid_kernel (words[0], NULL)
 	           && (!words[1] || nm_utils_hwaddr_aton (words[1], buf, len))) {
 		*interface_name = words[0];
 		*mac_address = NULL;
@@ -312,7 +299,7 @@ nmt_device_entry_set_mac_address (NmtDeviceEntry *deventry,
 		priv->mac_address = g_strdup (mac_address);
 		changed = TRUE;
 	} else if (!mac_address && priv->mac_address) {
-		g_clear_pointer (&priv->mac_address, g_free);
+		nm_clear_g_free (&priv->mac_address);
 		changed = TRUE;
 	} else if (   mac_address && priv->mac_address
 	           && !nm_utils_hwaddr_matches (mac_address, -1, priv->mac_address, -1)) {

@@ -1,20 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2016 - 2017 Red Hat, Inc.
+ * Copyright (C) 2016 - 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -204,7 +190,7 @@ _accept_or_wait_signal (const char *file, int line, const char *func, SignalData
 	if (data->received_count == 0) {
 		data->loop = g_main_loop_new (NULL, FALSE);
 		g_main_loop_run (data->loop);
-		g_clear_pointer (&data->loop, g_main_loop_unref);
+		nm_clear_pointer (&data->loop, g_main_loop_unref);
 	}
 
 	_accept_signal (file, line, func, data);
@@ -219,7 +205,7 @@ _wait_signal (const char *file, int line, const char *func, SignalData *data)
 
 	data->loop = g_main_loop_new (NULL, FALSE);
 	g_main_loop_run (data->loop);
-	g_clear_pointer (&data->loop, g_main_loop_unref);
+	nm_clear_pointer (&data->loop, g_main_loop_unref);
 
 	_accept_signal (file, line, func, data);
 }
@@ -366,9 +352,12 @@ _nmtstp_assert_ip4_route_exists (const char *file,
 	                    &c);
 
 	if (c != c_exists && c_exists != -1) {
+		char sbuf[NM_UTILS_INET_ADDRSTRLEN];
+
 		g_error ("[%s:%u] %s(): The ip4 route %s/%d metric %u tos %u shall exist %u times, but platform has it %u times",
 		         file, line, func,
-		         nm_utils_inet4_ntop (network, NULL), plen,
+		         _nm_utils_inet4_ntop (network, sbuf),
+		         plen,
 		         metric,
 		         tos,
 		         c_exists,
@@ -478,10 +467,10 @@ _nmtstp_assert_ip6_route_exists (const char *file,
 
 		g_error ("[%s:%u] %s(): The ip6 route %s/%d metric %u src %s/%d shall exist %u times, but platform has it %u times",
 		         file, line, func,
-		         nm_utils_inet6_ntop (network, s_network),
+		         _nm_utils_inet6_ntop (network, s_network),
 		         plen,
 		         metric,
-		         nm_utils_inet6_ntop (src, s_src),
+		         _nm_utils_inet6_ntop (src, s_src),
 		         src_plen,
 		         c_exists,
 		         c);
@@ -564,10 +553,11 @@ _wait_for_signal_timeout (gpointer user_data)
 }
 
 guint
-nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_ms)
+nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_msec)
 {
 	WaitForSignalData data = { 0 };
 	gulong id_link, id_ip4_address, id_ip6_address, id_ip4_route, id_ip6_route;
+	gulong id_qdisc, id_tfilter;
 
 	_init_platform (&platform, FALSE);
 
@@ -578,8 +568,10 @@ nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_ms)
 	id_ip6_address = g_signal_connect (platform, NM_PLATFORM_SIGNAL_IP6_ADDRESS_CHANGED, G_CALLBACK (_wait_for_signal_cb), &data);
 	id_ip4_route   = g_signal_connect (platform, NM_PLATFORM_SIGNAL_IP4_ROUTE_CHANGED, G_CALLBACK (_wait_for_signal_cb), &data);
 	id_ip6_route   = g_signal_connect (platform, NM_PLATFORM_SIGNAL_IP6_ROUTE_CHANGED, G_CALLBACK (_wait_for_signal_cb), &data);
+	id_qdisc       = g_signal_connect (platform, NM_PLATFORM_SIGNAL_QDISC_CHANGED, G_CALLBACK (_wait_for_signal_cb), &data);
+	id_tfilter     = g_signal_connect (platform, NM_PLATFORM_SIGNAL_TFILTER_CHANGED, G_CALLBACK (_wait_for_signal_cb), &data);
 
-	/* if timeout_ms is negative, it means the wait-time already expired.
+	/* if timeout_msec is negative, it means the wait-time already expired.
 	 * Maybe, we should do nothing and return right away, without even
 	 * processing events from platform. However, that inconsistency (of not
 	 * processing events from mainloop) is inconvenient.
@@ -589,7 +581,7 @@ nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_ms)
 	 * a zero timeout: we check whether there are any events pending in platform,
 	 * and quite the mainloop immediately afterwards. But we always check. */
 
-	data.id = g_timeout_add (CLAMP (timeout_ms, 0, G_MAXUINT32),
+	data.id = g_timeout_add (CLAMP (timeout_msec, 0, G_MAXUINT32),
 	                         _wait_for_signal_timeout, &data);
 
 	g_main_loop_run (data.loop);
@@ -600,8 +592,10 @@ nmtstp_wait_for_signal (NMPlatform *platform, gint64 timeout_ms)
 	g_assert (nm_clear_g_signal_handler (platform, &id_ip6_address));
 	g_assert (nm_clear_g_signal_handler (platform, &id_ip4_route));
 	g_assert (nm_clear_g_signal_handler (platform, &id_ip6_route));
+	g_assert (nm_clear_g_signal_handler (platform, &id_tfilter));
+	g_assert (nm_clear_g_signal_handler (platform, &id_qdisc));
 
-	g_clear_pointer (&data.loop, g_main_loop_unref);
+	nm_clear_pointer (&data.loop, g_main_loop_unref);
 
 	/* return the number of signals, or 0 if timeout was reached .*/
 	return data.signal_counts;
@@ -614,7 +608,7 @@ nmtstp_wait_for_signal_until (NMPlatform *platform, gint64 until_ms)
 	guint signal_counts;
 
 	while (TRUE) {
-		now = nm_utils_get_monotonic_timestamp_ms ();
+		now = nm_utils_get_monotonic_timestamp_msec ();
 
 		if (until_ms < now)
 			return 0;
@@ -626,11 +620,11 @@ nmtstp_wait_for_signal_until (NMPlatform *platform, gint64 until_ms)
 }
 
 const NMPlatformLink *
-nmtstp_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, gint64 timeout_ms)
+nmtstp_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, gint64 timeout_msec)
 {
 	return nmtstp_wait_for_link_until (platform, ifname, expected_link_type,
-	                                   timeout_ms
-	                                     ? nm_utils_get_monotonic_timestamp_ms () + timeout_ms
+	                                   timeout_msec
+	                                     ? nm_utils_get_monotonic_timestamp_msec () + timeout_msec
 	                                     : 0);
 }
 
@@ -644,7 +638,7 @@ nmtstp_wait_for_link_until (NMPlatform *platform, const char *ifname, NMLinkType
 	_init_platform (&platform, FALSE);
 
 	while (TRUE) {
-		now = nm_utils_get_monotonic_timestamp_ms ();
+		now = nm_utils_get_monotonic_timestamp_msec ();
 
 		plink = nm_platform_link_get_by_ifname (platform, ifname);
 		if (   plink
@@ -676,7 +670,7 @@ nmtstp_run_command_check_external_global (void)
 {
 	if (!nmtstp_is_root_test ())
 		return FALSE;
-	switch (nmtst_get_rand_int () % 3) {
+	switch (nmtst_get_rand_uint32 () % 3) {
 	case 0:
 		return -1;
 	case 1:
@@ -696,7 +690,7 @@ nmtstp_run_command_check_external (int external_command)
 	}
 	if (!nmtstp_is_root_test ())
 		return FALSE;
-	return (nmtst_get_rand_int () % 2) == 0;
+	return (nmtst_get_rand_uint32 () % 2) == 0;
 }
 
 /*****************************************************************************/
@@ -715,7 +709,7 @@ nmtstp_ip_address_check_lifetime (const NMPlatformIPAddress *addr,
 	g_assert (addr);
 
 	if (now == -1)
-		now = nm_utils_get_monotonic_timestamp_s ();
+		now = nm_utils_get_monotonic_timestamp_sec ();
 	g_assert (now > 0);
 
 	g_assert (expected_preferred <= expected_lifetime);
@@ -761,7 +755,7 @@ nmtstp_ip_address_assert_lifetime (const NMPlatformIPAddress *addr,
 	g_assert (addr);
 
 	if (now == -1)
-		now = nm_utils_get_monotonic_timestamp_s ();
+		now = nm_utils_get_monotonic_timestamp_sec ();
 	g_assert (now > 0);
 
 	g_assert (expected_preferred <= expected_lifetime);
@@ -821,7 +815,8 @@ _ip_address_add (NMPlatform *platform,
 		gs_free char *s_valid = NULL;
 		gs_free char *s_preferred = NULL;
 		gs_free char *s_label = NULL;
-		char b1[NM_UTILS_INET_ADDRSTRLEN], b2[NM_UTILS_INET_ADDRSTRLEN];
+		char b1[NM_UTILS_INET_ADDRSTRLEN];
+		char b2[NM_UTILS_INET_ADDRSTRLEN];
 
 		ifname = nm_platform_link_get_name (platform, ifindex);
 		g_assert (ifname);
@@ -834,19 +829,19 @@ _ip_address_add (NMPlatform *platform,
 			s_label = g_strdup_printf ("%s:%s", ifname, label);
 
 		if (is_v4) {
-			char s_peer[100];
+			char s_peer[NM_UTILS_INET_ADDRSTRLEN + 50];
 
 			g_assert (flags == 0);
 
 			if (   peer_address->addr4 != address->addr4
-			    || nmtst_get_rand_int () % 2) {
+			    || nmtst_get_rand_uint32 () % 2) {
 				/* If the peer is the same as the local address, we can omit it. The result should be identical */
-				g_snprintf (s_peer, sizeof (s_peer), " peer %s", nm_utils_inet4_ntop (peer_address->addr4, b2));
+				nm_sprintf_buf (s_peer, " peer %s", _nm_utils_inet4_ntop (peer_address->addr4, b2));
 			} else
 				s_peer[0] = '\0';
 
 			nmtstp_run_command_check ("ip address change %s%s/%d dev %s%s%s%s",
-			                          nm_utils_inet4_ntop (address->addr4, b1),
+			                          _nm_utils_inet4_ntop (address->addr4, b1),
 			                          s_peer,
 			                          plen,
 			                          ifname,
@@ -859,9 +854,9 @@ _ip_address_add (NMPlatform *platform,
 			/* flags not implemented (yet) */
 			g_assert (flags == 0);
 			nmtstp_run_command_check ("ip address change %s%s%s/%d dev %s%s%s%s",
-			                          nm_utils_inet6_ntop (&address->addr6, b1),
+			                          _nm_utils_inet6_ntop (&address->addr6, b1),
 			                          !IN6_IS_ADDR_UNSPECIFIED (&peer_address->addr6) ? " peer " : "",
-			                          !IN6_IS_ADDR_UNSPECIFIED (&peer_address->addr6) ? nm_utils_inet6_ntop (&peer_address->addr6, b2) : "",
+			                          !IN6_IS_ADDR_UNSPECIFIED (&peer_address->addr6) ? _nm_utils_inet6_ntop (&peer_address->addr6, b2) : "",
 			                          plen,
 			                          ifname,
 			                          s_valid ?: "",
@@ -877,6 +872,7 @@ _ip_address_add (NMPlatform *platform,
 			                                       address->addr4,
 			                                       plen,
 			                                       peer_address->addr4,
+			                                       0u,
 			                                       lifetime,
 			                                       preferred,
 			                                       flags,
@@ -896,7 +892,7 @@ _ip_address_add (NMPlatform *platform,
 	}
 
 	/* Let's wait until we see the address. */
-	end_time = nm_utils_get_monotonic_timestamp_ms () + 250;
+	end_time = nm_utils_get_monotonic_timestamp_msec () + 500;
 	do {
 
 		if (external_command)
@@ -1006,7 +1002,7 @@ void nmtstp_ip4_route_add (NMPlatform *platform,
 	route.metric = metric;
 	route.mss = mss;
 
-	g_assert_cmpint (nm_platform_ip4_route_add (platform, NMP_NLM_FLAG_REPLACE, &route), ==, NM_PLATFORM_ERROR_SUCCESS);
+	g_assert (NMTST_NM_ERR_SUCCESS (nm_platform_ip4_route_add (platform, NMP_NLM_FLAG_REPLACE, &route)));
 }
 
 void nmtstp_ip6_route_add (NMPlatform *platform,
@@ -1030,7 +1026,7 @@ void nmtstp_ip6_route_add (NMPlatform *platform,
 	route.metric = metric;
 	route.mss = mss;
 
-	g_assert_cmpint (nm_platform_ip6_route_add (platform, NMP_NLM_FLAG_REPLACE, &route), ==, NM_PLATFORM_ERROR_SUCCESS);
+	g_assert (NMTST_NM_ERR_SUCCESS (nm_platform_ip6_route_add (platform, NMP_NLM_FLAG_REPLACE, &route)));
 }
 
 /*****************************************************************************/
@@ -1052,7 +1048,8 @@ _ip_address_del (NMPlatform *platform,
 
 	if (external_command) {
 		const char *ifname;
-		char b1[NM_UTILS_INET_ADDRSTRLEN], b2[NM_UTILS_INET_ADDRSTRLEN];
+		char b1[NM_UTILS_INET_ADDRSTRLEN];
+		char b2[NM_UTILS_INET_ADDRSTRLEN];
 		int success;
 		gboolean had_address;
 
@@ -1067,15 +1064,15 @@ _ip_address_del (NMPlatform *platform,
 
 		if (is_v4) {
 			success = nmtstp_run_command ("ip address delete %s%s%s/%d dev %s",
-			                              nm_utils_inet4_ntop (address->addr4, b1),
+			                              _nm_utils_inet4_ntop (address->addr4, b1),
 			                              peer_address->addr4 != address->addr4 ? " peer " : "",
-			                              peer_address->addr4 != address->addr4 ? nm_utils_inet4_ntop (peer_address->addr4, b2) : "",
+			                              peer_address->addr4 != address->addr4 ? _nm_utils_inet4_ntop (peer_address->addr4, b2) : "",
 			                              plen,
 			                              ifname);
 		} else {
 			g_assert (!peer_address);
 			success = nmtstp_run_command ("ip address delete %s/%d dev %s",
-			                              nm_utils_inet6_ntop (&address->addr6, b1),
+			                              _nm_utils_inet6_ntop (&address->addr6, b1),
 			                              plen,
 			                              ifname);
 		}
@@ -1100,7 +1097,7 @@ _ip_address_del (NMPlatform *platform,
 	}
 
 	/* Let's wait until we get the result */
-	end_time = nm_utils_get_monotonic_timestamp_ms () + 250;
+	end_time = nm_utils_get_monotonic_timestamp_msec () + 250;
 	do {
 		if (external_command)
 			nm_platform_process_events (platform);
@@ -1184,7 +1181,7 @@ nmtstp_link_veth_add (NMPlatform *platform,
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 
@@ -1198,7 +1195,7 @@ nmtstp_link_veth_add (NMPlatform *platform,
 			nmtstp_assert_wait_for_link (platform, peer, NM_LINK_TYPE_VETH, 10);
 		}
 	} else
-		success = nm_platform_link_veth_add (platform, name, peer, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_veth_add (platform, name, peer, &pllink));
 
 	g_assert (success);
 	_assert_pllink (platform, success, pllink, name, NM_LINK_TYPE_VETH);
@@ -1213,7 +1210,7 @@ nmtstp_link_dummy_add (NMPlatform *platform,
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 
@@ -1225,7 +1222,7 @@ nmtstp_link_dummy_add (NMPlatform *platform,
 		if (success)
 			pllink = nmtstp_assert_wait_for_link (platform, name, NM_LINK_TYPE_DUMMY, 100);
 	} else
-		success = nm_platform_link_dummy_add (platform, name, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_dummy_add (platform, name, &pllink));
 
 	g_assert (success);
 	_assert_pllink (platform, success, pllink, name, NM_LINK_TYPE_DUMMY);
@@ -1240,10 +1237,11 @@ nmtstp_link_gre_add (NMPlatform *platform,
 {
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
-	char buffer[INET_ADDRSTRLEN];
+	char b1[INET_ADDRSTRLEN];
+	char b2[INET_ADDRSTRLEN];
 	NMLinkType link_type;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 	link_type = lnk->is_tap ? NM_LINK_TYPE_GRETAP : NM_LINK_TYPE_GRE;
@@ -1265,15 +1263,15 @@ nmtstp_link_gre_add (NMPlatform *platform,
 		                                name,
 		                                type,
 		                                dev ?: "",
-		                                nm_utils_inet4_ntop (lnk->local, NULL),
-		                                nm_utils_inet4_ntop (lnk->remote, buffer),
+		                                _nm_utils_inet4_ntop (lnk->local, b1),
+		                                _nm_utils_inet4_ntop (lnk->remote, b2),
 		                                lnk->ttl,
 		                                lnk->tos,
 		                                lnk->path_mtu_discovery ? "pmtudisc" : "nopmtudisc");
 		if (success)
 			pllink = nmtstp_assert_wait_for_link (platform, name, link_type, 100);
 	} else
-		success = nm_platform_link_gre_add (platform, name, lnk, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_gre_add (platform, name, NULL, 0, lnk, &pllink));
 
 	_assert_pllink (platform, success, pllink, name, link_type);
 
@@ -1288,13 +1286,14 @@ nmtstp_link_ip6tnl_add (NMPlatform *platform,
 {
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
-	char buffer[INET6_ADDRSTRLEN];
+	char b1[NM_UTILS_INET_ADDRSTRLEN];
+	char b2[NM_UTILS_INET_ADDRSTRLEN];
 	char encap[20];
 	char tclass[20];
 	gboolean encap_ignore;
 	gboolean tclass_inherit;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 	g_assert (!lnk->is_gre);
 
 	external_command = nmtstp_run_command_check_external (external_command);
@@ -1326,8 +1325,8 @@ nmtstp_link_ip6tnl_add (NMPlatform *platform,
 		                                name,
 		                                mode,
 		                                dev,
-		                                nm_utils_inet6_ntop (&lnk->local, NULL),
-		                                nm_utils_inet6_ntop (&lnk->remote, buffer),
+		                                _nm_utils_inet6_ntop (&lnk->local, b1),
+		                                _nm_utils_inet6_ntop (&lnk->remote, b2),
 		                                lnk->ttl,
 		                                tclass_inherit ? "inherit" : nm_sprintf_buf (tclass, "%02x", lnk->tclass),
 		                                encap_ignore ? "none" : nm_sprintf_buf (encap, "%u", lnk->encap_limit),
@@ -1335,7 +1334,7 @@ nmtstp_link_ip6tnl_add (NMPlatform *platform,
 		if (success)
 			pllink = nmtstp_assert_wait_for_link (platform, name, NM_LINK_TYPE_IP6TNL, 100);
 	} else
-		success = nm_platform_link_ip6tnl_add (platform, name, lnk, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_ip6tnl_add (platform, name, lnk, &pllink));
 
 	_assert_pllink (platform, success, pllink, name, NM_LINK_TYPE_IP6TNL);
 
@@ -1350,11 +1349,12 @@ nmtstp_link_ip6gre_add (NMPlatform *platform,
 {
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
-	char buffer[INET6_ADDRSTRLEN];
+	char b1[NM_UTILS_INET_ADDRSTRLEN];
+	char b2[NM_UTILS_INET_ADDRSTRLEN];
 	char tclass[20];
 	gboolean tclass_inherit;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 	g_assert (lnk->is_gre);
 
 	external_command = nmtstp_run_command_check_external (external_command);
@@ -1373,8 +1373,8 @@ nmtstp_link_ip6gre_add (NMPlatform *platform,
 		                                name,
 		                                lnk->is_tap ? "ip6gretap" : "ip6gre",
 		                                dev,
-		                                nm_utils_inet6_ntop (&lnk->local, NULL),
-		                                nm_utils_inet6_ntop (&lnk->remote, buffer),
+		                                _nm_utils_inet6_ntop (&lnk->local, b1),
+		                                _nm_utils_inet6_ntop (&lnk->remote, b2),
 		                                lnk->ttl,
 		                                tclass_inherit ? "inherit" : nm_sprintf_buf (tclass, "%02x", lnk->tclass),
 		                                lnk->flow_label);
@@ -1385,7 +1385,7 @@ nmtstp_link_ip6gre_add (NMPlatform *platform,
 			                                      100);
 		}
 	} else
-		success = nm_platform_link_ip6gre_add (platform, name, lnk, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_ip6gre_add (platform, name, NULL, 0, lnk, &pllink));
 
 	_assert_pllink (platform, success, pllink, name, lnk->is_tap ? NM_LINK_TYPE_IP6GRETAP : NM_LINK_TYPE_IP6GRE);
 
@@ -1400,9 +1400,10 @@ nmtstp_link_ipip_add (NMPlatform *platform,
 {
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
-	char buffer[INET_ADDRSTRLEN];
+	char b1[INET_ADDRSTRLEN];
+	char b2[INET_ADDRSTRLEN];
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 
@@ -1417,15 +1418,15 @@ nmtstp_link_ipip_add (NMPlatform *platform,
 		success = !nmtstp_run_command ("ip tunnel add %s mode ipip %s local %s remote %s ttl %u tos %02x %s",
 		                                name,
 		                                dev,
-		                                nm_utils_inet4_ntop (lnk->local, NULL),
-		                                nm_utils_inet4_ntop (lnk->remote, buffer),
+		                                _nm_utils_inet4_ntop (lnk->local, b1),
+		                                _nm_utils_inet4_ntop (lnk->remote, b2),
 		                                lnk->ttl,
 		                                lnk->tos,
 		                                lnk->path_mtu_discovery ? "pmtudisc" : "nopmtudisc");
 		if (success)
 			pllink = nmtstp_assert_wait_for_link (platform, name, NM_LINK_TYPE_IPIP, 100);
 	} else
-		success = nm_platform_link_ipip_add (platform, name, lnk, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_ipip_add (platform, name, lnk, &pllink));
 
 	_assert_pllink (platform, success, pllink, name, NM_LINK_TYPE_IPIP);
 
@@ -1443,7 +1444,7 @@ nmtstp_link_macvlan_add (NMPlatform *platform,
 	gboolean success;
 	NMLinkType link_type;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 
@@ -1473,7 +1474,7 @@ nmtstp_link_macvlan_add (NMPlatform *platform,
 		if (success)
 			pllink = nmtstp_assert_wait_for_link (platform, name, link_type, 100);
 	} else
-		success = nm_platform_link_macvlan_add (platform, name, parent, lnk, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_macvlan_add (platform, name, parent, lnk, &pllink));
 
 	_assert_pllink (platform, success, pllink, name, link_type);
 
@@ -1488,9 +1489,10 @@ nmtstp_link_sit_add (NMPlatform *platform,
 {
 	const NMPlatformLink *pllink = NULL;
 	gboolean success;
-	char buffer[INET_ADDRSTRLEN];
+	char b1[INET_ADDRSTRLEN];
+	char b2[INET_ADDRSTRLEN];
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 
@@ -1510,15 +1512,15 @@ nmtstp_link_sit_add (NMPlatform *platform,
 		success = !nmtstp_run_command ("ip tunnel add %s mode sit%s local %s remote %s ttl %u tos %02x %s",
 		                                name,
 		                                dev,
-		                                nm_utils_inet4_ntop (lnk->local, NULL),
-		                                nm_utils_inet4_ntop (lnk->remote, buffer),
+		                                _nm_utils_inet4_ntop (lnk->local, b1),
+		                                _nm_utils_inet4_ntop (lnk->remote, b2),
 		                                lnk->ttl,
 		                                lnk->tos,
 		                                lnk->path_mtu_discovery ? "pmtudisc" : "nopmtudisc");
 		if (success)
 			pllink = nmtstp_assert_wait_for_link (platform, name, NM_LINK_TYPE_SIT, 100);
 	} else
-		success = nm_platform_link_sit_add (platform, name, lnk, &pllink) == NM_PLATFORM_ERROR_SUCCESS;
+		success = NMTST_NM_ERR_SUCCESS (nm_platform_link_sit_add (platform, name, lnk, &pllink));
 
 	_assert_pllink (platform, success, pllink, name, NM_LINK_TYPE_SIT);
 
@@ -1533,10 +1535,10 @@ nmtstp_link_tun_add (NMPlatform *platform,
                      int *out_fd)
 {
 	const NMPlatformLink *pllink = NULL;
-	NMPlatformError plerr;
 	int err;
+	int r;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 	g_assert (lnk);
 	g_assert (NM_IN_SET (lnk->type, IFF_TUN, IFF_TAP));
 	g_assert (!out_fd || *out_fd == -1);
@@ -1579,13 +1581,52 @@ nmtstp_link_tun_add (NMPlatform *platform,
 			g_error ("failure to add tun/tap device via ip-route");
 	} else {
 		g_assert (lnk->persist || out_fd);
-		plerr = nm_platform_link_tun_add (platform, name, lnk, &pllink, out_fd);
-		g_assert_cmpint (plerr, ==, NM_PLATFORM_ERROR_SUCCESS);
+		r = nm_platform_link_tun_add (platform, name, lnk, &pllink, out_fd);
+		g_assert_cmpint (r, ==, 0);
 	}
 
 	g_assert (pllink);
 	g_assert_cmpint (pllink->type, ==, NM_LINK_TYPE_TUN);
 	g_assert_cmpstr (pllink->name, ==, name);
+	return pllink;
+}
+
+const NMPlatformLink *
+nmtstp_link_vrf_add (NMPlatform *platform,
+                     gboolean external_command,
+                     const char *name,
+                     const NMPlatformLnkVrf *lnk,
+                     gboolean *out_not_supported)
+{
+	const NMPlatformLink *pllink = NULL;
+	int r = 0;
+
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
+
+	NM_SET_OUT (out_not_supported, FALSE);
+	external_command = nmtstp_run_command_check_external (external_command);
+
+	_init_platform (&platform, external_command);
+
+	if (external_command) {
+		r = nmtstp_run_command ("ip link add %s type vrf table %u",
+		                        name,
+		                        lnk->table);
+
+		if (r == 0)
+			pllink = nmtstp_assert_wait_for_link (platform, name, NM_LINK_TYPE_VRF, 100);
+		else
+			_LOGI ("Adding vrf device via iproute2 failed. Assume iproute2 is not up to the task.");
+	}
+
+	if (!pllink) {
+		r = nm_platform_link_vrf_add (platform, name, lnk, &pllink);
+		if (r == -EOPNOTSUPP)
+			NM_SET_OUT (out_not_supported, TRUE);
+	}
+
+	_assert_pllink (platform, r == 0, pllink, name, NM_LINK_TYPE_VRF);
+
 	return pllink;
 }
 
@@ -1596,10 +1637,10 @@ nmtstp_link_vxlan_add (NMPlatform *platform,
                        const NMPlatformLnkVxlan *lnk)
 {
 	const NMPlatformLink *pllink = NULL;
-	NMPlatformError plerr;
 	int err;
+	int r;
 
-	g_assert (nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
 	external_command = nmtstp_run_command_check_external (external_command);
 
@@ -1607,27 +1648,32 @@ nmtstp_link_vxlan_add (NMPlatform *platform,
 
 	if (external_command) {
 		gs_free char *dev = NULL;
-		gs_free char *local = NULL, *remote = NULL;
+		char local[NM_UTILS_INET_ADDRSTRLEN];
+		char group[NM_UTILS_INET_ADDRSTRLEN];
 
 		if (lnk->parent_ifindex)
 			dev = g_strdup_printf ("dev %s", nm_platform_link_get_name (platform, lnk->parent_ifindex));
 
 		if (lnk->local)
-			local = g_strdup_printf ("%s", nm_utils_inet4_ntop (lnk->local, NULL));
+			_nm_utils_inet4_ntop (lnk->local, local);
 		else if (memcmp (&lnk->local6, &in6addr_any, sizeof (in6addr_any)))
-			local = g_strdup_printf ("%s", nm_utils_inet6_ntop (&lnk->local6, NULL));
+			_nm_utils_inet6_ntop (&lnk->local6, local);
+		else
+			local[0] = '\0';
 
 		if (lnk->group)
-			remote = g_strdup_printf ("%s", nm_utils_inet4_ntop (lnk->group, NULL));
+			_nm_utils_inet4_ntop (lnk->group, group);
 		else if (memcmp (&lnk->group6, &in6addr_any, sizeof (in6addr_any)))
-			remote = g_strdup_printf ("%s", nm_utils_inet6_ntop (&lnk->group6, NULL));
+			_nm_utils_inet6_ntop (&lnk->group6, group);
+		else
+			group[0] = '\0';
 
 		err = nmtstp_run_command ("ip link add %s type vxlan id %u %s local %s group %s ttl %u tos %02x dstport %u srcport %u %u ageing %u",
 		                          name,
 		                          lnk->id,
 		                          dev ?: "",
 		                          local,
-		                          remote,
+		                          group,
 		                          lnk->ttl,
 		                          lnk->tos,
 		                          lnk->dst_port,
@@ -1641,8 +1687,8 @@ nmtstp_link_vxlan_add (NMPlatform *platform,
 			_LOGI ("Adding vxlan device via iproute2 failed. Assume iproute2 is not up to the task.");
 	}
 	if (!pllink) {
-		plerr = nm_platform_link_vxlan_add (platform, name, lnk, &pllink);
-		g_assert_cmpint (plerr, ==, NM_PLATFORM_ERROR_SUCCESS);
+		r = nm_platform_link_vxlan_add (platform, name, lnk, &pllink);
+		g_assert (NMTST_NM_ERR_SUCCESS (r));
 		g_assert (pllink);
 	}
 
@@ -1683,7 +1729,7 @@ nmtstp_link_get_typed (NMPlatform *platform,
 			g_assert_cmpstr (name, ==, pllink->name);
 	}
 
-	g_assert (!name || nm_utils_is_valid_iface_name (name, NULL));
+	g_assert (!name || nm_utils_ifname_valid_kernel (name, NULL));
 
 	if (pllink && link_type != NM_LINK_TYPE_NONE)
 		g_assert_cmpint (pllink->type, ==, link_type);
@@ -1702,10 +1748,11 @@ nmtstp_link_get (NMPlatform *platform,
 /*****************************************************************************/
 
 void
-nmtstp_link_del (NMPlatform *platform,
-                 gboolean external_command,
-                 int ifindex,
-                 const char *name)
+nmtstp_link_delete (NMPlatform *platform,
+                    gboolean external_command,
+                    int ifindex,
+                    const char *name,
+                    gboolean require_exist)
 {
 	gint64 end_time;
 	const NMPlatformLink *pllink;
@@ -1718,7 +1765,10 @@ nmtstp_link_del (NMPlatform *platform,
 
 	pllink = nmtstp_link_get (platform, ifindex, name);
 
-	g_assert (pllink);
+	if (!pllink) {
+		g_assert (!require_exist);
+		return;
+	}
 
 	name = name_copy = g_strdup (pllink->name);
 	ifindex = pllink->ifindex;
@@ -1731,7 +1781,7 @@ nmtstp_link_del (NMPlatform *platform,
 	}
 
 	/* Let's wait until we get the result */
-	end_time = nm_utils_get_monotonic_timestamp_ms () + 250;
+	end_time = nm_utils_get_monotonic_timestamp_msec () + 250;
 	do {
 		if (external_command)
 			nm_platform_process_events (platform);
@@ -1780,7 +1830,7 @@ nmtstp_link_set_updown (NMPlatform *platform,
 	}
 
 	/* Let's wait until we get the result */
-	end_time = nm_utils_get_monotonic_timestamp_ms () + 250;
+	end_time = nm_utils_get_monotonic_timestamp_msec () + 250;
 	do {
 		if (external_command)
 			nm_platform_process_events (platform);
@@ -1821,7 +1871,7 @@ nmtstp_namespace_create (int unshare_flags, GError **error)
 	if (e != 0) {
 		errsv = errno;
 		g_set_error (error, NM_UTILS_ERROR, NM_UTILS_ERROR_UNKNOWN,
-		             "pipe() failed with %d (%s)", errsv, strerror (errsv));
+		             "pipe() failed with %d (%s)", errsv, nm_strerror_native (errsv));
 		return FALSE;
 	}
 
@@ -1829,7 +1879,7 @@ nmtstp_namespace_create (int unshare_flags, GError **error)
 	if (e != 0) {
 		errsv = errno;
 		g_set_error (error, NM_UTILS_ERROR, NM_UTILS_ERROR_UNKNOWN,
-		             "pipe() failed with %d (%s)", errsv, strerror (errsv));
+		             "pipe() failed with %d (%s)", errsv, nm_strerror_native (errsv));
 		nm_close (pipefd_c2p[0]);
 		nm_close (pipefd_c2p[1]);
 		return FALSE;
@@ -1839,7 +1889,7 @@ nmtstp_namespace_create (int unshare_flags, GError **error)
 	if (pid < 0) {
 		errsv = errno;
 		g_set_error (error, NM_UTILS_ERROR, NM_UTILS_ERROR_UNKNOWN,
-		             "fork() failed with %d (%s)", errsv, strerror (errsv));
+		             "fork() failed with %d (%s)", errsv, nm_strerror_native (errsv));
 		nm_close (pipefd_c2p[0]);
 		nm_close (pipefd_c2p[1]);
 		nm_close (pipefd_p2c[0]);
@@ -1900,7 +1950,7 @@ nmtstp_namespace_create (int unshare_flags, GError **error)
 			             "child process failed for unknown reason");
 		} else {
 			g_set_error (error, NM_UTILS_ERROR, NM_UTILS_ERROR_UNKNOWN,
-			             "child process signaled failure %d (%s)", errsv, strerror (errsv));
+			             "child process signaled failure %d (%s)", errsv, nm_strerror_native (errsv));
 		}
 		nm_close (pipefd_p2c[1]);
 		kill (pid, SIGKILL);
@@ -1975,7 +2025,7 @@ nmtstp_netns_select_random (NMPlatform **platforms, gsize n_platforms, NMPNetns 
 	for (i = 0; i < n_platforms; i++)
 		g_assert (NM_IS_PLATFORM (platforms[i]));
 
-	i = nmtst_get_rand_int () % (n_platforms + 1);
+	i = nmtst_get_rand_uint32 () % (n_platforms + 1);
 	if (i == 0)
 		return;
 	g_assert (nm_platform_netns_push (platforms[i - 1], netns));
@@ -2055,14 +2105,14 @@ main (int argc, char **argv)
 
 		if (unshare (CLONE_NEWNET | CLONE_NEWNS) != 0) {
 			errsv = errno;
-			g_error ("unshare(CLONE_NEWNET|CLONE_NEWNS) failed with %s (%d)", strerror (errsv), errsv);
+			g_error ("unshare(CLONE_NEWNET|CLONE_NEWNS) failed with %s (%d)", nm_strerror_native (errsv), errsv);
 		}
 
 		/* We need a read-only /sys so that the platform knows there's no udev. */
 		mount (NULL, "/sys", "sysfs", MS_SLAVE, NULL);
 		if (mount ("sys", "/sys", "sysfs", MS_RDONLY, NULL) != 0) {
 			errsv = errno;
-			g_error ("mount(\"/sys\") failed with %s (%d)", strerror (errsv), errsv);
+			g_error ("mount(\"/sys\") failed with %s (%d)", nm_strerror_native (errsv), errsv);
 		}
 	}
 
@@ -2072,7 +2122,7 @@ main (int argc, char **argv)
 
 	result = g_test_run ();
 
-	nm_platform_link_delete (NM_PLATFORM_GET, nm_platform_link_get_ifindex (NM_PLATFORM_GET, DEVICE_NAME));
+	nmtstp_link_delete (NM_PLATFORM_GET, -1, -1, DEVICE_NAME, FALSE);
 
 	g_object_unref (NM_PLATFORM_GET);
 	return result;

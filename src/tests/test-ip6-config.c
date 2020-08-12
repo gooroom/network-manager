@@ -1,26 +1,10 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
  * Copyright (C) 2013 Red Hat, Inc.
- *
  */
 
 #include "nm-default.h"
 
-#include <string.h>
 #include <arpa/inet.h>
 #include <linux/if_addr.h>
 
@@ -252,7 +236,7 @@ test_nm_ip6_config_addresses_sort_check (NMIP6Config *config, NMSettingIP6Config
 	copy2 = nm_ip6_config_clone (config);
 	g_assert (copy2);
 
-	/* initialize the array of indeces, and keep shuffling them for every @repeat iteration. */
+	/* initialize the array of indices, and keep shuffling them for every @repeat iteration. */
 	for (i = 0; i < addr_count; i++)
 		idx[i] = i;
 
@@ -262,7 +246,7 @@ test_nm_ip6_config_addresses_sort_check (NMIP6Config *config, NMSettingIP6Config
 		for (i = 0; i < addr_count; i++) {
 			int j = g_rand_int_range (nmtst_get_rand (), i, addr_count);
 
-			NMTST_SWAP (idx[i], idx[j]);
+			NM_SWAP (idx[i], idx[j]);
 			nm_ip6_config_add_address (copy, _nmtst_ip6_config_get_address (config, idx[i]));
 		}
 

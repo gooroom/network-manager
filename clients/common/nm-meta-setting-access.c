@@ -1,20 +1,6 @@
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2010 - 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -99,6 +85,22 @@ nm_meta_setting_info_editor_get_property_info (const NMMetaSettingInfoEditor *se
 	}
 
 	return NULL;
+}
+
+gboolean
+nm_meta_setting_info_editor_has_secrets (const NMMetaSettingInfoEditor *setting_info)
+{
+	guint i;
+
+	if (!setting_info)
+		return FALSE;
+
+	for (i = 0; i < setting_info->properties_num; i++) {
+		if (setting_info->properties[i]->is_secret)
+			return TRUE;
+	}
+
+	return FALSE;
 }
 
 const NMMetaPropertyInfo *
@@ -257,6 +259,7 @@ nm_meta_abstract_info_complete (const NMMetaAbstractInfo *abstract_info,
                                 gpointer environment_user_data,
                                 const NMMetaOperationContext *operation_context,
                                 const char *text,
+                                gboolean *out_complete_filename,
                                 char ***out_to_free)
 {
 	const char *const*values;
@@ -276,6 +279,7 @@ nm_meta_abstract_info_complete (const NMMetaAbstractInfo *abstract_info,
 	                                                 environment_user_data,
 	                                                 operation_context,
 	                                                 text,
+	                                                 out_complete_filename,
 	                                                 out_to_free);
 
 	nm_assert (!*out_to_free || values == (const char *const*) *out_to_free);

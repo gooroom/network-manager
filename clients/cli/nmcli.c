@@ -1,22 +1,7 @@
-/* nmcli - command-line tool to control NetworkManager
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Jiri Klimes <jklimes@redhat.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2018 Red Hat, Inc.
+ * Copyright (C) 2010 - 2018 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -24,7 +9,6 @@
 #include "nmcli.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <termios.h>
@@ -41,8 +25,6 @@
 #include "common.h"
 #include "connections.h"
 #include "devices.h"
-#include "general.h"
-#include "agent.h"
 #include "settings.h"
 
 #if defined(NM_DIST_VERSION)
@@ -56,6 +38,7 @@
 	[NM_META_COLOR_CONNECTION_ACTIVATING]    = "33", \
 	[NM_META_COLOR_CONNECTION_DISCONNECTING] = "31", \
 	[NM_META_COLOR_CONNECTION_INVISIBLE]     =  "2", \
+	[NM_META_COLOR_CONNECTION_EXTERNAL]      = "32;2", \
 	[NM_META_COLOR_CONNECTIVITY_FULL]        = "32", \
 	[NM_META_COLOR_CONNECTIVITY_LIMITED]     = "33", \
 	[NM_META_COLOR_CONNECTIVITY_NONE]        = "31", \
@@ -66,6 +49,8 @@
 	[NM_META_COLOR_DEVICE_FIRMWARE_MISSING]  = "31", \
 	[NM_META_COLOR_DEVICE_PLUGIN_MISSING]    = "31", \
 	[NM_META_COLOR_DEVICE_UNAVAILABLE]       =  "2", \
+	[NM_META_COLOR_DEVICE_DISABLED]          = "31", \
+	[NM_META_COLOR_DEVICE_EXTERNAL]          = "32;2", \
 	[NM_META_COLOR_MANAGER_RUNNING]          = "32", \
 	[NM_META_COLOR_MANAGER_STARTING]         = "33", \
 	[NM_META_COLOR_MANAGER_STOPPED]          = "31", \
@@ -87,7 +72,7 @@
 	[NM_META_COLOR_ENABLED]                  = "32", \
 	[NM_META_COLOR_DISABLED]                 = "31", \
 
-NmCli nm_cli = {
+static NmCli nm_cli = {
 	.client = NULL,
 
 	.return_value = NMC_RESULT_SUCCESS,
@@ -115,6 +100,9 @@ NmCli nm_cli = {
 	.editor_status_line = FALSE,
 	.editor_save_confirmation = TRUE,
 };
+
+const NmCli *const nm_cli_global_readline = &nm_cli;
+const NmCli *const nmc_meta_environment_arg = &nm_cli;
 
 /*****************************************************************************/
 
@@ -245,19 +233,19 @@ usage (void)
 	g_printerr (_("Usage: nmcli [OPTIONS] OBJECT { COMMAND | help }\n"
 	              "\n"
 	              "OPTIONS\n"
-	              "  -o[verview]                                    overview mode (hide default values)\n"
-	              "  -t[erse]                                       terse output\n"
-	              "  -p[retty]                                      pretty output\n"
-	              "  -m[ode] tabular|multiline                      output mode\n"
-	              "  -c[olors] auto|yes|no                          whether to use colors in output\n"
-	              "  -f[ields] <field1,field2,...>|all|common       specify fields to output\n"
-	              "  -g[et-values] <field1,field2,...>|all|common   shortcut for -m tabular -t -f\n"
-	              "  -e[scape] yes|no                               escape columns separators in values\n"
-	              "  -a[sk]                                         ask for missing parameters\n"
-	              "  -s[how-secrets]                                allow displaying passwords\n"
-	              "  -w[ait] <seconds>                              set timeout waiting for finishing operations\n"
-	              "  -v[ersion]                                     show program version\n"
-	              "  -h[elp]                                        print this help\n"
+	              "  -a, --ask                                ask for missing parameters\n"
+	              "  -c, --colors auto|yes|no                 whether to use colors in output\n"
+	              "  -e, --escape yes|no                      escape columns separators in values\n"
+	              "  -f, --fields <field,...>|all|common      specify fields to output\n"
+	              "  -g, --get-values <field,...>|all|common  shortcut for -m tabular -t -f\n"
+	              "  -h, --help                               print this help\n"
+	              "  -m, --mode tabular|multiline             output mode\n"
+	              "  -o, --overview                           overview mode\n"
+	              "  -p, --pretty                             pretty output\n"
+	              "  -s, --show-secrets                       allow displaying passwords\n"
+	              "  -t, --terse                              terse output\n"
+	              "  -v, --version                            show program version\n"
+	              "  -w, --wait <seconds>                     set timeout waiting for finishing operations\n"
 	              "\n"
 	              "OBJECT\n"
 	              "  g[eneral]       NetworkManager's general status and operations\n"
@@ -270,21 +258,21 @@ usage (void)
 	              "\n"));
 }
 
-static const NMCCommand nmcli_cmds[] = {
-	{ "general",     do_general,      NULL,   FALSE,  FALSE },
-	{ "monitor",     do_monitor,      NULL,   TRUE,   FALSE },
-	{ "networking",  do_networking,   NULL,   FALSE,  FALSE },
-	{ "radio",       do_radio,        NULL,   FALSE,  FALSE },
-	{ "connection",  do_connections,  NULL,   FALSE,  FALSE },
-	{ "device",      do_devices,      NULL,   FALSE,  FALSE },
-	{ "agent",       do_agent,        NULL,   FALSE,  FALSE },
-	{ NULL,          do_overview,     usage,  TRUE,   TRUE },
-};
-
 static gboolean
-matches_arg (NmCli *nmc, int *argc, char ***argv, const char *pattern, char **arg)
+matches_arg (NmCli *nmc,
+             int *argc,
+             const char *const**argv,
+             const char *pattern,
+             char **arg)
 {
-	char *opt = *argv[0];
+	gs_free char *opt_free = NULL;
+	const char *opt = (*argv)[0];
+	gs_free char *arg_tmp = NULL;
+	const char *s;
+
+	nm_assert (opt);
+	nm_assert (opt[0] == '-');
+	nm_assert (!arg || !*arg);
 
 	if (nmc->return_value != NMC_RESULT_SUCCESS) {
 		/* Don't process further matches if there has been an error. */
@@ -300,33 +288,31 @@ matches_arg (NmCli *nmc, int *argc, char ***argv, const char *pattern, char **ar
 	if (arg) {
 		/* If there's a "=" separator, replace it with NUL so that matches()
 		 * works and consider the part after it to be the arguemnt's value. */
-		*arg = strchr (opt, '=');
-		if (*arg) {
-			**arg = '\0';
-			(*arg)++;
+		s = strchr (opt, '=');
+		if (s) {
+			opt = nm_strndup_a (300, opt, s - opt, &opt_free);
+			arg_tmp = g_strdup (&s[1]);
 		}
 	}
 
-	if (!matches (opt, pattern)) {
-		if (arg && *arg) {
-			/* Back off the replacement of "=". */
-			(*arg)--;
-			**arg = '=';
-		}
+	if (!matches (opt, pattern))
 		return FALSE;
-	}
 
-	if (arg && !*arg) {
-		/* We need a value, but the option didn't contain a "=<value>" part.
-		 * Proceed to the next argument. */
-		(*argc)--;
-		(*argv)++;
-		if (!*argc) {
-			g_string_printf (nmc->return_text, _("Error: missing argument for '%s' option."), opt);
-			nmc->return_value = NMC_RESULT_ERROR_USER_INPUT;
-			return FALSE;
+	if (arg) {
+		if (arg_tmp)
+			*arg = g_steal_pointer (&arg_tmp);
+		else {
+			/* We need a value, but the option didn't contain a "=<value>" part.
+			 * Proceed to the next argument. */
+			if (*argc <= 1) {
+				g_string_printf (nmc->return_text, _("Error: missing argument for '%s' option."), opt);
+				nmc->return_value = NMC_RESULT_ERROR_USER_INPUT;
+				return FALSE;
+			}
+			(*argc)--;
+			(*argv)++;
+			*arg = g_strdup (*argv[0]);
 		}
-		*arg = *argv[0];
 	}
 
 	return TRUE;
@@ -471,6 +457,12 @@ check_colors (NmcColorOption color_option,
 		return FALSE;
 	}
 
+	if (   color_option == NMC_USE_COLOR_AUTO
+	    && g_getenv ("NO_COLOR")) {
+		/* https://no-color.org/ */
+		return FALSE;
+	}
+
 	term = g_getenv ("TERM");
 
 	if (color_option == NMC_USE_COLOR_AUTO) {
@@ -504,7 +496,7 @@ resolve_color_alias (const char *color)
 	static const struct {
 		const char *name;
 		const char *alias;
-	} const aliases[] = {
+	} aliases[] = {
 		{ "reset",        "0" },
 		{ "bold",         "1" },
 		{ "white",        "1;37" },
@@ -560,6 +552,7 @@ parse_color_scheme (char *palette_buffer,
 		[NM_META_COLOR_CONNECTION_ACTIVATING]    = "connection-activating",
 		[NM_META_COLOR_CONNECTION_DISCONNECTING] = "connection-disconnecting",
 		[NM_META_COLOR_CONNECTION_INVISIBLE]     = "connection-invisible",
+		[NM_META_COLOR_CONNECTION_EXTERNAL]      = "connection-external",
 		[NM_META_COLOR_CONNECTION_UNKNOWN]       = "connection-unknown",
 		[NM_META_COLOR_CONNECTIVITY_FULL]        = "connectivity-full",
 		[NM_META_COLOR_CONNECTIVITY_LIMITED]     = "connectivity-limited",
@@ -572,6 +565,8 @@ parse_color_scheme (char *palette_buffer,
 		[NM_META_COLOR_DEVICE_FIRMWARE_MISSING]  = "device-firmware-missing",
 		[NM_META_COLOR_DEVICE_PLUGIN_MISSING]    = "device-plugin-missing",
 		[NM_META_COLOR_DEVICE_UNAVAILABLE]       = "device-unavailable",
+		[NM_META_COLOR_DEVICE_DISABLED]          = "device-disabled",
+		[NM_META_COLOR_DEVICE_EXTERNAL]          = "device-external",
 		[NM_META_COLOR_DEVICE_UNKNOWN]           = "device-unknown",
 		[NM_META_COLOR_MANAGER_RUNNING]          = "manager-running",
 		[NM_META_COLOR_MANAGER_STARTING]         = "manager-starting",
@@ -705,26 +700,43 @@ set_colors (NmcColorOption color_option,
 /*************************************************************************************/
 
 static gboolean
-process_command_line (NmCli *nmc, int argc, char **argv)
+process_command_line (NmCli *nmc, int argc, char **argv_orig)
 {
+	static const NMCCommand nmcli_cmds[] = {
+		{ "general",    nmc_command_func_general,     NULL,  FALSE, FALSE },
+		{ "monitor",    nmc_command_func_monitor,     NULL,  TRUE,  FALSE },
+		{ "networking", nmc_command_func_networking,  NULL,  FALSE, FALSE },
+		{ "radio",      nmc_command_func_radio,       NULL,  FALSE, FALSE },
+		{ "connection", nmc_command_func_connection,  NULL,  FALSE, FALSE },
+		{ "device",     nmc_command_func_device,      NULL,  FALSE, FALSE },
+		{ "agent",      nmc_command_func_agent,       NULL,  FALSE, FALSE },
+		{ NULL,         nmc_command_func_overview,    usage, TRUE,  TRUE },
+	};
 	NmcColorOption colors = NMC_USE_COLOR_AUTO;
-	char *base;
+	const char *base;
+	const char *const*argv;
 
-	base = strrchr (argv[0], '/');
+	base = strrchr (argv_orig[0], '/');
 	if (base == NULL)
-		base = argv[0];
+		base = argv_orig[0];
 	else
 		base++;
-	if (argc > 1 && nm_streq (argv[1], "--complete-args")) {
+
+	if (   argc > 1
+	    && nm_streq (argv_orig[1], "--complete-args")) {
 		nmc->complete = TRUE;
-		argv[1] = argv[0];
-		next_arg (nmc, &argc, &argv, NULL);
+		argv_orig[1] = argv_orig[0];
+		argc--;
+		argv_orig++;
 	}
+
+	argv = (const char *const*) argv_orig;
+
 	next_arg (nmc, &argc, &argv, NULL);
 
 	/* parse options */
 	while (argc) {
-		char *value;
+		gs_free char *value = NULL;
 
 		if (argv[0][0] != '-')
 			break;
@@ -733,7 +745,7 @@ process_command_line (NmCli *nmc, int argc, char **argv)
 			nmc_complete_strings (argv[0], "--terse", "--pretty", "--mode", "--overview",
 			                               "--colors", "--escape",
 			                               "--fields", "--nocheck", "--get-values",
-			                               "--wait", "--version", "--help", NULL);
+			                               "--wait", "--version", "--help");
 		}
 
 		if (argv[0][1] == '-' && argv[0][2] == '\0') {
@@ -916,86 +928,13 @@ signal_handler (gpointer user_data)
 	return G_SOURCE_CONTINUE;
 }
 
-static void
-nmc_convert_strv_to_string (const GValue *src_value, GValue *dest_value)
+void
+nm_cli_spawn_pager (const NmcConfig *nmc_config,
+                    NmcPagerData *pager_data)
 {
-	char **strings;
-
-	strings = g_value_get_boxed (src_value);
-	if (strings)
-		g_value_take_string (dest_value, g_strjoinv (",", strings));
-	else
-		g_value_set_string (dest_value, "");
-}
-
-static void
-nmc_convert_string_hash_to_string (const GValue *src_value, GValue *dest_value)
-{
-	GHashTable *hash;
-	GHashTableIter iter;
-	const char *key, *value;
-	GString *string;
-
-	hash = (GHashTable *) g_value_get_boxed (src_value);
-
-	string = g_string_new (NULL);
-	if (hash) {
-		g_hash_table_iter_init (&iter, hash);
-		while (g_hash_table_iter_next (&iter, (gpointer *) &key, (gpointer *) &value)) {
-			if (string->len)
-				g_string_append_c (string, ',');
-			g_string_append_printf (string, "%s=%s", key, value);
-		}
-	}
-
-	g_value_take_string (dest_value, g_string_free (string, FALSE));
-}
-
-static void
-nmc_convert_bytes_to_string (const GValue *src_value, GValue *dest_value)
-{
-	GBytes *bytes;
-	const guint8 *array;
-	gsize length;
-	GString *printable;
-	guint i = 0;
-
-	bytes = g_value_get_boxed (src_value);
-
-	printable = g_string_new ("[");
-
-	if (bytes) {
-		array = g_bytes_get_data (bytes, &length);
-		while (i < MIN (length, 35)) {
-			if (i > 0)
-				g_string_append_c (printable, ' ');
-			g_string_append_printf (printable, "0x%02X", array[i++]);
-		}
-		if (i < length)
-			g_string_append (printable, " ... ");
-	}
-	g_string_append_c (printable, ']');
-
-	g_value_take_string (dest_value, g_string_free (printable, FALSE));
-}
-
-static void
-nmc_value_transforms_register (void)
-{
-	g_value_register_transform_func (G_TYPE_STRV,
-	                                 G_TYPE_STRING,
-	                                 nmc_convert_strv_to_string);
-
-	/* This depends on the fact that all of the hash-table-valued properties
-	 * in libnm-core are string->string.
-	 */
-	g_value_register_transform_func (G_TYPE_HASH_TABLE,
-	                                 G_TYPE_STRING,
-	                                 nmc_convert_string_hash_to_string);
-
-	g_value_register_transform_func (G_TYPE_BYTES,
-	                                 G_TYPE_STRING,
-	                                 nmc_convert_bytes_to_string);
+	if (pager_data->pid != 0)
+		return;
+	pager_data->pid = nmc_terminal_spawn_pager (nmc_config);
 }
 
 static void
@@ -1005,25 +944,26 @@ nmc_cleanup (NmCli *nmc)
 
 	g_clear_object (&nmc->client);
 
-	g_string_free (nmc->return_text, TRUE);
+	if (nmc->return_text)
+		g_string_free (g_steal_pointer (&nmc->return_text), TRUE);
 
 	if (nmc->secret_agent) {
-		/* Destroy secret agent if we have one. */
-		nm_secret_agent_old_unregister (nmc->secret_agent, NULL, NULL);
-		g_object_unref (nmc->secret_agent);
+		nm_secret_agent_old_unregister (NM_SECRET_AGENT_OLD (nmc->secret_agent), NULL, NULL);
+		g_clear_object (&nmc->secret_agent);
 	}
-	if (nmc->pwds_hash)
-		g_hash_table_destroy (nmc->pwds_hash);
+
+	nm_clear_pointer (&nmc->pwds_hash, g_hash_table_destroy);
 
 	nm_clear_g_free (&nmc->required_fields);
 
-	if (nmc->pager_pid > 0) {
+	if (nmc->pager_data.pid != 0) {
+		pid_t pid = nm_steal_int (&nmc->pager_data.pid);
+
 		fclose (stdout);
 		fclose (stderr);
 		do {
-			ret = waitpid (nmc->pager_pid, NULL, 0);
+			ret = waitpid (pid, NULL, 0);
 		} while (ret == -1 && errno == EINTR);
-		nmc->pager_pid = 0;
 	}
 
 	nm_clear_g_free (&nmc->palette_buffer);
@@ -1047,8 +987,6 @@ main (int argc, char *argv[])
 	/* Save terminal settings */
 	tcgetattr (STDIN_FILENO, &termios_orig);
 
-	nmc_value_transforms_register ();
-
 	nm_cli.return_text = g_string_new (_("Success"));
 	loop = g_main_loop_new (NULL, FALSE);
 
@@ -1067,8 +1005,8 @@ main (int argc, char *argv[])
 		g_printerr ("%s\n", nm_cli.return_text->str);
 	}
 
-	g_main_loop_unref (loop);
 	nmc_cleanup (&nm_cli);
+	g_main_loop_unref (loop);
 
 	return nm_cli.return_value;
 }

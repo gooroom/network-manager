@@ -2,12 +2,12 @@
 .\"     Title: nmcli-examples
 .\"    Author: 
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/23/2019
+.\"      Date: 07/13/2020
 .\"    Manual: Examples
-.\"    Source: NetworkManager 1.14.6
+.\"    Source: NetworkManager 1.26.0
 .\"  Language: English
 .\"
-.TH "NMCLI\-EXAMPLES" "7" "" "NetworkManager 1\&.14\&.6" "Examples"
+.TH "NMCLI\-EXAMPLES" "7" "" "NetworkManager 1\&.26\&.0" "Examples"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -73,7 +73,29 @@ option for displaying different columns\&.
 \fBnmcli \-f all dev wifi list\fR
 will show all of them\&.
 .PP
-\fBExample\ \&2.\ \&Showing general information and properties for a Wi\-Fi interface\fR
+\fBExample\ \&2.\ \&Connect to a password\-protected wifi network\fR
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ \fBnmcli device wifi connect "$SSID" password "$PASSWORD"\fR
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ \fBnmcli \-\-ask device wifi connect "$SSID"\fR
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+\fBExample\ \&3.\ \&Showing general information and properties for a Wi\-Fi interface\fR
 .sp
 .if n \{\
 .RS 4
@@ -120,7 +142,7 @@ WIFI\-PROPERTIES\&.ADHOC:    yes
 .PP
 This command shows information about a Wi\-Fi device\&.
 .PP
-\fBExample\ \&3.\ \&Listing NetworkManager polkit permissions\fR
+\fBExample\ \&4.\ \&Listing NetworkManager polkit permissions\fR
 .sp
 .if n \{\
 .RS 4
@@ -164,7 +186,7 @@ command can display description for polkit actions\&.
 .sp
 More information about polkit can be found at http://www\&.freedesktop\&.org/wiki/Software/polkit\&.
 .PP
-\fBExample\ \&4.\ \&Listing NetworkManager log level and domains\fR
+\fBExample\ \&5.\ \&Listing NetworkManager log level and domains\fR
 .sp
 .if n \{\
 .RS 4
@@ -183,7 +205,7 @@ B,DISPATCH
 .PP
 This command shows current NetworkManager logging status\&.
 .PP
-\fBExample\ \&5.\ \&Changing NetworkManager logging\fR
+\fBExample\ \&6.\ \&Changing NetworkManager logging\fR
 .sp
 .if n \{\
 .RS 4
@@ -200,7 +222,25 @@ The first command makes NetworkManager log in DEBUG level, and only for CORE, ET
 \fBNetworkManager.conf\fR(5)
 manual page for available logging levels and domains\&.
 .PP
-\fBExample\ \&6.\ \&Adding a bonding master and two slave connection profiles\fR
+\fBExample\ \&7.\ \&Activating a VPN connection profile requiring interactive password input\fR
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ \fBnmcli \-\-ask con up my\-vpn\-con\fR
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+This command activates a VPN connection profile enabling nmcli to interact with the user (\*(Aq\-\-ask\*(Aq): this will allow nmcli to prompt for the VPN password on the command line when the
+\fIpassword\-flags\fR
+are set to \*(Aq0x02\*(Aq (\*(Aqalways ask\*(Aq, see
+\fBnm-settings\fR(5)
+)\&. This is particularly useful for OTP based VPNs, as the user needs to be prompted for the password each time the connection is activated\&.
+.PP
+\fBExample\ \&8.\ \&Adding a bonding master and two slave connection profiles\fR
 .sp
 .if n \{\
 .RS 4
@@ -224,7 +264,7 @@ mode\&. The next two commands add slaves connections, both enslaved to
 interface, the second to
 \fIeth2\fR\&.
 .PP
-\fBExample\ \&7.\ \&Adding a team master and two slave connection profiles\fR
+\fBExample\ \&9.\ \&Adding a team master and two slave connection profiles\fR
 .sp
 .if n \{\
 .RS 4
@@ -266,7 +306,7 @@ will use its default configuration\&. You will activate the whole setup by activ
 .sp
 By default, the created profiles are marked for auto\-activation\&. But if another connection has been activated on the device, the new profile won\*(Aqt activate automatically and you need to activate it manually\&.
 .PP
-\fBExample\ \&8.\ \&Adding a bridge and two slave profiles\fR
+\fBExample\ \&10.\ \&Adding a bridge and two slave profiles\fR
 .sp
 .if n \{\
 .RS 4
@@ -288,7 +328,7 @@ This example demonstrates adding a bridge master connection and two slaves\&. Th
 interface, the second to
 \fIens4\fR\&. The last command will disable 802\&.1D STP for the TowerBridge profile\&.
 .PP
-\fBExample\ \&9.\ \&Adding an ethernet connection profile with manual IP configuration\fR
+\fBExample\ \&11.\ \&Adding an ethernet connection profile with manual IP configuration\fR
 .sp
 .if n \{\
 .RS 4
@@ -312,7 +352,7 @@ that is bound to interface name
 \fIcon show\fR
 command displays the profile so that all parameters can be reviewed\&.
 .PP
-\fBExample\ \&10.\ \&Convenient field values retrieval for scripting\fR
+\fBExample\ \&12.\ \&Convenient field values retrieval for scripting\fR
 .sp
 .if n \{\
 .RS 4
@@ -352,7 +392,7 @@ This example shows retrieval of ip4 connection field values via the \-\-get\-val
 \fBnmcli\fR(1)
 manual page for more customized output\&.
 .PP
-\fBExample\ \&11.\ \&Adding an Ethernet connection and configuring SR\-IOV VFs\fR
+\fBExample\ \&13.\ \&Adding an Ethernet connection and configuring SR\-IOV VFs\fR
 .sp
 .if n \{\
 .RS 4
@@ -375,7 +415,7 @@ and
 \fIspoof\-check\fR
 features respectively enabled and disabled\&. VF number 2 has a maximux transmission rate of 20Mbps\&. The kernel is instructed to not automatically instantiate a network interface for the VFs\&.
 .PP
-\fBExample\ \&12.\ \&Escaping colon characters in tabular mode\fR
+\fBExample\ \&14.\ \&Escaping colon characters in tabular mode\fR
 .sp
 .if n \{\
 .RS 4
@@ -394,7 +434,7 @@ nager/ActiveConnection/9
 .PP
 This example shows escaping colon characters in tabular mode\&. It may be useful for script processing, because \*(Aq:\*(Aq is used as a field separator\&.
 .PP
-\fBExample\ \&13.\ \&nmcli usage in a NetworkManager dispatcher script to make Ethernet and Wi\-Fi mutually exclusive\fR
+\fBExample\ \&15.\ \&nmcli usage in a NetworkManager dispatcher script to make Ethernet and Wi\-Fi mutually exclusive\fR
 .sp
 .if n \{\
 .RS 4
@@ -432,7 +472,7 @@ manual page for more information about NetworkManager dispatcher scripts\&.
 .PP
 \fBExample sessions of interactive connection editor\fR
 .PP
-\fBExample\ \&14.\ \&Adding an ethernet connection profile in interactive editor (a)\fR
+\fBExample\ \&16.\ \&Adding an ethernet connection profile in interactive editor (a)\fR
 .sp
 .if n \{\
 .RS 4
@@ -671,6 +711,46 @@ nmcli> \fBquit\fR
 .\}
 .PP
 Example session in the nmcli interactive connection editor\&. The scenario creates an Ethernet connection profile with static addressing (IPs and DNS)\&.
+.PP
+\fBExample\ \&17.\ \&Bluetooth connection profiles\fR
+.PP
+NetworkManger supports both connecting to NAP and DUN devices as a client\&. It also supports sharing the network via a NAP server\&.
+.PP
+For NAP client connections, NetworkManager automatically creates a suitable in\-memory profile for paired devices if none is available\&. You may use that generated profile directly, but you may also modify and persist it, which will prevent to automatically re\-create it\&. You may also create a profile from scratch\&. For example, the following uses DHCP and IPv6 autoconf for address configuration:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ \fBnmcli connection add type bluetooth con\-name "Profile for My Bluetooth Device (NAP)" autoconnect no bluetooth\&.type panu bluetooth\&.bdaddr "$BDADDR"\fR
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+For DUN connections, the user needs to configure modem settings and hence no profile gets created automatically\&. The modem settings depend on your device and you either need a "gsm" or a "csma" section\&. For example,
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ \fBnmcli connection add type bluetooth con\-name "Profile for My Bluetooth Device (DUN)" autoconnect no bluetooth\&.type dun bluetooth\&.bdaddr "$BDADDR" gsm\&.apn apn\&.com\fR
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+Finally, you can create a bluetooth hotspot\&. BlueZ implements those as a bridge device, so such profiles also have a bridge section\&. Also, you probably want to set IP methods as "shared", so that clients get automatic IP addressing\&. Note that the "shared" IPv4 method requires dnsmasq to be available\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ \fBnmcli connection add type bluetooth con\-name "My Bluetooth Hotspot" autoconnect no ifname btnap0 bluetooth\&.type nap ipv4\&.method shared ipv6\&.method shared\fR
+.fi
+.if n \{\
+.RE
+.\}
 .SH "SEE ALSO"
 .PP
 \fBnmcli\fR(1),

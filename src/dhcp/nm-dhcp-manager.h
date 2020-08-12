@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-dhcp-manager.c - Handle the DHCP daemon for NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2005 - 2010 Red Hat, Inc.
  * Copyright (C) 2006 - 2008 Novell, Inc.
  */
@@ -24,7 +9,7 @@
 
 #include "nm-dhcp-client.h"
 #include "nm-ip4-config.h"
-#include "nm-dhcp4-config.h"
+#include "nm-dhcp-config.h"
 
 #define NM_TYPE_DHCP_MANAGER            (nm_dhcp_manager_get_type ())
 #define NM_DHCP_MANAGER(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_DHCP_MANAGER, NMDhcpManager))
@@ -50,12 +35,15 @@ NMDhcpClient * nm_dhcp_manager_start_ip4     (NMDhcpManager *manager,
                                               const char *iface,
                                               int ifindex,
                                               GBytes *hwaddr,
+                                              GBytes *bcast_hwaddr,
                                               const char *uuid,
                                               guint32 route_table,
                                               guint32 route_metric,
                                               gboolean send_hostname,
                                               const char *dhcp_hostname,
                                               const char *dhcp_fqdn,
+                                              NMDhcpHostnameFlags hostname_flags,
+                                              const char *mud_url,
                                               GBytes *dhcp_client_id,
                                               guint32 timeout,
                                               const char *dhcp_anycast_addr,
@@ -67,14 +55,19 @@ NMDhcpClient * nm_dhcp_manager_start_ip6     (NMDhcpManager *manager,
                                               const char *iface,
                                               int ifindex,
                                               GBytes *hwaddr,
+                                              GBytes *bcast_hwaddr,
                                               const struct in6_addr *ll_addr,
                                               const char *uuid,
                                               guint32 route_table,
                                               guint32 route_metric,
                                               gboolean send_hostname,
                                               const char *dhcp_hostname,
+                                              NMDhcpHostnameFlags hostname_flags,
+                                              const char *mud_url,
                                               GBytes *duid,
                                               gboolean enforce_duid,
+                                              guint32 iaid,
+                                              gboolean iaid_explicit,
                                               guint32 timeout,
                                               const char *dhcp_anycast_addr,
                                               gboolean info_only,
@@ -85,7 +78,7 @@ NMDhcpClient * nm_dhcp_manager_start_ip6     (NMDhcpManager *manager,
 /* For testing only */
 extern const char* nm_dhcp_helper_path;
 
-extern const NMDhcpClientFactory *const _nm_dhcp_manager_factories[4];
+extern const NMDhcpClientFactory *const _nm_dhcp_manager_factories[6];
 
 void nmtst_dhcp_manager_unget (gpointer singleton_instance);
 

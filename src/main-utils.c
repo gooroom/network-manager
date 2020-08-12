@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2004 - 2012 Red Hat, Inc.
  * Copyright (C) 2005 - 2008 Novell, Inc.
  */
@@ -22,7 +7,6 @@
 #include "nm-default.h"
 
 #include <stdio.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -93,21 +77,26 @@ nm_main_utils_write_pidfile (const char *pidfile)
 {
 	char pid[16];
 	int fd;
+	int errsv;
 	gboolean success = FALSE;
 
 	if ((fd = open (pidfile, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 00644)) < 0) {
-		fprintf (stderr, _("Opening %s failed: %s\n"), pidfile, strerror (errno));
+		errsv = errno;
+		fprintf (stderr, _("Opening %s failed: %s\n"), pidfile, nm_strerror_native (errsv));
 		return FALSE;
 	}
 
 	g_snprintf (pid, sizeof (pid), "%d", getpid ());
-	if (write (fd, pid, strlen (pid)) < 0)
-		fprintf (stderr, _("Writing to %s failed: %s\n"), pidfile, strerror (errno));
-	else
+	if (write (fd, pid, strlen (pid)) < 0) {
+		errsv = errno;
+		fprintf (stderr, _("Writing to %s failed: %s\n"), pidfile, nm_strerror_native (errsv));
+	} else
 		success = TRUE;
 
-	if (nm_close (fd))
-		fprintf (stderr, _("Closing %s failed: %s\n"), pidfile, strerror (errno));
+	if (nm_close (fd)) {
+		errsv = errno;
+		fprintf (stderr, _("Closing %s failed: %s\n"), pidfile, nm_strerror_native (errsv));
+	}
 
 	return success;
 }
@@ -126,13 +115,13 @@ nm_main_utils_ensure_statedir ()
 	    && parent[1] != '\0'
 	    && g_mkdir_with_parents (parent, 0755) != 0) {
 		errsv = errno;
-		fprintf (stderr, "Cannot create parents for '%s': %s", NMSTATEDIR, g_strerror (errsv));
+		fprintf (stderr, "Cannot create parents for '%s': %s", NMSTATEDIR, nm_strerror_native (errsv));
 		exit (1);
 	}
 	/* Ensure state directory exists */
 	if (g_mkdir_with_parents (NMSTATEDIR, 0700) != 0) {
 		errsv = errno;
-		fprintf (stderr, "Cannot create '%s': %s", NMSTATEDIR, g_strerror (errsv));
+		fprintf (stderr, "Cannot create '%s': %s", NMSTATEDIR, nm_strerror_native (errsv));
 		exit (1);
 	}
 }
@@ -145,7 +134,7 @@ nm_main_utils_ensure_rundir ()
 	/* Setup runtime directory */
 	if (g_mkdir_with_parents (NMRUNDIR, 0755) != 0) {
 		errsv = errno;
-		fprintf (stderr, _("Cannot create '%s': %s"), NMRUNDIR, g_strerror (errsv));
+		fprintf (stderr, _("Cannot create '%s': %s"), NMRUNDIR, nm_strerror_native (errsv));
 		exit (1);
 	}
 
@@ -156,7 +145,7 @@ nm_main_utils_ensure_rundir ()
 	if (g_mkdir (NM_CONFIG_DEVICE_STATE_DIR, 0755) != 0) {
 		errsv = errno;
 		if (errsv != EEXIST) {
-			fprintf (stderr, _("Cannot create '%s': %s"), NM_CONFIG_DEVICE_STATE_DIR, g_strerror (errsv));
+			fprintf (stderr, _("Cannot create '%s': %s"), NM_CONFIG_DEVICE_STATE_DIR, nm_strerror_native (errsv));
 			exit (1);
 		}
 	}
@@ -196,7 +185,7 @@ nm_main_utils_ensure_not_running_pidfile (const char *pidfile)
 	if (pid <= 0 || pid > 65536 || errno)
 		return;
 
-	g_clear_pointer (&contents, g_free);
+	nm_clear_g_free (&contents);
 	proc_cmdline = g_strdup_printf ("/proc/%ld/cmdline", pid);
 	if (!g_file_get_contents (proc_cmdline, &contents, &len, NULL))
 		return;

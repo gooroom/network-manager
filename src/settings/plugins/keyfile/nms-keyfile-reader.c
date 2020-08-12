@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager system settings service - keyfile plugin
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2015 Red Hat, Inc.
  */
 
@@ -23,9 +8,8 @@
 #include "nms-keyfile-reader.h"
 
 #include <sys/stat.h>
-#include <string.h>
 
-#include "nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
 
 #include "NetworkManagerUtils.h"
 #include "nms-keyfile-utils.h"
@@ -33,11 +17,15 @@
 /*****************************************************************************/
 
 static const char *
-_fmt_warn (const char *group, NMSetting *setting, const char *property_name, const char *message, char **out_message)
+_fmt_warn (const NMKeyfileHandlerData *handler_data, char **out_message)
 {
-	const char *setting_name = setting ? nm_setting_get_name (setting) : NULL;
+	const char *group = handler_data->kf_group_name;
+	const char *message = _nm_keyfile_handler_data_warn_get_message (handler_data);
 
 	if (group) {
+		NMSetting *setting = handler_data->cur_setting;
+		const char *property_name = handler_data->cur_property;
+		const char *setting_name = setting ? nm_setting_get_name (setting) : NULL;
 		char *res;
 
 		if (setting_name) {
@@ -53,30 +41,30 @@ _fmt_warn (const char *group, NMSetting *setting, const char *property_name, con
 			res = g_strdup_printf ("%s: %s", group, message);
 		*out_message = res;
 		return res;
-	} else
-		return message;
+	}
+
+	return message;
 }
 
 typedef struct {
 	bool verbose;
-} HandlerReadData;
+} ReadInfo;
 
 static gboolean
 _handler_read (GKeyFile *keyfile,
                NMConnection *connection,
-               NMKeyfileReadType type,
-               void *type_data,
-               void *user_data,
-               GError **error)
+               NMKeyfileHandlerType handler_type,
+               NMKeyfileHandlerData *handler_data,
+               void *user_data)
 {
-	const HandlerReadData *handler_data = user_data;
+	const ReadInfo *read_info = user_data;
 
-	if (type == NM_KEYFILE_READ_TYPE_WARN) {
-		NMKeyfileReadTypeDataWarn *warn_data = type_data;
+	if (handler_type == NM_KEYFILE_HANDLER_TYPE_WARN) {
+		const NMKeyfileHandlerDataWarn *warn_data = &handler_data->warn;
 		NMLogLevel level;
 		char *message_free = NULL;
 
-		if (!handler_data->verbose)
+		if (!read_info->verbose)
 			return TRUE;
 
 		if (warn_data->severity > NM_KEYFILE_WARN_SEVERITY_WARN)
@@ -88,15 +76,17 @@ _handler_read (GKeyFile *keyfile,
 		else
 			level = LOGL_INFO;
 
-		nm_log (level, LOGD_SETTINGS, NULL,
+		nm_log (level,
+		        LOGD_SETTINGS,
+		        NULL,
 		        nm_connection_get_uuid (connection),
 		        "keyfile: %s",
-		        _fmt_warn (warn_data->group, warn_data->setting,
-		                   warn_data->property_name, warn_data->message,
+		        _fmt_warn (handler_data,
 		                   &message_free));
 		g_free (message_free);
 		return TRUE;
 	}
+
 	return FALSE;
 }
 
@@ -109,7 +99,7 @@ nms_keyfile_reader_from_keyfile (GKeyFile *key_file,
                                  GError **error)
 {
 	NMConnection *connection;
-	HandlerReadData data = {
+	ReadInfo read_info = {
 		.verbose = verbose,
 	};
 	gs_free char *base_dir_free = NULL;
@@ -138,15 +128,15 @@ nms_keyfile_reader_from_keyfile (GKeyFile *key_file,
 		filename = &s[1];
 	}
 
-	connection = nm_keyfile_read (key_file, base_dir, _handler_read, &data, error);
+	connection = nm_keyfile_read (key_file, base_dir, NM_KEYFILE_HANDLER_FLAGS_NONE, _handler_read, &read_info, error);
 	if (!connection)
 		return NULL;
 
-	if (g_str_has_suffix (filename, NMS_KEYFILE_PATH_SUFFIX_NMCONNECTION)) {
+	if (g_str_has_suffix (filename, NM_KEYFILE_PATH_SUFFIX_NMCONNECTION)) {
 		gsize l = strlen (filename);
 
-		if (l > NM_STRLEN (NMS_KEYFILE_PATH_SUFFIX_NMCONNECTION))
-			filename_id = g_strndup (filename, l - NM_STRLEN (NMS_KEYFILE_PATH_SUFFIX_NMCONNECTION));
+		if (l > NM_STRLEN (NM_KEYFILE_PATH_SUFFIX_NMCONNECTION))
+			filename_id = g_strndup (filename, l - NM_STRLEN (NM_KEYFILE_PATH_SUFFIX_NMCONNECTION));
 	}
 
 	nm_keyfile_read_ensure_id (connection, filename_id ?: filename);
@@ -163,6 +153,12 @@ nms_keyfile_reader_from_keyfile (GKeyFile *key_file,
 NMConnection *
 nms_keyfile_reader_from_file (const char *full_filename,
                               const char *profile_dir,
+                              struct stat *out_stat,
+                              NMTernary *out_is_nm_generated,
+                              NMTernary *out_is_volatile,
+                              NMTernary *out_is_external,
+                              char **out_shadowed_storage,
+                              NMTernary *out_shadowed_owned,
                               GError **error)
 {
 	gs_unref_keyfile GKeyFile *key_file = NULL;
@@ -172,8 +168,13 @@ nms_keyfile_reader_from_file (const char *full_filename,
 	nm_assert (full_filename && full_filename[0] == '/');
 	nm_assert (!profile_dir || profile_dir[0] == '/');
 
-	if (!nms_keyfile_utils_check_file_permissions (full_filename,
-	                                               NULL,
+	NM_SET_OUT (out_is_nm_generated, NM_TERNARY_DEFAULT);
+	NM_SET_OUT (out_is_volatile, NM_TERNARY_DEFAULT);
+	NM_SET_OUT (out_is_external, NM_TERNARY_DEFAULT);
+
+	if (!nms_keyfile_utils_check_file_permissions (NMS_KEYFILE_FILETYPE_KEYFILE,
+	                                               full_filename,
+	                                               out_stat,
 	                                               error))
 		return NULL;
 
@@ -194,6 +195,31 @@ nms_keyfile_reader_from_file (const char *full_filename,
 		g_object_unref (connection);
 		connection = NULL;
 	}
+
+	NM_SET_OUT (out_is_nm_generated, nm_key_file_get_boolean (key_file,
+	                                                          NM_KEYFILE_GROUP_NMMETA,
+	                                                          NM_KEYFILE_KEY_NMMETA_NM_GENERATED,
+	                                                          NM_TERNARY_DEFAULT));
+
+	NM_SET_OUT (out_is_volatile, nm_key_file_get_boolean (key_file,
+	                                                      NM_KEYFILE_GROUP_NMMETA,
+	                                                      NM_KEYFILE_KEY_NMMETA_VOLATILE,
+	                                                      NM_TERNARY_DEFAULT));
+
+	NM_SET_OUT (out_is_external, nm_key_file_get_boolean (key_file,
+	                                                      NM_KEYFILE_GROUP_NMMETA,
+	                                                      NM_KEYFILE_KEY_NMMETA_EXTERNAL,
+	                                                      NM_TERNARY_DEFAULT));
+
+	NM_SET_OUT (out_shadowed_storage, g_key_file_get_string (key_file,
+	                                                         NM_KEYFILE_GROUP_NMMETA,
+	                                                         NM_KEYFILE_KEY_NMMETA_SHADOWED_STORAGE,
+	                                                         NULL));
+
+	NM_SET_OUT (out_shadowed_owned, nm_key_file_get_boolean (key_file,
+	                                                         NM_KEYFILE_GROUP_NMMETA,
+	                                                         NM_KEYFILE_KEY_NMMETA_SHADOWED_OWNED,
+	                                                         NM_TERNARY_DEFAULT));
 
 	return connection;
 }

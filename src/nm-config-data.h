@@ -1,25 +1,32 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2014 Red Hat, Inc.
  */
 
 #ifndef NM_CONFIG_DATA_H
 #define NM_CONFIG_DATA_H
+
+/*****************************************************************************/
+
+typedef enum {
+
+	/* an invalid mode. */
+	NM_AUTH_POLKIT_MODE_UNKNOWN,
+
+	/* don't use PolicyKit, but only allow root user (uid 0). */
+	NM_AUTH_POLKIT_MODE_ROOT_ONLY,
+
+	/* don't use PolicyKit, but allow all requests. */
+	NM_AUTH_POLKIT_MODE_ALLOW_ALL,
+
+	/* use PolicyKit to authorize requests. Root user (uid 0) always
+	 * gets a free pass, without consulting PolicyKit. If PolicyKit is not
+	 * running, authorization will fail for non root users. */
+	NM_AUTH_POLKIT_MODE_USE_POLKIT,
+
+} NMAuthPolkitMode;
+
+/*****************************************************************************/
 
 #define NM_TYPE_CONFIG_DATA            (nm_config_data_get_type ())
 #define NM_CONFIG_DATA(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_CONFIG_DATA, NMConfigData))
@@ -38,25 +45,6 @@
 #define NM_CONFIG_DATA_CONNECTIVITY_RESPONSE "connectivity-response"
 #define NM_CONFIG_DATA_NO_AUTO_DEFAULT       "no-auto-default"
 #define NM_CONFIG_DATA_DNS_MODE              "dns"
-
-/* The flags for Reload. Currently these are internal defines,
- * only their numeric value matters and must be stable as
- * they are public API! Also, the enum must fit in uint32. */
-enum { /*< skip >*/
-	NM_MANAGER_RELOAD_FLAGS_NONE                            = 0,
-
-	/* reload the configuration from disk */
-	NM_MANAGER_RELOAD_FLAGS_CONF                            = (1LL << 0),
-
-	/* write DNS configuration to resolv.conf */
-	NM_MANAGER_RELOAD_FLAGS_DNS_RC                          = (1LL << 1),
-
-	/* restart the DNS plugin (includes DNS_RC) */
-	NM_MANAGER_RELOAD_FLAGS_DNS_FULL                        = (1LL << 2),
-
-	_NM_MANAGER_RELOAD_FLAGS_ALL,
-	NM_MANAGER_RELOAD_FLAGS_ALL = ((_NM_MANAGER_RELOAD_FLAGS_ALL - 1) << 1) - 1,
-};
 
 typedef enum { /*< flags >*/
 	NM_CONFIG_GET_VALUE_NONE                   = 0,
@@ -144,9 +132,10 @@ NMConfigData *nm_config_data_new_update_no_auto_default (const NMConfigData *bas
 NMConfigChangeFlags nm_config_data_diff (NMConfigData *old_data, NMConfigData *new_data);
 
 void nm_config_data_log (const NMConfigData *self,
-                               const char *prefix,
-                               const char *key_prefix,
-                               /* FILE* */ gpointer print_stream);
+                         const char *prefix,
+                         const char *key_prefix,
+                         const char *no_auto_default_file,
+                         /* FILE* */ gpointer print_stream);
 
 const char *nm_config_data_get_config_main_file (const NMConfigData *config_data);
 const char *nm_config_data_get_config_description (const NMConfigData *config_data);
@@ -165,17 +154,35 @@ const char *nm_config_data_get_connectivity_response (const NMConfigData *config
 
 int nm_config_data_get_autoconnect_retries_default (const NMConfigData *config_data);
 
+NMAuthPolkitMode nm_config_data_get_main_auth_polkit (const NMConfigData *config_data);
+
 const char *const*nm_config_data_get_no_auto_default (const NMConfigData *config_data);
 gboolean          nm_config_data_get_no_auto_default_for_device (const NMConfigData *self, NMDevice *device);
 
 const char *nm_config_data_get_dns_mode (const NMConfigData *self);
 const char *nm_config_data_get_rc_manager (const NMConfigData *self);
+gboolean nm_config_data_get_systemd_resolved (const NMConfigData *self);
 
 gboolean nm_config_data_get_ignore_carrier (const NMConfigData *self, NMDevice *device);
 gboolean nm_config_data_get_assume_ipv6ll_only (const NMConfigData *self, NMDevice *device);
 int      nm_config_data_get_sriov_num_vfs (const NMConfigData *self, NMDevice *device);
 
 NMGlobalDnsConfig *nm_config_data_get_global_dns_config (const NMConfigData *self);
+
+extern const char *__start_connection_defaults[];
+extern const char *__stop_connection_defaults[];
+
+#define NM_CON_DEFAULT_NOP(name) \
+	static const char *NM_UNIQ_T (connection_default, NM_UNIQ) \
+		_nm_used _nm_section ("connection_defaults") = "" name
+
+#define NM_CON_DEFAULT(name) \
+	({ \
+		static const char *__con_default_prop \
+			_nm_used _nm_section ("connection_defaults") = "" name; \
+		\
+		name; \
+	})
 
 char *nm_config_data_get_connection_default (const NMConfigData *self,
                                              const char *property,
@@ -226,6 +233,9 @@ void nm_global_dns_config_free (NMGlobalDnsConfig *dns_config);
 
 NMGlobalDnsConfig *nm_global_dns_config_from_dbus (const GValue *value, GError **error);
 void nm_global_dns_config_to_dbus (const NMGlobalDnsConfig *dns_config, GValue *value);
+
+void nm_config_data_get_warnings (const NMConfigData *self,
+                                  GPtrArray *warnings);
 
 /* private accessors */
 GKeyFile *_nm_config_data_get_keyfile (const NMConfigData *self);

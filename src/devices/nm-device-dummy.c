@@ -1,15 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -17,7 +8,6 @@
 #include "nm-device-dummy.h"
 
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 
 #include "nm-act-request.h"
@@ -67,6 +57,7 @@ complete_connection (NMDevice *device,
 	                           NULL,
 	                           _("Dummy connection"),
 	                           NULL,
+	                           NULL,
 	                           TRUE);
 
 	s_dummy = nm_connection_get_setting_dummy (connection);
@@ -98,38 +89,23 @@ create_and_realize (NMDevice *device,
                     GError **error)
 {
 	const char *iface = nm_device_get_iface (device);
-	NMPlatformError plerr;
 	NMSettingDummy *s_dummy;
+	int r;
 
 	s_dummy = nm_connection_get_setting_dummy (connection);
 	g_assert (s_dummy);
 
-	plerr = nm_platform_link_dummy_add (nm_device_get_platform (device), iface, out_plink);
-	if (plerr != NM_PLATFORM_ERROR_SUCCESS) {
+	r = nm_platform_link_dummy_add (nm_device_get_platform (device), iface, out_plink);
+	if (r < 0) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
 		             "Failed to create dummy interface '%s' for '%s': %s",
 		             iface,
 		             nm_connection_get_id (connection),
-		             nm_platform_error_to_string_a (plerr));
+		             nm_strerror (r));
 		return FALSE;
 	}
 
 	return TRUE;
-}
-
-static NMActStageReturn
-act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
-{
-	NMActStageReturn ret;
-
-	ret = NM_DEVICE_CLASS (nm_device_dummy_parent_class)->act_stage1_prepare (device, out_failure_reason);
-	if (ret != NM_ACT_STAGE_RETURN_SUCCESS)
-		return ret;
-
-	if (!nm_device_hw_addr_set_cloned (device, nm_device_get_applied_connection (device), FALSE))
-		return NM_ACT_STAGE_RETURN_FAILURE;
-
-	return NM_ACT_STAGE_RETURN_SUCCESS;
 }
 
 /*****************************************************************************/
@@ -168,7 +144,7 @@ nm_device_dummy_class_init (NMDeviceDummyClass *klass)
 	device_class->create_and_realize = create_and_realize;
 	device_class->get_generic_capabilities = get_generic_capabilities;
 	device_class->update_connection = update_connection;
-	device_class->act_stage1_prepare = act_stage1_prepare;
+	device_class->act_stage1_prepare_set_hwaddr_ethernet = TRUE;
 	device_class->get_configured_mtu = nm_device_get_configured_mtu_for_wired;
 }
 

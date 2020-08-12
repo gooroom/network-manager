@@ -1,19 +1,9 @@
-common_conf = configuration_data()
-common_conf.set('NM_VERSION', nm_version)
-common_conf.set('sysconfdir', nm_sysconfdir)
-common_conf.set('nmrundir', nm_pkgrundir)
-common_conf.set('NM_CONFIG_DEFAULT_MAIN_AUTH_POLKIT_TEXT', config_default_main_auth_polkit)
-common_conf.set('NM_CONFIG_DEFAULT_LOGGING_BACKEND_TEXT', config_logging_backend_default)
-common_conf.set('NM_CONFIG_DEFAULT_LOGGING_AUDIT_TEXT', config_default_logging_audit)
-common_conf.set('NM_CONFIG_DEFAULT_MAIN_RC_MANAGER', config_dns_rc_manager_default)
-common_conf.set('NM_CONFIG_DEFAULT_MAIN_DHCP', config_dhcp_default)
-
-common = 'common.ent'
+# SPDX-License-Identifier: LGPL-2.1+
 
 common_ent_file = configure_file(
-  input: common + '.in',
-  output: common,
-  configuration: common_conf
+  input: 'common.ent.in',
+  output: '@BASENAME@',
+  configuration: data_conf,
 )
 
 xsltproc_options = [
@@ -27,7 +17,7 @@ xsltproc_options = [
   '--stringparam', 'man.th.extra1.suppress', '1',
   '--stringparam', 'man.authors.section.enabled', '0',
   '--stringparam', 'man.copyright.section.enabled', '0',
-  '--stringparam', 'man.th.title.max.length', '30'
+  '--stringparam', 'man.th.title.max.length', '30',
 ]
 
 docbook_xls = 'http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl'
@@ -61,18 +51,56 @@ foreach man: mans
     command: xsltproc_options + [docbook_xls, '@INPUT@'],
     depend_files: common_ent_file,
     install: true,
-    install_dir: join_paths(nm_mandir, 'man' + man[1])
+    install_dir: join_paths(nm_mandir, 'man' + man[1]),
   )
 endforeach
 
 if enable_introspection
+
+  name = 'dbus'
+  nm_settings_docs_xml_dbus = custom_target(
+    'nm-settings-docs-' + name + '.xml',
+    input: [nm_settings_docs_xml_gir, nm_property_infos_xml[name]],
+    output: 'nm-settings-docs-' + name + '.xml',
+    command: [
+      python.path(),
+      join_paths(meson.source_root(), 'tools', 'generate-docs-nm-settings-docs-merge.py'),
+      '@OUTPUT@',
+      nm_property_infos_xml[name],
+      nm_settings_docs_xml_gir,
+    ],
+  )
+
+  name = 'nmcli'
+  nm_settings_docs_xml_nmcli = custom_target(
+    'nm-settings-docs-' + name + '.xml',
+    input: [nm_settings_docs_xml_gir, nm_property_infos_xml[name]],
+    output: 'nm-settings-docs-' + name + '.xml',
+    command: [
+      python.path(),
+      join_paths(meson.source_root(), 'tools', 'generate-docs-nm-settings-docs-merge.py'),
+      '--only-from-first',
+      '@OUTPUT@',
+      generate_docs_nm_settings_nmcli_xml,
+      nm_property_infos_xml[name],
+      nm_settings_docs_xml_gir,
+    ],
+  )
+
+  nm_settings_docs_xml = {
+    'gir':   nm_settings_docs_xml_gir,
+    'dbus':  nm_settings_docs_xml_dbus,
+    'nmcli':  nm_settings_docs_xml_nmcli,
+  }
+
   mans = [
-    ['nm-settings-keyfile', '5', nm_settings_keyfile_docs],
-    ['nm-settings', '5', nm_settings_docs]
+    ['nm-settings-keyfile', '5', nm_property_infos_xml['keyfile']],
+    ['nm-settings-dbus',    '5', nm_settings_docs_xml['dbus']],
+    ['nm-settings-nmcli',   '5', nm_settings_docs_xml['nmcli']],
   ]
 
   if enable_ifcfg_rh
-    mans += [['nm-settings-ifcfg-rh', '5', nm_settings_ifcfg_rh_docs]]
+    mans += [['nm-settings-ifcfg-rh', '5', nm_property_infos_xml['ifcfg-rh']]]
   endif
 
   foreach man: mans
@@ -82,7 +110,7 @@ if enable_introspection
       output,
       input: man[2],
       output: output,
-      command: xsltproc_options + [join_paths(meson.current_source_dir(), man[0] + '.xsl'), '@INPUT@']
+      command: xsltproc_options + [join_paths(meson.current_source_dir(), man[0] + '.xsl'), '@INPUT@'],
     )
     content_files += input.full_path()
 
@@ -94,7 +122,7 @@ if enable_introspection
       output: output,
       command: xsltproc_options + [docbook_xls, '@INPUT@'],
       install: true,
-      install_dir: join_paths(nm_mandir, 'man' + man[1])
+      install_dir: join_paths(nm_mandir, 'man' + man[1]),
     )
   endforeach
 endif

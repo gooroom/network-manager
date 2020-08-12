@@ -1,28 +1,11 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2013 - 2016 Canonical Ltd.
  */
 
 #include "nm-default.h"
 
 #include "nm-modem-ofono.h"
-
-#include <string.h>
 
 #include "nm-core-internal.h"
 #include "devices/nm-device-private.h"
@@ -146,30 +129,36 @@ update_modem_state (NMModemOfono *self)
 /* Disconnect */
 typedef struct {
 	NMModemOfono *self;
-	GSimpleAsyncResult *result;
+	_NMModemDisconnectCallback callback;
+	gpointer callback_user_data;
 	GCancellable *cancellable;
 	gboolean warn;
 } DisconnectContext;
 
 static void
-disconnect_context_complete (DisconnectContext *ctx)
+disconnect_context_complete (DisconnectContext *ctx, GError *error)
 {
-	if (ctx->cancellable)
-		g_object_unref (ctx->cancellable);
-	if (ctx->result) {
-		g_simple_async_result_complete_in_idle (ctx->result);
-		g_object_unref (ctx->result);
-	}
+	if (ctx->callback)
+		ctx->callback (NM_MODEM (ctx->self), error, ctx->callback_user_data);
+	nm_g_object_unref (ctx->cancellable);
 	g_object_unref (ctx->self);
 	g_slice_free (DisconnectContext, ctx);
 }
 
-static gboolean
-disconnect_finish (NMModem *self,
-                   GAsyncResult *result,
-                   GError **error)
+static void
+disconnect_context_complete_on_idle (gpointer user_data,
+                                     GCancellable *cancellable)
 {
-	return !g_simple_async_result_propagate_error (G_SIMPLE_ASYNC_RESULT (result), error);
+	DisconnectContext *ctx = user_data;
+	gs_free_error GError *error = NULL;
+
+	if (!g_cancellable_set_error_if_cancelled (cancellable, &error)) {
+		g_set_error_literal (&error,
+		                     NM_UTILS_ERROR,
+		                     NM_UTILS_ERROR_UNKNOWN,
+		                     ("modem is currently not connected"));
+	}
+	disconnect_context_complete (ctx, error);
 }
 
 static void
@@ -177,16 +166,14 @@ disconnect_done (GObject *source,
                  GAsyncResult *result,
                  gpointer user_data)
 {
-	DisconnectContext *ctx = (DisconnectContext*) user_data;
+	DisconnectContext *ctx = user_data;
 	NMModemOfono *self = ctx->self;
 	gs_free_error GError *error = NULL;
 	gs_unref_variant GVariant *v = NULL;
 
 	v = g_dbus_proxy_call_finish (G_DBUS_PROXY (source), result, &error);
 	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-		if (ctx->result)
-			g_simple_async_result_take_error (ctx->result, g_steal_pointer (&error));
-		disconnect_context_complete (ctx);
+		disconnect_context_complete (ctx, error);
 		return;
 	}
 
@@ -196,21 +183,20 @@ disconnect_done (GObject *source,
 	_LOGD ("modem disconnected");
 
 	update_modem_state (self);
-	disconnect_context_complete (ctx);
+	disconnect_context_complete (ctx, error);
 }
 
 static void
 disconnect (NMModem *modem,
             gboolean warn,
             GCancellable *cancellable,
-            GAsyncReadyCallback callback,
+            _NMModemDisconnectCallback callback,
             gpointer user_data)
 {
 	NMModemOfono *self = NM_MODEM_OFONO (modem);
 	NMModemOfonoPrivate *priv = NM_MODEM_OFONO_GET_PRIVATE (self);
 	DisconnectContext *ctx;
 	NMModemState state = nm_modem_get_state (NM_MODEM (self));
-	GError *error = NULL;
 
 	_LOGD ("warn: %s modem_state: %s",
 	       warn ? "TRUE" : "FALSE",
@@ -218,36 +204,18 @@ disconnect (NMModem *modem,
 
 	ctx = g_slice_new0 (DisconnectContext);
 	ctx->self = g_object_ref (self);
-	ctx->warn = warn;
-	if (callback) {
-		ctx->result = g_simple_async_result_new (G_OBJECT (self),
-		                                         callback,
-		                                         user_data,
-		                                         disconnect);
-	}
-
-	if (state != NM_MODEM_STATE_CONNECTED) {
-		if (ctx->result) {
-			g_set_error_literal (&error,
-			                     NM_UTILS_ERROR,
-			                     NM_UTILS_ERROR_UNKNOWN,
-			                     ("modem is currently not connected"));
-			g_simple_async_result_take_error (ctx->result, error);
-		}
-		disconnect_context_complete (ctx);
-		return;
-	}
-
-	if (g_cancellable_set_error_if_cancelled (cancellable, &error)) {
-		if (ctx->result)
-			g_simple_async_result_take_error (ctx->result, error);
-		else
-			g_clear_error (&error);
-		disconnect_context_complete (ctx);
-		return;
-	}
-
 	ctx->cancellable = nm_g_object_ref (cancellable);
+	ctx->warn = warn;
+	ctx->callback = callback;
+	ctx->callback_user_data = user_data;
+
+	if (   state != NM_MODEM_STATE_CONNECTED
+	    || g_cancellable_is_cancelled (cancellable)) {
+		nm_utils_invoke_on_idle (cancellable,
+		                         disconnect_context_complete_on_idle,
+		                         ctx);
+		return;
+	}
 
 	nm_modem_set_state (NM_MODEM (self),
 	                    NM_MODEM_STATE_DISCONNECTING,
@@ -266,7 +234,9 @@ disconnect (NMModem *modem,
 }
 
 static void
-deactivate_cleanup (NMModem *modem, NMDevice *device)
+deactivate_cleanup (NMModem *modem,
+                    NMDevice *device,
+                    gboolean stop_ppp_manager)
 {
 	NMModemOfono *self = NM_MODEM_OFONO (modem);
 	NMModemOfonoPrivate *priv = NM_MODEM_OFONO_GET_PRIVATE (self);
@@ -275,7 +245,9 @@ deactivate_cleanup (NMModem *modem, NMDevice *device)
 
 	g_clear_object (&priv->ip4_config);
 
-	NM_MODEM_CLASS (nm_modem_ofono_parent_class)->deactivate_cleanup (modem, device);
+	NM_MODEM_CLASS (nm_modem_ofono_parent_class)->deactivate_cleanup (modem,
+	                                                                  device,
+	                                                                  stop_ppp_manager);
 }
 
 static gboolean
@@ -477,7 +449,7 @@ handle_sim_iface (NMModemOfono *self, gboolean found)
 			g_signal_handlers_disconnect_by_data (priv->sim_proxy, self);
 			g_clear_object (&priv->sim_proxy);
 		}
-		g_clear_pointer (&priv->imsi, g_free);
+		nm_clear_g_free (&priv->imsi);
 		update_modem_state (self);
 	} else if (found && (!priv->sim_proxy && !priv->sim_proxy_cancellable)) {
 		_LOGI ("found new SimManager interface");
@@ -664,7 +636,7 @@ handle_connman_iface (NMModemOfono *self, gboolean found)
 		                          OFONO_DBUS_INTERFACE_CONNECTION_MANAGER,
 		                          priv->connman_proxy_cancellable,
 		                          _connman_proxy_new_cb,
-		                          NULL);
+		                          self);
 	}
 }
 
@@ -797,7 +769,7 @@ stage1_prepare_done (GObject *source,
 
 	g_clear_object (&priv->context_proxy_cancellable);
 
-	g_clear_pointer (&priv->connect_properties, g_hash_table_destroy);
+	nm_clear_pointer (&priv->connect_properties, g_hash_table_destroy);
 
 	if (error) {
 		_LOGW ("connection failed: %s", error->message);
@@ -883,7 +855,7 @@ context_property_changed (GDBusProxy *proxy,
 		goto out;
 	}
 	if (   !s
-	    || !nm_utils_parse_inaddr_bin (AF_INET, s, &address_network)) {
+	    || !nm_utils_parse_inaddr_bin (AF_INET, s, NULL, &address_network)) {
 		_LOGW ("can't convert 'Address' %s to addr", s ?: "");
 		goto out;
 	}
@@ -897,7 +869,7 @@ context_property_changed (GDBusProxy *proxy,
 		goto out;
 	}
 	if (   !s
-	    || !nm_utils_parse_inaddr_bin (AF_INET, s, &address_network)) {
+	    || !nm_utils_parse_inaddr_bin (AF_INET, s, NULL, &address_network)) {
 		_LOGW ("invalid 'Netmask': %s", s ?: "");
 		goto out;
 	}
@@ -911,7 +883,7 @@ context_property_changed (GDBusProxy *proxy,
 		_LOGW ("Settings 'Gateway' missing");
 		goto out;
 	}
-	if (!nm_utils_parse_inaddr_bin (AF_INET, s, &gateway_network)) {
+	if (!nm_utils_parse_inaddr_bin (AF_INET, s, NULL, &gateway_network)) {
 		_LOGW ("invalid 'Gateway': %s", s);
 		goto out;
 	}
@@ -938,7 +910,7 @@ context_property_changed (GDBusProxy *proxy,
 	}
 	if (array) {
 		for (iter = array; *iter; iter++) {
-			if (   nm_utils_parse_inaddr_bin (AF_INET, *iter, &address_network)
+			if (   nm_utils_parse_inaddr_bin (AF_INET, *iter, NULL, &address_network)
 			    && address_network) {
 				_LOGI ("DNS: %s", *iter);
 				nm_ip4_config_add_nameserver (priv->ip4_config, address_network);
@@ -958,7 +930,7 @@ context_property_changed (GDBusProxy *proxy,
 	if (g_variant_lookup (v_dict, "MessageProxy", "&s", &s)) {
 		_LOGI ("MessageProxy: %s", s);
 		if (   s
-		    && nm_utils_parse_inaddr_bin (AF_INET, s, &address_network)) {
+		    && nm_utils_parse_inaddr_bin (AF_INET, s, NULL, &address_network)) {
 			nm_modem_get_route_parameters (NM_MODEM (self),
 			                               &ip4_route_table,
 			                               &ip4_route_metric,
@@ -1128,9 +1100,9 @@ create_connect_properties (NMConnection *connection)
 }
 
 static NMActStageReturn
-act_stage1_prepare (NMModem *modem,
-                    NMConnection *connection,
-                    NMDeviceStateReason *out_failure_reason)
+modem_act_stage1_prepare (NMModem *modem,
+                          NMConnection *connection,
+                          NMDeviceStateReason *out_failure_reason)
 {
 	NMModemOfono *self = NM_MODEM_OFONO (modem);
 	NMModemOfonoPrivate *priv = NM_MODEM_OFONO_GET_PRIVATE (self);
@@ -1319,10 +1291,9 @@ nm_modem_ofono_class_init (NMModemOfonoClass *klass)
 
 	modem_class->get_capabilities = get_capabilities;
 	modem_class->disconnect = disconnect;
-	modem_class->disconnect_finish = disconnect_finish;
 	modem_class->deactivate_cleanup = deactivate_cleanup;
 	modem_class->check_connection_compatible_with_modem = check_connection_compatible_with_modem;
 
-	modem_class->act_stage1_prepare = act_stage1_prepare;
+	modem_class->modem_act_stage1_prepare = modem_act_stage1_prepare;
 	modem_class->static_stage3_ip4_config_start = static_stage3_ip4_config_start;
 }

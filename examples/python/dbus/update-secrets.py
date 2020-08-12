@@ -1,18 +1,5 @@
 #!/usr/bin/env python
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (C) 2011 - 2012 Red Hat, Inc.
 #
@@ -31,6 +18,7 @@ import sys
 
 bus = dbus.SystemBus()
 
+
 def change_secrets_in_one_setting(proxy, config, setting_name):
     # Add new secret values to the connection config
     try:
@@ -42,12 +30,15 @@ def change_secrets_in_one_setting(proxy, config, setting_name):
         # Ask user for new secrets and put them into our connection config
         for setting in secrets:
             for key in secrets[setting]:
-                new_secret = raw_input ("Enter new secret for '%s' in '%s': " % (key, setting))
+                new_secret = raw_input(
+                    "Enter new secret for '%s' in '%s': " % (key, setting)
+                )
                 config[setting_name][key] = new_secret
     except Exception as e:
-        #code = str(e).split(':')[0]
-        #print("Exception:" + str(e))
+        # code = str(e).split(':')[0]
+        # print("Exception:" + str(e))
         pass
+
 
 def change_secrets(con_path, config):
     # Get existing secrets; we grab the secrets for each type of connection
@@ -55,37 +46,46 @@ def change_secrets(con_path, config):
     # you only need 'wifi' secrets or '802.1x' secrets, not everything) and
     # set new values into the connection settings (config)
     con_proxy = bus.get_object("org.freedesktop.NetworkManager", con_path)
-    connection_secrets = dbus.Interface(con_proxy, "org.freedesktop.NetworkManager.Settings.Connection")
-    change_secrets_in_one_setting(connection_secrets, config, '802-11-wireless')
-    change_secrets_in_one_setting(connection_secrets, config, '802-11-wireless-security')
-    change_secrets_in_one_setting(connection_secrets, config, '802-1x')
-    change_secrets_in_one_setting(connection_secrets, config, 'gsm')
-    change_secrets_in_one_setting(connection_secrets, config, 'cdma')
-    change_secrets_in_one_setting(connection_secrets, config, 'ppp')
+    connection_secrets = dbus.Interface(
+        con_proxy, "org.freedesktop.NetworkManager.Settings.Connection"
+    )
+    change_secrets_in_one_setting(connection_secrets, config, "802-11-wireless")
+    change_secrets_in_one_setting(
+        connection_secrets, config, "802-11-wireless-security"
+    )
+    change_secrets_in_one_setting(connection_secrets, config, "802-1x")
+    change_secrets_in_one_setting(connection_secrets, config, "gsm")
+    change_secrets_in_one_setting(connection_secrets, config, "cdma")
+    change_secrets_in_one_setting(connection_secrets, config, "ppp")
+
 
 def find_connection(name):
     # Ask the settings service for the list of connections it provides
     global con_path
-    proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+    proxy = bus.get_object(
+        "org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings"
+    )
     settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
     connection_paths = settings.ListConnections()
 
     # Get the settings and look for connection's name
     for path in connection_paths:
         con_proxy = bus.get_object("org.freedesktop.NetworkManager", path)
-        connection = dbus.Interface(con_proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+        connection = dbus.Interface(
+            con_proxy, "org.freedesktop.NetworkManager.Settings.Connection"
+        )
         try:
             config = connection.GetSettings()
         except Exception as e:
             pass
 
         # Find connection by the id
-        s_con = config['connection']
-        if name == s_con['id']:
+        s_con = config["connection"]
+        if name == s_con["id"]:
             con_path = path
             return config
         # Find connection by the uuid
-        if name == s_con['uuid']:
+        if name == s_con["uuid"]:
             con_path = path
             return config
 
@@ -109,8 +109,9 @@ if con:
 
     # Change the connection with Update()
     proxy = bus.get_object("org.freedesktop.NetworkManager", con_path)
-    settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+    settings = dbus.Interface(
+        proxy, "org.freedesktop.NetworkManager.Settings.Connection"
+    )
     settings.Update(con)
 else:
     sys.exit("No connection '%s' found" % sys.argv[1])
-

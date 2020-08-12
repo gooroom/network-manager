@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -26,14 +13,16 @@
 
 #include "nm-default.h"
 
+#include "nmtui.h"
+
 #include <locale.h>
 #include <stdlib.h>
-#include <string.h>
+
+#include "nm-libnm-aux/nm-libnm-aux.h"
 
 #include "nmt-newt.h"
 #include "nm-editor-bindings.h"
 
-#include "nmtui.h"
 #include "nmtui-edit.h"
 #include "nmtui-connect.h"
 #include "nmtui-hostname.h"
@@ -244,8 +233,11 @@ main (int argc, char **argv)
 
 	nm_editor_bindings_init ();
 
-	nm_client = nm_client_new (NULL, &error);
-	if (!nm_client) {
+	if (!nmc_client_new_waitsync (NULL,
+	                              &nm_client,
+	                              &error,
+	                              NM_CLIENT_INSTANCE_FLAGS, (guint) NM_CLIENT_INSTANCE_FLAGS_NO_AUTO_FETCH_PERMISSIONS,
+	                              NULL)) {
 		g_printerr (_("Could not contact NetworkManager: %s.\n"), error->message);
 		g_error_free (error);
 		exit (1);

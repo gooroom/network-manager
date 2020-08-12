@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2005 - 2016 Red Hat, Inc.
  * Copyright (C) 2006 - 2008 Novell, Inc.
  */
@@ -39,7 +24,7 @@
 #define NM_DEVICE_WIFI_SCANNING            "scanning"
 #define NM_DEVICE_WIFI_LAST_SCAN           "last-scan"
 
-#define NM_DEVICE_WIFI_SCANNING_PROHIBITED    "scanning-prohibited"
+#define NM_DEVICE_WIFI_P2P_DEVICE_CREATED     "p2p-device-created"
 
 typedef struct _NMDeviceWifi NMDeviceWifi;
 typedef struct _NMDeviceWifiClass NMDeviceWifiClass;
@@ -53,5 +38,13 @@ const CList *_nm_device_wifi_get_aps (NMDeviceWifi *self);
 void _nm_device_wifi_request_scan (NMDeviceWifi *self,
                                    GVariant *options,
                                    GDBusMethodInvocation *invocation);
+
+GPtrArray *nmtst_ssids_options_to_ptrarray (GVariant *value, GError **error);
+
+gboolean nm_device_wifi_get_scanning (NMDeviceWifi *self);
+
+void nm_device_wifi_scanning_prohibited_track (NMDeviceWifi *self,
+                                               gpointer tag,
+                                               gboolean temporarily_prohibited);
 
 #endif /* __NETWORKMANAGER_DEVICE_WIFI_H__ */

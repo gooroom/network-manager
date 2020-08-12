@@ -1,23 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
- * Copyright 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
  */
 
 #ifndef __NM_SETTING_WIRED_H__
@@ -63,20 +47,19 @@ G_BEGIN_DECLS
  * Since: 1.2
  */
 typedef enum { /*< flags >*/
-	NM_SETTING_WIRED_WAKE_ON_LAN_NONE      = 0, /*< skip >*/
-	NM_SETTING_WIRED_WAKE_ON_LAN_PHY       = (1 << 1),
-	NM_SETTING_WIRED_WAKE_ON_LAN_UNICAST   = (1 << 2),
-	NM_SETTING_WIRED_WAKE_ON_LAN_MULTICAST = (1 << 3),
-	NM_SETTING_WIRED_WAKE_ON_LAN_BROADCAST = (1 << 4),
-	NM_SETTING_WIRED_WAKE_ON_LAN_ARP       = (1 << 5),
-	NM_SETTING_WIRED_WAKE_ON_LAN_MAGIC     = (1 << 6),
+	NM_SETTING_WIRED_WAKE_ON_LAN_NONE            = 0, /*< skip >*/
+	NM_SETTING_WIRED_WAKE_ON_LAN_PHY             = 0x2,
+	NM_SETTING_WIRED_WAKE_ON_LAN_UNICAST         = 0x4,
+	NM_SETTING_WIRED_WAKE_ON_LAN_MULTICAST       = 0x8,
+	NM_SETTING_WIRED_WAKE_ON_LAN_BROADCAST       = 0x10,
+	NM_SETTING_WIRED_WAKE_ON_LAN_ARP             = 0x20,
+	NM_SETTING_WIRED_WAKE_ON_LAN_MAGIC           = 0x40,
 
-	_NM_SETTING_WIRED_WAKE_ON_LAN_LAST_OPT, /*< skip >*/
-	NM_SETTING_WIRED_WAKE_ON_LAN_ALL       = (((_NM_SETTING_WIRED_WAKE_ON_LAN_LAST_OPT - 1) << 1) - 1) - (1 << 0 /*DEFAULT*/), /*< skip >*/
+	NM_SETTING_WIRED_WAKE_ON_LAN_ALL             = 0x7E, /*< skip >*/
 
-	NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT   = (1 << 0),
-	NM_SETTING_WIRED_WAKE_ON_LAN_IGNORE    = (1 << 15),
-	NM_SETTING_WIRED_WAKE_ON_LAN_EXCLUSIVE_FLAGS = NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT | NM_SETTING_WIRED_WAKE_ON_LAN_IGNORE, /*< skip >*/
+	NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT         = 0x1,
+	NM_SETTING_WIRED_WAKE_ON_LAN_IGNORE          = 0x8000,
+	NM_SETTING_WIRED_WAKE_ON_LAN_EXCLUSIVE_FLAGS = 0x8001, /*< skip >*/
 } NMSettingWiredWakeOnLan;
 
 #define NM_SETTING_WIRED_PORT "port"

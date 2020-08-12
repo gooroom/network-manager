@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -235,12 +222,23 @@ add_and_activate_callback (GObject      *client,
 }
 
 static void
+deactivate_connection (NMActiveConnection *ac)
+{
+	GError *error = NULL;
+
+	if (!nm_client_deactivate_connection (nm_client, ac, NULL, &error)) {
+		nmt_newt_message_dialog (_("Could not deactivate connection: %s"), error->message);
+		g_clear_error (&error);
+	}
+}
+
+static void
 activate_connection (NMConnection *connection,
                      NMDevice     *device,
                      NMObject     *specific_object)
 {
 	NmtNewtForm *form;
-	gs_unref_object NMSecretAgentOld *agent = NULL;
+	gs_unref_object NMSecretAgentSimple *agent = NULL;
 	NmtNewtWidget *label;
 	NmtSyncOp op;
 	const char *specific_object_path;
@@ -257,7 +255,7 @@ activate_connection (NMConnection *connection,
 	agent = nm_secret_agent_simple_new ("nmtui");
 	if (agent) {
 		if (connection) {
-			nm_secret_agent_simple_enable (NM_SECRET_AGENT_SIMPLE (agent),
+			nm_secret_agent_simple_enable (agent,
 			                               nm_object_get_path (NM_OBJECT (connection)));
 		}
 		g_signal_connect (agent,
@@ -303,7 +301,7 @@ activate_connection (NMConnection *connection,
 	if (agent && !connection) {
 		connection = NM_CONNECTION (nm_active_connection_get_connection (ac));
 		if (connection) {
-			nm_secret_agent_simple_enable (NM_SECRET_AGENT_SIMPLE (agent),
+			nm_secret_agent_simple_enable (agent,
 			                               nm_object_get_path (NM_OBJECT (connection)));
 		}
 	}
@@ -341,7 +339,7 @@ activate_connection (NMConnection *connection,
 	g_object_unref (form);
 
 	if (agent)
-		nm_secret_agent_old_unregister (agent, NULL, NULL);
+		nm_secret_agent_old_unregister (NM_SECRET_AGENT_OLD (agent), NULL, NULL);
 }
 
 static void
@@ -362,7 +360,7 @@ listbox_activated (NmtNewtListbox *listbox,
 		return;
 
 	if (ac)
-		nm_client_deactivate_connection (nm_client, ac, NULL, NULL);
+		deactivate_connection (ac);
 	else
 		activate_connection (connection, device, specific_object);
 }

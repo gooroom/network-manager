@@ -1,22 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2008 Novell, Inc.
- * Copyright 2007 - 2012 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2012 Red Hat, Inc.
  */
 
 #ifndef __NM_DEVICE_WIFI_H__
@@ -49,24 +34,13 @@ G_BEGIN_DECLS
 /**
  * NMDeviceWifi:
  */
-struct _NMDeviceWifi {
-	NMDevice parent;
-};
-
-typedef struct {
-	NMDeviceClass parent;
-
-	/* Signals */
-	void (*access_point_added) (NMDeviceWifi *device, NMAccessPoint *ap);
-	void (*access_point_removed) (NMDeviceWifi *device, NMAccessPoint *ap);
-
-	/*< private >*/
-	gpointer padding[4];
-} NMDeviceWifiClass;
+typedef struct _NMDeviceWifiClass NMDeviceWifiClass;
 
 GType nm_device_wifi_get_type (void);
 
+NM_DEPRECATED_IN_1_24_FOR (nm_device_get_hw_address)
 const char *             nm_device_wifi_get_hw_address           (NMDeviceWifi *device);
+
 const char *             nm_device_wifi_get_permanent_hw_address (NMDeviceWifi *device);
 NM80211Mode              nm_device_wifi_get_mode                 (NMDeviceWifi *device);
 guint32                  nm_device_wifi_get_bitrate              (NMDeviceWifi *device);
@@ -81,10 +55,12 @@ const GPtrArray *        nm_device_wifi_get_access_points        (NMDeviceWifi *
 NM_AVAILABLE_IN_1_12
 gint64                   nm_device_wifi_get_last_scan            (NMDeviceWifi *device);
 
+_NM_DEPRECATED_SYNC_METHOD
 gboolean                 nm_device_wifi_request_scan             (NMDeviceWifi *device,
                                                                   GCancellable *cancellable,
                                                                   GError **error);
 NM_AVAILABLE_IN_1_2
+_NM_DEPRECATED_SYNC_METHOD
 gboolean                 nm_device_wifi_request_scan_options     (NMDeviceWifi *device,
                                                                   GVariant *options,
                                                                   GCancellable *cancellable,

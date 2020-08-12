@@ -2,12 +2,12 @@
 .\"     Title: nm-settings-ifcfg-rh
 .\"    Author: 
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/23/2019
+.\"      Date: 07/13/2020
 .\"    Manual: Configuration
-.\"    Source: NetworkManager 1.14.6
+.\"    Source: NetworkManager 1.26.0
 .\"  Language: English
 .\"
-.TH "NM\-SETTINGS\-IFCFG\-RH" "5" "" "NetworkManager 1\&.14\&.6" "Configuration"
+.TH "NM\-SETTINGS\-IFCFG\-RH" "5" "" "NetworkManager 1\&.26\&.0" "Configuration"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -72,10 +72,7 @@ character can be used for comments, strings with spaces must be quoted, special 
 .PP
 Users can create or modify the
 \fIifcfg\-rh\fR
-connection files manually, even if that is not the recommended way of managing the profiles\&. However, if they choose to do that, they must inform NetworkManager about their changes (see
-\fImonitor\-connection\-file\fR
-in
-\fBnm-settings\fR(5), and
+connection files manually, even if that is not the recommended way of managing the profiles\&. However, if they choose to do that, they must inform NetworkManager about their changes (for example via
 \fInmcli con (re)load\fR)\&.
 .PP
 \fBSome ifcfg-rh configuration examples:\fR. 
@@ -285,7 +282,7 @@ PEERDNS
 .IP \(bu 2.3
 .\}
 ONBOOT
-\- initscripts use ONBOOT=yes to mark the devices that are to be activated during boot\&. NetworkManager extents this to also mean that this profile can be used for auto\-connecting at any time\&.
+\- initscripts use ONBOOT=yes to mark the devices that are to be activated during boot\&. NetworkManager extends this to also mean that this profile can be used for auto\-connecting at any time\&.
 .RE
 .sp
 .RS 4
@@ -405,6 +402,10 @@ l l l l
 l l l l
 l l l l
 l l l l
+l l l l
+l l l l
+l l l l
+l l l l
 l l l l.
 T{
 eap
@@ -464,11 +465,11 @@ T}
 T{
 ca\-path
 T}:T{
-(none)
+IEEE_8021X_CA_PATH\fI(+)\fR
 T}:T{
 \ \&
 T}:T{
-The property is not handled by ifcfg\-rh plugin\&.
+The search path for the certificate\&.
 T}
 T{
 subject\-match
@@ -500,6 +501,15 @@ T}:T{
 \ \&
 T}:T{
 Suffix to match domain of server certificate against\&.
+T}
+T{
+domain\-match
+T}:T{
+IEEE_8021X_DOMAIN_MATCH\fI(+)\fR
+T}:T{
+\ \&
+T}:T{
+Value to match domain of server certificate against\&.
 T}
 T{
 client\-cert
@@ -587,6 +597,15 @@ Example: \fRIEEE_8021X_INNER_AUTH_METHODS="MSCHAPV2 EAP\-TLS"\fB
 Allowed values: \fR"EAP\-MD5", "EAP\-MSCHAPV2", "EAP\-GTC", "EAP\-OTP" and "EAP\-TLS"
 T}
 T{
+phase2\-ca\-path
+T}:T{
+IEEE_8021X_PHASE2_CA_PATH\fI(+)\fR
+T}:T{
+\ \&
+T}:T{
+The search path for the certificate\&.
+T}
+T{
 phase2\-subject\-match
 T}:T{
 IEEE_8021X_PHASE2_SUBJECT_MATCH\fI(+)\fR
@@ -614,6 +633,15 @@ T}:T{
 \ \&
 T}:T{
 Suffix to match domain of server certificate for phase 2 against\&.
+T}
+T{
+phase2\-domain\-match
+T}:T{
+IEEE_8021X_PHASE2_DOMAIN_MATCH\fI(+)\fR
+T}:T{
+\ \&
+T}:T{
+Value to match domain of server certificate for phase 2 against\&.
 T}
 T{
 phase2\-client\-cert
@@ -658,11 +686,11 @@ T}
 T{
 password\-raw\-flags
 T}:T{
-(none)
+IEEE_8021X_PASSWORD_RAW_FLAGS\fI(+)\fR
 T}:T{
 \ \&
 T}:T{
-The property is not handled by ifcfg\-rh plugin\&.
+The secret flags for password\-raw\&.
 T}
 T{
 private\-key
@@ -723,29 +751,29 @@ T}
 T{
 pin
 T}:T{
-(none)
+IEEE_8021X_PIN\fI(+)\fR
 T}:T{
 \ \&
 T}:T{
-The property is not handled by ifcfg\-rh plugin\&.
+The pin secret used for EAP authentication methods\&.
 T}
 T{
 pin\-flags
 T}:T{
-(none)
+IEEE_8021X_PIN_FLAGS\fI(+)\fR
 T}:T{
 \ \&
 T}:T{
-The property is not handled by ifcfg\-rh plugin\&.
+The secret flags for the pin property\&.
 T}
 T{
 system\-ca\-certs
 T}:T{
-(none)
+IEEE_8021X_SYSTEM_CA_CERTS\fI(+)\fR
 T}:T{
 \ \&
 T}:T{
-The property is not handled by ifcfg\-rh plugin\&.
+a boolean value\&.
 T}
 T{
 auth\-timeout
@@ -755,6 +783,15 @@ T}:T{
 0
 T}:T{
 Timeout in seconds for the 802\&.1X authentication\&. Zero means the global default or 25\&.
+T}
+T{
+optional
+T}:T{
+IEEE_8021X_OPTIONAL\fI(+)\fR default=no
+T}:T{
+\ \&
+T}:T{
+whether the 802\&.1X authentication is optional
 T}
 .TE
 .sp 1
@@ -812,6 +849,7 @@ T}
 .T&
 l l l l
 l l l l
+l l l l
 l l l l.
 T{
 priority
@@ -844,6 +882,17 @@ yes
 T}:T{
 Hairpin mode of the bridge port\&.
 T}
+T{
+vlans
+T}:T{
+BRIDGE_PORT_VLANS
+T}:T{
+\ \&
+T}:T{
+List of VLANs on the bridge port\fB
+
+Example: \fRBRIDGE_PORT_VLANS="1 pvid untagged,20,300\-400 untagged"
+T}
 .TE
 .sp 1
 .sp
@@ -865,6 +914,24 @@ T}:T{
 Description
 T}
 .T&
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
+l l l l
 l l l l
 l l l l
 l l l l
@@ -957,6 +1024,206 @@ IGMP snooping support\&.\fB
 
 Allowed values: \fR0 or 1
 T}
+T{
+vlan\-filtering
+T}:T{
+BRIDGING_OPTS: vlan_filtering=
+T}:T{
+0
+T}:T{
+VLAN filtering support\&.\fB
+
+Allowed values: \fR0 or 1
+T}
+T{
+vlan\-default\-pvid
+T}:T{
+BRIDGING_OPTS: default_pvid=
+T}:T{
+1
+T}:T{
+default VLAN PVID\&.\fB
+
+Allowed values: \fR0 \- 4094
+T}
+T{
+vlans
+T}:T{
+BRIDGE_VLANS
+T}:T{
+\ \&
+T}:T{
+List of VLANs on the bridge\fB
+
+Example: \fRBRIDGE_VLANS="1 pvid untagged,20,300\-400 untagged"
+T}
+T{
+group\-address
+T}:T{
+BRIDGING_OPTS: group_address=
+T}:T{
+\ \&
+T}:T{
+STP group address\&.\fB
+
+Example: \fRBRIDGING_OPTS="group_address=01:80:C2:00:00:0A"
+T}
+T{
+vlan\-protocol
+T}:T{
+BRIDGING_OPTS: vlan_protocol=
+T}:T{
+\ \&
+T}:T{
+VLAN filtering protocol\&.\fB
+
+Example: \fRBRIDGING_OPTS="vlan_protocol=802\&.1Q"
+T}
+T{
+vlan\-stats\-enabled
+T}:T{
+BRIDGING_OPTS: vlan_stats_enabled=
+T}:T{
+0
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="vlan_stats_enabled=1"
+T}
+T{
+multicast\-router
+T}:T{
+BRIDGING_OPTS: multicast_router=
+T}:T{
+auto
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_router=enabled"\fB
+
+Allowed values: \fRauto, enabled, disabled
+T}
+T{
+multicast\-query\-use\-ifaddr
+T}:T{
+BRIDGING_OPTS: multicast_query_use_ifaddr=
+T}:T{
+0
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_query\-use_ifaddr=1"
+T}
+T{
+multicast\-querier
+T}:T{
+BRIDGING_OPTS: multicast_querier=
+T}:T{
+0
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_querier=1"
+T}
+T{
+multicast\-hash\-max
+T}:T{
+BRIDGING_OPTS: multicast_hash_max=
+T}:T{
+4096
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_hash_max=8192"
+T}
+T{
+multicast\-last\-member\-count
+T}:T{
+BRIDGING_OPTS: multicast_last_member_count=
+T}:T{
+2
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_last_member_count=4"
+T}
+T{
+multicast\-last\-member\-interval
+T}:T{
+BRIDGING_OPTS: multicast_last_member_interval=
+T}:T{
+100
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_last_member_interval=200"
+T}
+T{
+multicast\-membership\-interval
+T}:T{
+BRIDGING_OPTS: multicast_membership_interval=
+T}:T{
+26000
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_membership_interval=16000"
+T}
+T{
+multicast\-querier\-interval
+T}:T{
+BRIDGING_OPTS: multicast_querier_interval=
+T}:T{
+25500
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_querier_interval=20000"
+T}
+T{
+multicast\-query\-interval
+T}:T{
+BRIDGING_OPTS: multicast_query_interval=
+T}:T{
+12500
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_query_interval=22500"
+T}
+T{
+multicast\-query\-response\-interval
+T}:T{
+BRIDGING_OPTS: multicast_query_response_interval=
+T}:T{
+1000
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_query_response_interval=2000"
+T}
+T{
+multicast\-startup\-query\-count
+T}:T{
+BRIDGING_OPTS: multicast_startup_query_count=
+T}:T{
+2
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_startup_query_count=4"
+T}
+T{
+multicast\-startup\-query\-interval
+T}:T{
+BRIDGING_OPTS: multicast_startup_query_interval=
+T}:T{
+3125
+T}:T{
+\fB
+
+Example: \fRBRIDGING_OPTS="multicast_startup_query_interval=4000"
+T}
 .TE
 .sp 1
 .sp
@@ -978,6 +1245,8 @@ T}:T{
 Description
 T}
 .T&
+l l l l
+l l l l
 l l l l
 l l l l
 l l l l
@@ -1103,7 +1372,7 @@ T}:T{
 T}:T{
 whether the profile can be active on multiple devices at a given moment\&. The values are numbers corresponding to #NMConnectionMultiConnect enum\&.\fB
 
-Example: \fRZONE=3
+Example: \fRMULTI_CONNECT=3
 T}
 T{
 zone
@@ -1223,6 +1492,32 @@ Whether or not LLMNR is enabled for the connection\fB
 Example: \fRLLMNR=yes\fB
 
 Allowed values: \fRyes,no,resolve
+T}
+T{
+wait\-device\-timeout
+T}:T{
+DEVTIMEOUT\fI(+)\fR
+T}:T{
+\ \&
+T}:T{
+for initscripts compatibility, this variable must be a whole integer\&. If necessary, NetworkManager stores also a fractional component for the milliseconds\&.\fB
+
+Example: \fRDEVTIMEOUT=5\fB
+
+Allowed values: \fRtimeout in seconds\&.
+T}
+T{
+mud\-url
+T}:T{
+MUD_URL
+T}:T{
+\ \&
+T}:T{
+MUD_URL to be sent by device (See RFC 8520)\&.\fB
+
+Example: \fRhttps://yourdevice\&.example\&.com/model\&.json\fB
+
+Allowed values: \fRa valid URL that points to recommended policy for this device
 T}
 .TE
 .sp 1
@@ -1413,7 +1708,7 @@ DCB_PG_UP2TC
 T}:T{
 \ \&
 T}:T{
-Priority values\&. String of eight trafic class values (0 \- 7)\&.\fB
+Priority values\&. String of eight traffic class values (0 \- 7)\&.\fB
 
 Example: \fRDCB_PG_UP2TC=01623701
 T}
@@ -1798,15 +2093,17 @@ l l l l
 l l l l
 l l l l
 l l l l
+l l l l
+l l l l
 l l l l.
 T{
 method
 T}:T{
-IPV6INIT, IPV6FORWARDING, IPV6_AUTOCONF, DHCPV6C
+IPV6INIT, IPV6FORWARDING, IPV6_AUTOCONF, DHCPV6C, IPV6_DISABLED
 T}:T{
 IPV6INIT=yes; IPV6FORWARDING=no; IPV6_AUTOCONF=!IPV6FORWARDING, DHCPV6=no
 T}:T{
-Method used for IPv6 protocol configuration\&. ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes
+Method used for IPv6 protocol configuration\&. ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes; disabled ~ IPV6_DISABLED=yes
 T}
 T{
 dns
@@ -1878,11 +2175,22 @@ T}
 T{
 dhcp\-hostname
 T}:T{
-DHCP_HOSTNAME
+DHCPV6_HOSTNAME
 T}:T{
 \ \&
 T}:T{
 Hostname to send the DHCP server\&.
+T}
+T{
+dhcp\-timeout
+T}:T{
+IPV6_DHCP_TIMEOUT\fI(+)\fR
+T}:T{
+\ \&
+T}:T{
+A timeout after which the DHCP transaction fails in case of no response\&.\fB
+
+Example: \fRIPV6_DHCP_TIMEOUT=10
 T}
 T{
 never\-default
@@ -1891,7 +2199,9 @@ IPV6_DEFROUTE\fI(+)\fR, (and IPV6_DEFAULTGW, IPV6_DEFAULTDEV in /etc/sysconfig/n
 T}:T{
 IPV6_DEFROUTE=yes (when no variable specified)
 T}:T{
-IPV6_DEFROUTE=no tells NetworkManager that this connection should not be assigned the default IPv6 route\&. IPV6_DEFROUTE has the opposite meaning as \*(Aqnever\-default\*(Aq property\&.
+IPV6_DEFROUTE=no tells NetworkManager that this connection should not be assigned the default IPv6 route\&. IPV6_DEFROUTE has the opposite meaning as \*(Aqnever\-default\*(Aq property\&.\fB
+
+Example: \fRDHCPV6_HOSTNAME_FLAGS=5 */
 T}
 T{
 may\-fail
@@ -1980,6 +2290,17 @@ The IPv6 tokenized interface identifier token\fB
 Example: \fRIPV6_TOKEN=::53
 T}
 T{
+dhcp\-timeout
+T}:T{
+IPV6_RA_TIMEOUT\fI(+)\fR
+T}:T{
+\ \&
+T}:T{
+A timeout for waiting Router Advertisements in seconds\&.\fB
+
+Example: \fRIPV6_RA_TIMEOUT=10
+T}
+T{
 dhcp\-duid
 T}:T{
 DHCPV6_DUID\fI(+)\fR
@@ -2011,7 +2332,18 @@ T}:T{
 Description
 T}
 .T&
-.
+l l l l.
+T{
+path
+T}:T{
+MATCH_PATH
+T}:T{
+\ \&
+T}:T{
+space\-separated list of paths to match against the udev property ID_PATHS of devices\fB
+
+Example: \fRMATCH_PATH="pci\-0000:01:00\&.0 pci\-0000:0c:00\&.0"
+T}
 .TE
 .sp 1
 .sp
@@ -2041,7 +2373,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&14.\ \&ovs\-interface setting
+.B Table\ \&14.\ \&ovs\-dpdk setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2063,7 +2395,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&15.\ \&ovs\-patch setting
+.B Table\ \&15.\ \&ovs\-interface setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2085,7 +2417,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&16.\ \&ovs\-port setting
+.B Table\ \&16.\ \&ovs\-patch setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2107,7 +2439,29 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.\ \&proxy setting
+.B Table\ \&17.\ \&ovs\-port setting
+.TS
+allbox tab(:);
+lB lB lB lB.
+T{
+Property
+T}:T{
+Ifcfg\-rh Variable
+T}:T{
+Default
+T}:T{
+Description
+T}
+.T&
+.
+.TE
+.sp 1
+.sp
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.B Table\ \&18.\ \&proxy setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2174,7 +2528,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&18.\ \&sriov setting
+.B Table\ \&19.\ \&sriov setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2231,7 +2585,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&19.\ \&tc setting
+.B Table\ \&20.\ \&tc setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2276,7 +2630,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&20.\ \&team\-port setting
+.B Table\ \&21.\ \&team\-port setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2307,7 +2661,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&21.\ \&team setting
+.B Table\ \&22.\ \&team setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2338,7 +2692,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&22.\ \&user setting
+.B Table\ \&23.\ \&user setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2371,7 +2725,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&23.\ \&vlan setting
+.B Table\ \&24.\ \&vlan setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2460,7 +2814,51 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&24.\ \&802\-3\-ethernet setting
+.B Table\ \&25.\ \&vrf setting
+.TS
+allbox tab(:);
+lB lB lB lB.
+T{
+Property
+T}:T{
+Ifcfg\-rh Variable
+T}:T{
+Default
+T}:T{
+Description
+T}
+.T&
+.
+.TE
+.sp 1
+.sp
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.B Table\ \&26.\ \&wifi\-p2p setting
+.TS
+allbox tab(:);
+lB lB lB lB.
+T{
+Property
+T}:T{
+Ifcfg\-rh Variable
+T}:T{
+Default
+T}:T{
+Description
+T}
+.T&
+.
+.TE
+.sp 1
+.sp
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.B Table\ \&27.\ \&802\-3\-ethernet setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2609,7 +3007,29 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&25.\ \&802\-11\-wireless\-security setting
+.B Table\ \&28.\ \&wireguard setting
+.TS
+allbox tab(:);
+lB lB lB lB.
+T{
+Property
+T}:T{
+Ifcfg\-rh Variable
+T}:T{
+Default
+T}:T{
+Description
+T}
+.T&
+.
+.TE
+.sp 1
+.sp
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.B Table\ \&29.\ \&802\-11\-wireless\-security setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -2856,7 +3276,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&26.\ \&802\-11\-wireless setting
+.B Table\ \&30.\ \&802\-11\-wireless setting
 .TS
 allbox tab(:);
 lB lB lB lB.
@@ -3067,7 +3487,7 @@ T}
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&27.\ \&wpan setting
+.B Table\ \&31.\ \&wpan setting
 .TS
 allbox tab(:);
 lB lB lB lB.

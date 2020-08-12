@@ -1,32 +1,18 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager system settings service
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Søren Sandmann <sandmann@daimi.au.dk>
  * Dan Williams <dcbw@redhat.com>
  * Tambet Ingo <tambet@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * (C) Copyright 2007 - 2011 Red Hat, Inc.
- * (C) Copyright 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2011 Red Hat, Inc.
+ * Copyright (C) 2008 Novell, Inc.
  */
 
 #ifndef __NM_SETTINGS_H__
 #define __NM_SETTINGS_H__
 
 #include "nm-connection.h"
+
+#include "nm-settings-connection.h"
 
 #define NM_TYPE_SETTINGS            (nm_settings_get_type ())
 #define NM_SETTINGS(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_SETTINGS, NMSettings))
@@ -68,6 +54,7 @@ NMSettings *nm_settings_get (void);
 #define NM_SETTINGS_GET (nm_settings_get ())
 
 NMSettings *nm_settings_new (void);
+
 gboolean nm_settings_start (NMSettings *self, GError **error);
 
 typedef void (*NMSettingsAddCallback) (NMSettings *settings,
@@ -79,7 +66,9 @@ typedef void (*NMSettingsAddCallback) (NMSettings *settings,
 
 void nm_settings_add_connection_dbus (NMSettings *self,
                                       NMConnection *connection,
-                                      gboolean save_to_disk,
+                                      NMSettingsConnectionPersistMode persist_mode,
+                                      NMSettingsConnectionAddReason add_reason,
+                                      NMSettingsConnectionIntFlags sett_flags,
                                       NMAuthSubject *subject,
                                       GDBusMethodInvocation *context,
                                       NMSettingsAddCallback callback,
@@ -94,15 +83,36 @@ NMSettingsConnection **nm_settings_get_connections_clone (NMSettings *self,
                                                           GCompareDataFunc sort_compare_func,
                                                           gpointer sort_data);
 
-NMSettingsConnection *nm_settings_add_connection (NMSettings *settings,
-                                                  NMConnection *connection,
-                                                  gboolean save_to_disk,
-                                                  GError **error);
+gboolean nm_settings_add_connection (NMSettings *settings,
+                                     NMConnection *connection,
+                                     NMSettingsConnectionPersistMode persist_mode,
+                                     NMSettingsConnectionAddReason add_reason,
+                                     NMSettingsConnectionIntFlags sett_flags,
+                                     NMSettingsConnection **out_sett_conn,
+                                     GError **error);
+
+gboolean nm_settings_update_connection (NMSettings *self,
+                                        NMSettingsConnection *sett_conn,
+                                        NMConnection *new_connection,
+                                        NMSettingsConnectionPersistMode persist_mode,
+                                        NMSettingsConnectionIntFlags sett_flags,
+                                        NMSettingsConnectionIntFlags sett_mask,
+                                        NMSettingsConnectionUpdateReason update_reason,
+                                        const char *log_context_name,
+                                        GError **error);
+
+void nm_settings_delete_connection (NMSettings *self,
+                                    NMSettingsConnection *sett_conn,
+                                    gboolean allow_add_to_no_auto_default);
+
 NMSettingsConnection *nm_settings_get_connection_by_path (NMSettings *settings,
                                                           const char *path);
 
 NMSettingsConnection *nm_settings_get_connection_by_uuid (NMSettings *settings,
                                                           const char *uuid);
+
+const char *nm_settings_get_dbus_path_for_uuid (NMSettings *self,
+                                                const char *uuid);
 
 gboolean nm_settings_has_connection (NMSettings *self, NMSettingsConnection *connection);
 
@@ -112,6 +122,8 @@ void nm_settings_device_added (NMSettings *self, NMDevice *device);
 
 void nm_settings_device_removed (NMSettings *self, NMDevice *device, gboolean quitting);
 
-gboolean nm_settings_get_startup_complete (NMSettings *self);
+const char *nm_settings_get_startup_complete_blocked_reason (NMSettings *self);
+
+void nm_settings_kf_db_write (NMSettings *settings);
 
 #endif  /* __NM_SETTINGS_H__ */

@@ -1,15 +1,17 @@
-test_unit = 'test-keyfile'
+# SPDX-License-Identifier: LGPL-2.1+
 
-test_keyfiles_dir = join_paths(meson.current_source_dir(), 'keyfiles')
+test_unit = 'test-keyfile-settings'
 
 exe = executable(
   test_unit,
   test_unit + '.c',
-  dependencies: test_nm_dep,
+  dependencies: libnetwork_manager_test_dep,
+  c_args: test_c_flags,
 )
 
 test(
-  'keyfile/' + test_unit,
+  test_unit,
   test_script,
-  args: test_args + [exe.full_path()]
+  args: test_args + [exe.full_path()],
+  timeout: default_test_timeout,
 )

@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -27,12 +14,11 @@
 
 #include "nm-default.h"
 
+#include "nm-editor-bindings.h"
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdlib.h>
-#include <string.h>
-
-#include "nm-editor-bindings.h"
 
 static void
 value_transform_string_int (const GValue *src_value,
@@ -206,7 +192,7 @@ ip_addresses_check_and_copy (GBinding     *binding,
 	strings = g_value_get_boxed (source_value);
 
 	for (i = 0; strings[i]; i++) {
-		if (!nm_utils_ipaddr_valid (addr_family, strings[i]))
+		if (!nm_utils_ipaddr_is_valid (addr_family, strings[i]))
 			return FALSE;
 	}
 
@@ -265,7 +251,7 @@ ip_gateway_from_string (GBinding     *binding,
 	const char *gateway;
 
 	gateway = g_value_get_string (source_value);
-	if (gateway && !nm_utils_ipaddr_valid (addr_family, gateway))
+	if (gateway && !nm_utils_ipaddr_is_valid (addr_family, gateway))
 		gateway = NULL;
 
 	g_value_set_string (target_value, gateway);
@@ -471,7 +457,7 @@ ip_route_transform_from_next_hop_string (GBinding     *binding,
 
 	text = g_value_get_string (source_value);
 	if (*text) {
-		if (!nm_utils_ipaddr_valid (addr_family, text))
+		if (!nm_utils_ipaddr_is_valid (addr_family, text))
 			return FALSE;
 	} else
 		text = NULL;
@@ -516,7 +502,7 @@ ip_route_transform_from_metric_string (GBinding     *binding,
  * @addr_family: the IP address family
  * @source: the source object
  * @source_property: the source property
- * @dest_target: the target object for the route's destionation
+ * @dest_target: the target object for the route's destination
  * @dest_target_property: the property on @dest_target
  * @next_hop_target: the target object for the route's next hop
  * @next_hop_target_property: the property on @next_hop_target
@@ -603,9 +589,14 @@ get_security_type (NMEditorWirelessSecurityMethodBinding *binding)
 		return "dynamic-wep";
 	}
 
-	if (   !strcmp (key_mgmt, "wpa-none")
-	    || !strcmp (key_mgmt, "wpa-psk"))
+	if (!strcmp (key_mgmt, "wpa-psk"))
 		return "wpa-personal";
+
+	if (!strcmp (key_mgmt, "sae"))
+		return "wpa3-personal";
+
+	if (!strcmp (key_mgmt, "owe"))
+		return "owe";
 
 	if (!strcmp (key_mgmt, "wpa-eap"))
 		return "wpa-enterprise";
@@ -708,6 +699,18 @@ wireless_security_target_changed (GObject    *object,
 	} else if (!strcmp (method, "wpa-personal")) {
 		g_object_set (binding->s_wsec,
 		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk",
+		              NM_SETTING_WIRELESS_SECURITY_AUTH_ALG, NULL,
+		              NM_SETTING_WIRELESS_SECURITY_WEP_KEY_TYPE, NM_WEP_KEY_TYPE_UNKNOWN,
+		              NULL);
+	} else if (!strcmp (method, "wpa3-personal")) {
+		g_object_set (binding->s_wsec,
+		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "sae",
+		              NM_SETTING_WIRELESS_SECURITY_AUTH_ALG, NULL,
+		              NM_SETTING_WIRELESS_SECURITY_WEP_KEY_TYPE, NM_WEP_KEY_TYPE_UNKNOWN,
+		              NULL);
+	} else if (!strcmp (method, "owe")) {
+		g_object_set (binding->s_wsec,
+		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "owe",
 		              NM_SETTING_WIRELESS_SECURITY_AUTH_ALG, NULL,
 		              NM_SETTING_WIRELESS_SECURITY_WEP_KEY_TYPE, NM_WEP_KEY_TYPE_UNKNOWN,
 		              NULL);

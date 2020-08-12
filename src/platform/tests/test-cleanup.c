@@ -1,20 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2016 Red Hat, Inc.
+ * Copyright (C) 2016 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -52,7 +38,7 @@ test_cleanup_internal (void)
 	inet_pton (AF_INET6, "2001:db8:e:f:1:2:3:4", &gateway6);
 
 	/* Create and set up device */
-	g_assert (nm_platform_link_dummy_add (NM_PLATFORM_GET, DEVICE_NAME, NULL) == NM_PLATFORM_ERROR_SUCCESS);
+	g_assert (NMTST_NM_ERR_SUCCESS (nm_platform_link_dummy_add (NM_PLATFORM_GET, DEVICE_NAME, NULL)));
 	accept_signal (link_added);
 	free_signal (link_added);
 	g_assert (nm_platform_link_set_up (NM_PLATFORM_GET, nm_platform_link_get_ifindex (NM_PLATFORM_GET, DEVICE_NAME), NULL));
@@ -75,8 +61,7 @@ test_cleanup_internal (void)
 			break;
 	});
 
-	/* Add routes and addresses */
-	g_assert (nm_platform_ip4_address_add (NM_PLATFORM_GET, ifindex, addr4, plen4, addr4, lifetime, preferred, 0, NULL));
+	g_assert (nm_platform_ip4_address_add (NM_PLATFORM_GET, ifindex, addr4, plen4, addr4, nm_platform_ip4_broadcast_address_create (addr4, plen4), lifetime, preferred, 0, NULL));
 	g_assert (nm_platform_ip6_address_add (NM_PLATFORM_GET, ifindex, addr6, plen6, in6addr_any, lifetime, preferred, flags));
 	nmtstp_ip4_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, gateway4, 32, INADDR_ANY, 0, metric, mss);
 	nmtstp_ip4_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, network4, plen4, gateway4, 0, metric, mss);
@@ -128,8 +113,7 @@ _nmtstp_init_tests (int *argc, char ***argv)
 void
 _nmtstp_setup_tests (void)
 {
-	nm_platform_link_delete (NM_PLATFORM_GET, nm_platform_link_get_ifindex (NM_PLATFORM_GET, DEVICE_NAME));
-	g_assert (!nm_platform_link_get_by_ifname (NM_PLATFORM_GET, DEVICE_NAME));
+	nmtstp_link_delete (NM_PLATFORM_GET, -1, -1, DEVICE_NAME, FALSE);
 
 	g_test_add_func ("/internal", test_cleanup_internal);
 	/* FIXME: add external cleanup check */

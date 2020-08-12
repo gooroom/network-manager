@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2005 - 2017 Red Hat, Inc.
+ * Copyright (C) 2005 - 2017 Red Hat, Inc.
  */
 
 #ifndef __NM_UTILS_H__
@@ -40,6 +25,8 @@
 
 G_BEGIN_DECLS
 
+/*****************************************************************************/
+
 typedef struct _NMVariantAttributeSpec NMVariantAttributeSpec;
 
 /* SSID helpers */
@@ -63,6 +50,8 @@ char *      nm_utils_ssid_to_utf8  (const guint8 *ssid, gsize len);
  * @NMU_SEC_WPA_ENTERPRISE: WPA1 is used with 802.1x authentication
  * @NMU_SEC_WPA2_PSK: WPA2/RSN is used with Pre-Shared Keys (PSK)
  * @NMU_SEC_WPA2_ENTERPRISE: WPA2 is used with 802.1x authentication
+ * @NMU_SEC_SAE: is used with WPA3 Enterprise
+ * @NMU_SEC_OWE: is used with Enhanced Open
  *
  * Describes generic security mechanisms that 802.11 access points may offer.
  * Used with nm_utils_security_valid() for checking whether a given access
@@ -77,7 +66,9 @@ typedef enum {
 	NMU_SEC_WPA_PSK,
 	NMU_SEC_WPA_ENTERPRISE,
 	NMU_SEC_WPA2_PSK,
-	NMU_SEC_WPA2_ENTERPRISE
+	NMU_SEC_WPA2_ENTERPRISE,
+	NMU_SEC_SAE,
+	NMU_SEC_OWE,
 } NMUtilsSecurityType;
 
 gboolean nm_utils_security_valid (NMUtilsSecurityType type,
@@ -261,6 +252,10 @@ NMSriovVF *nm_utils_sriov_vf_from_str (const char *str, GError **error);
 NM_AVAILABLE_IN_1_12
 gint64 nm_utils_get_timestamp_msec         (void);
 
+NM_AVAILABLE_IN_1_16
+gboolean nm_utils_base64secret_decode (const char *base64_key,
+                                       gsize required_key_len,
+                                       guint8 *out_key);
 
 G_END_DECLS
 

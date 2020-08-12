@@ -1,17 +1,18 @@
-test_unit = 'test-ifcfg-rh'
+# SPDX-License-Identifier: LGPL-2.1+
 
-test_ifcfg_dir = meson.current_source_dir()
+test_unit = 'test-ifcfg-rh'
 
 exe = executable(
   test_unit,
   test_unit + '.c',
-  dependencies: test_nm_dep,
-  link_with: libnms_ifcfg_rh_core
+  dependencies: libnetwork_manager_test_dep,
+  c_args: test_c_flags,
+  link_with: libnms_ifcfg_rh_core,
 )
 
 test(
   'ifcfg-rh/' + test_unit,
   test_script,
   timeout: 90,
-  args: test_args + [exe.full_path()]
+  args: test_args + [exe.full_path()],
 )

@@ -1,43 +1,20 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2014 - 2015 Red Hat, Inc.
+ * Copyright (C) 2014 - 2015 Red Hat, Inc.
  */
+
+#ifndef __NM_TEST_LIBNM_UTILS_H__
+#define __NM_TEST_LIBNM_UTILS_H__
 
 #include "NetworkManager.h"
 
 #include "nm-utils/nm-test-utils.h"
-
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-#include "nm-dbus-glib-types.h"
-#endif
-
-/*****************************************************************************/
 
 typedef struct {
 	GDBusConnection *bus;
 	GDBusProxy *proxy;
 	GPid pid;
 	int keepalive_fd;
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-	struct {
-		DBusGConnection *bus;
-	} libdbus;
-#endif
 } NMTstcServiceInfo;
 
 NMTstcServiceInfo *nmtstc_service_init (void);
@@ -62,18 +39,6 @@ static inline void _nmtstc_auto_service_cleanup (NMTstcServiceInfo **info)
 	}); \
 	NM_PRAGMA_WARNING_REENABLE
 
-/*****************************************************************************/
-
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-
-#include "nm-client.h"
-#include "nm-remote-settings.h"
-
-NMClient *nmtstc_nm_client_new (void);
-NMRemoteSettings *nmtstc_nm_remote_settings_new (void);
-
-#else
-
 NMDevice *nmtstc_service_add_device (NMTstcServiceInfo *info,
                                      NMClient *client,
                                      const char *method,
@@ -84,10 +49,6 @@ NMDevice * nmtstc_service_add_wired_device (NMTstcServiceInfo *sinfo,
                                             const char *ifname,
                                             const char *hwaddr,
                                             const char **subchannels);
-
-#endif
-
-/*****************************************************************************/
 
 void nmtstc_service_add_connection (NMTstcServiceInfo *sinfo,
                                     NMConnection *connection,
@@ -109,3 +70,20 @@ void nmtstc_service_update_connection_variant (NMTstcServiceInfo *sinfo,
                                                GVariant *connection,
                                                gboolean verify_connection);
 
+gpointer nmtstc_context_object_new_valist (GType gtype,
+                                           gboolean allow_iterate_main_context,
+                                           const char *first_property_name,
+                                           va_list var_args);
+
+gpointer nmtstc_context_object_new (GType gtype,
+                                    gboolean allow_iterate_main_context,
+                                    const char *first_property_name,
+                                    ...);
+
+static inline NMClient *
+nmtstc_client_new (gboolean allow_iterate_main_context)
+{
+	return nmtstc_context_object_new (NM_TYPE_CLIENT, allow_iterate_main_context, NULL);
+}
+
+#endif /* __NM_TEST_LIBNM_UTILS_H__ */

@@ -1,20 +1,6 @@
-/* nmcli - command-line tool to control NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2018 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2010 - 2018 Red Hat, Inc.
  */
 
 #ifndef NMC_UTILS_H
@@ -33,14 +19,14 @@ typedef struct {
 } nmc_arg_t;
 
 /* === Functions === */
-int next_arg (NmCli *nmc, int *argc, char ***argv, ...);
+int next_arg (NmCli *nmc, int *argc, const char *const**argv, ...);
 gboolean nmc_arg_is_help (const char *arg);
 gboolean nmc_arg_is_option (const char *arg, const char *opt_name);
-gboolean nmc_parse_args (nmc_arg_t *arg_arr, gboolean last, int *argc, char ***argv, GError **error);
+gboolean nmc_parse_args (nmc_arg_t *arg_arr, gboolean last, int *argc, const char *const**argv, GError **error);
 char *ssid_to_hex (const char *str, gsize len);
 void nmc_terminal_erase_line (void);
 void nmc_terminal_show_progress (const char *str);
-void nmc_terminal_spawn_pager (const NmcConfig *nmc_config);
+pid_t nmc_terminal_spawn_pager (const NmcConfig *nmc_config);
 char *nmc_colorize (const NmcConfig *nmc_config, NMMetaColor color, const char * fmt, ...)  _nm_printf (3, 4);
 void nmc_filter_out_colors_inplace (char *str);
 char *nmc_filter_out_colors (const char *str);
@@ -65,6 +51,7 @@ GArray *parse_output_fields (const char *fields_str,
 NmcOutputField *nmc_dup_fields_array (const NMMetaAbstractInfo *const*fields, NmcOfFlags flags);
 void nmc_empty_output_fields (NmcOutputData *output_data);
 void print_required_fields (const NmcConfig *nmc_config,
+                            NmcPagerData *pager_data,
                             NmcOfFlags of_flags,
                             const GArray *indices,
                             const char *header_name,
@@ -72,6 +59,7 @@ void print_required_fields (const NmcConfig *nmc_config,
                             const NmcOutputField *field_values);
 void print_data_prepare_width (GPtrArray *output_data);
 void print_data (const NmcConfig *nmc_config,
+                 NmcPagerData *pager_data,
                  const GArray *indices,
                  const char *header_name,
                  int indent,
@@ -80,7 +68,7 @@ void print_data (const NmcConfig *nmc_config,
 /*****************************************************************************/
 
 extern const NMMetaEnvironment *const nmc_meta_environment;
-extern NmCli *const nmc_meta_environment_arg;
+extern const NmCli *const nmc_meta_environment_arg;
 
 typedef enum {
 
@@ -144,6 +132,7 @@ typedef enum {
 	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_NAME = 0,
 	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_UUID,
 	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_DEVICES,
+	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_IP_IFACE,
 	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_STATE,
 	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_DEFAULT,
 	NMC_GENERIC_INFO_TYPE_CON_ACTIVE_GENERAL_DEFAULT6,
@@ -166,6 +155,8 @@ typedef enum {
 	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_DEVICE = 0,
 	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_TYPE,
 	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_STATE,
+	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_IP4_CONNECTIVITY,
+	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_IP6_CONNECTIVITY,
 	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_DBUS_PATH,
 	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_CONNECTION,
 	NMC_GENERIC_INFO_TYPE_DEVICE_STATUS_CON_UUID,
@@ -175,6 +166,7 @@ typedef enum {
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_DEVICE = 0,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_TYPE,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_NM_TYPE,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_DBUS_PATH,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_VENDOR,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_PRODUCT,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_DRIVER,
@@ -184,7 +176,10 @@ typedef enum {
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_MTU,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_STATE,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_REASON,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_IP4_CONNECTIVITY,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_IP6_CONNECTIVITY,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_UDI,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_PATH,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_IP_IFACE,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_IS_SOFTWARE,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_GENERAL_NM_MANAGED,
@@ -221,7 +216,14 @@ typedef enum {
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_WIFI_PROPERTIES_ADHOC,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_WIFI_PROPERTIES_2GHZ,
 	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_WIFI_PROPERTIES_5GHZ,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_WIFI_PROPERTIES_MESH,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_WIFI_PROPERTIES_IBSS_RSN,
 	_NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_WIFI_PROPERTIES_NUM,
+
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_INTERFACE_FLAGS_UP = 0,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_INTERFACE_FLAGS_LOWER_UP,
+	NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_INTERFACE_FLAGS_CARRIER,
+	_NMC_GENERIC_INFO_TYPE_DEVICE_DETAIL_INTERFACE_FLAGS_NUM,
 
 } NmcGenericInfoType;
 
@@ -284,6 +286,24 @@ nmc_meta_generic_get_str_i18n (const char *s, NMMetaAccessorGetType get_type)
 	if (get_type == NM_META_ACCESSOR_GET_TYPE_PRETTY)
 		return gettext (s);
 	return s;
+}
+
+static inline const char *
+nmc_meta_generic_get_str_i18n_null (const char *s, NMMetaAccessorGetType get_type)
+{
+	if (get_type == NM_META_ACCESSOR_GET_TYPE_PARSABLE) {
+		/* in parsable mode, return NULL. That is useful if @s is a pretty string
+		 * to describe a missing value (like "(unknown)"). We don't want to print
+		 * that for parsable mode. */
+		return NULL;
+	}
+	return nmc_meta_generic_get_str_i18n (s, get_type);
+}
+
+static inline const char *
+nmc_meta_generic_get_unknown (NMMetaAccessorGetType get_type)
+{
+	return nmc_meta_generic_get_str_i18n_null (N_("(unknown)"), get_type);
 }
 
 static inline const char *

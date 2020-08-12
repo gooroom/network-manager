@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2007 - 2008 Novell, Inc.
  * Copyright (C) 2007 - 2010 Red Hat, Inc.
  */
@@ -48,6 +33,7 @@
 #define NM_MANAGER_CONNECTIVITY "connectivity"
 #define NM_MANAGER_CONNECTIVITY_CHECK_AVAILABLE "connectivity-check-available"
 #define NM_MANAGER_CONNECTIVITY_CHECK_ENABLED "connectivity-check-enabled"
+#define NM_MANAGER_CONNECTIVITY_CHECK_URI "connectivity-check-uri"
 #define NM_MANAGER_PRIMARY_CONNECTION "primary-connection"
 #define NM_MANAGER_PRIMARY_CONNECTION_TYPE "primary-connection-type"
 #define NM_MANAGER_ACTIVATING_CONNECTION "activating-connection"
@@ -77,6 +63,7 @@ GType nm_manager_get_type (void);
 NMManager *   nm_manager_setup                         (void);
 
 NMManager *   nm_manager_get                           (void);
+#define NM_MANAGER_GET (nm_manager_get ())
 
 gboolean      nm_manager_start                         (NMManager *manager,
                                                         GError **error);
@@ -97,13 +84,26 @@ const CList * nm_manager_get_active_connections        (NMManager *manager);
 	    }); \
 	    iter = c_list_entry (iter->active_connections_lst.next, NMActiveConnection, active_connections_lst))
 
+#define nm_manager_for_each_active_connection_safe(manager, iter, tmp_list, iter_safe) \
+	for (tmp_list = nm_manager_get_active_connections (manager), \
+	     iter_safe = tmp_list->next; \
+	     ({ \
+	        if (iter_safe != tmp_list) { \
+	            iter = c_list_entry (iter_safe, NMActiveConnection, active_connections_lst); \
+	            iter_safe = iter_safe->next; \
+	        } else \
+	            iter = NULL; \
+	        (iter != NULL); \
+	     }); \
+	    )
+
 NMSettingsConnection **nm_manager_get_activatable_connections (NMManager *manager,
                                                                gboolean for_auto_activation,
                                                                gboolean sort,
                                                                guint *out_len);
 
 void          nm_manager_write_device_state_all (NMManager *manager);
-gboolean      nm_manager_write_device_state (NMManager *manager, NMDevice *device);
+gboolean      nm_manager_write_device_state (NMManager *manager, NMDevice *device, int *out_ifindex);
 
 /* Device handling */
 
@@ -121,6 +121,19 @@ const CList *       nm_manager_get_devices             (NMManager *manager);
 	    }); \
 	    iter = c_list_entry (iter->devices_lst.next, NMDevice, devices_lst))
 
+#define nm_manager_for_each_device_safe(manager, iter, tmp_list, iter_safe) \
+	for (tmp_list = nm_manager_get_devices (manager), \
+	     iter_safe = tmp_list->next; \
+	     ({ \
+	        if (iter_safe != tmp_list) { \
+	            iter = c_list_entry (iter_safe, NMDevice, devices_lst); \
+	            iter_safe = iter_safe->next; \
+	        } else \
+	            iter = NULL; \
+	        (iter != NULL); \
+	     }); \
+	    )
+
 NMDevice *          nm_manager_get_device_by_ifindex   (NMManager *manager,
                                                         int ifindex);
 NMDevice *          nm_manager_get_device_by_path      (NMManager *manager,
@@ -136,6 +149,7 @@ void                nm_manager_device_route_metric_clear (NMManager *self,
 char *              nm_manager_get_connection_iface (NMManager *self,
                                                      NMConnection *connection,
                                                      NMDevice **out_parent,
+                                                     const char **out_parent_spec,
                                                      GError **error);
 
 const char *        nm_manager_iface_for_uuid          (NMManager *self,
@@ -149,6 +163,7 @@ NMActiveConnection *nm_manager_activate_connection     (NMManager *manager,
                                                         NMAuthSubject *subject,
                                                         NMActivationType activation_type,
                                                         NMActivationReason activation_reason,
+                                                        NMActivationStateFlags initial_state_flags,
                                                         GError **error);
 
 gboolean            nm_manager_deactivate_connection   (NMManager *manager,
@@ -173,5 +188,21 @@ void nm_manager_dbus_set_property_handle (NMDBusObject *obj,
                                           GDBusMethodInvocation *invocation,
                                           GVariant *value,
                                           gpointer user_data);
+
+NMMetered nm_manager_get_metered (NMManager *self);
+
+void nm_manager_notify_device_availibility_maybe_changed (NMManager *self);
+
+/*****************************************************************************/
+
+void nm_manager_device_auth_request (NMManager *self,
+                                     NMDevice *device,
+                                     GDBusMethodInvocation *context,
+                                     NMConnection *connection,
+                                     const char *permission,
+                                     gboolean allow_interaction,
+                                     GCancellable *cancellable,
+                                     NMManagerDeviceAuthRequestFunc callback,
+                                     gpointer user_data);
 
 #endif /* __NETWORKMANAGER_MANAGER_H__ */

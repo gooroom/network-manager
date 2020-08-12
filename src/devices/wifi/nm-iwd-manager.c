@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2017 Intel Corporation
  */
 
@@ -22,7 +7,6 @@
 
 #include "nm-iwd-manager.h"
 
-#include <string.h>
 #include <net/if.h>
 
 #include "nm-logging.h"
@@ -30,7 +14,7 @@
 #include "nm-manager.h"
 #include "nm-device-iwd.h"
 #include "nm-wifi-utils.h"
-#include "nm-utils/nm-random-utils.h"
+#include "nm-glib-aux/nm-random-utils.h"
 #include "settings/nm-settings.h"
 
 /*****************************************************************************/
@@ -48,6 +32,7 @@ typedef struct {
 
 typedef struct {
 	NMManager *manager;
+	NMSettings *settings;
 	GCancellable *cancellable;
 	gboolean running;
 	GDBusObjectManager *object_manager;
@@ -136,6 +121,7 @@ agent_dbus_method_cb (GDBusConnection *connection,
 	int ifindex;
 	NMDevice *device;
 	gs_free char *name_owner = NULL;
+	int errsv;
 
 	/* Be paranoid and check the sender address */
 	name_owner = g_dbus_object_manager_client_get_name_owner (G_DBUS_OBJECT_MANAGER_CLIENT (priv->object_manager));
@@ -150,6 +136,11 @@ agent_dbus_method_cb (GDBusConnection *connection,
 	network = g_dbus_object_manager_get_interface (priv->object_manager,
 	                                               network_path,
 	                                               NM_IWD_NETWORK_INTERFACE);
+	if (!network) {
+		_LOGE ("unable to find the network object");
+		return;
+	}
+
 
 	device_path = get_property_string_or_null (G_DBUS_PROXY (network), "Device");
 	if (!device_path) {
@@ -171,8 +162,9 @@ agent_dbus_method_cb (GDBusConnection *connection,
 
 	ifindex = if_nametoindex (ifname);
 	if (!ifindex) {
+		errsv = errno;
 		_LOGD ("agent-request: if_nametoindex failed for Name %s for Device at %s: %i",
-		       ifname, device_path, errno);
+		       ifname, device_path, errsv);
 		goto return_error;
 	}
 
@@ -270,8 +262,21 @@ register_agent (NMIwdManager *self)
 	GDBusInterface *agent_manager;
 
 	agent_manager = g_dbus_object_manager_get_interface (priv->object_manager,
-	                                                     "/",
+	                                                     "/net/connman/iwd",
 	                                                     NM_IWD_AGENT_MANAGER_INTERFACE);
+
+	if (!agent_manager) {
+		/* IWD prior to 1.0 dated 30 October, 2019 has the agent manager on a
+		 * different path. */
+		agent_manager = g_dbus_object_manager_get_interface (priv->object_manager,
+		                                                     "/",
+		                                                     NM_IWD_AGENT_MANAGER_INTERFACE);
+	}
+
+	if (!agent_manager) {
+		_LOGE ("unable to register the IWD Agent: PSK/8021x Wi-Fi networks may not work");
+		return;
+	}
 
 	/* Register our agent */
 	g_dbus_proxy_call (G_DBUS_PROXY (agent_manager),
@@ -338,6 +343,7 @@ set_device_dbus_object (NMIwdManager *self, GDBusProxy *proxy,
 	const char *ifname;
 	int ifindex;
 	NMDevice *device;
+	int errsv;
 
 	ifname = get_property_string_or_null (proxy, "Name");
 	if (!ifname) {
@@ -349,8 +355,9 @@ set_device_dbus_object (NMIwdManager *self, GDBusProxy *proxy,
 	ifindex = if_nametoindex (ifname);
 
 	if (!ifindex) {
+		errsv = errno;
 		_LOGE ("if_nametoindex failed for Name %s for Device at %s: %i",
-		       ifname, g_dbus_proxy_get_object_path (proxy), errno);
+		       ifname, g_dbus_proxy_get_object_path (proxy), errsv);
 		return;
 	}
 
@@ -363,31 +370,35 @@ set_device_dbus_object (NMIwdManager *self, GDBusProxy *proxy,
 	nm_device_iwd_set_dbus_object (NM_DEVICE_IWD (device), object);
 }
 
-/* Create an in-memory NMConnection for a WPA2-Enterprise network that
- * has been preprovisioned with an IWD config file so that NM autoconnect
- * mechanism and the clients know this networks needs no additional EAP
- * configuration from the user.  Only do this if no existing connection
- * SSID and security type match that network yet.
+/* Look up an existing NMSettingsConnection for a WPA2-Enterprise network
+ * that has been preprovisioned with an IWD config file, or create a new
+ * in-memory connection object so that NM autoconnect mechanism and the
+ * clients know this networks needs no additional EAP configuration from
+ * the user.
  */
 static NMSettingsConnection *
 mirror_8021x_connection (NMIwdManager *self,
-                         const char *name)
+                         const char *name,
+                         gboolean create_new)
 {
-	NMSettings *settings = NM_SETTINGS_GET;
+	NMIwdManagerPrivate *priv = NM_IWD_MANAGER_GET_PRIVATE (self);
 	NMSettingsConnection *const*iter;
 	gs_unref_object NMConnection *connection = NULL;
-	NMSettingsConnection *settings_connection;
+	NMSettingsConnection *settings_connection = NULL;
 	char uuid[37];
 	NMSetting *setting;
 	GError *error = NULL;
 	gs_unref_bytes GBytes *new_ssid = NULL;
 
-	for (iter = nm_settings_get_connections (settings, NULL); *iter; iter++) {
+	for (iter = nm_settings_get_connections (priv->settings, NULL); *iter; iter++) {
 		NMSettingsConnection *sett_conn = *iter;
 		NMConnection *conn = nm_settings_connection_get_connection (sett_conn);
 		NMIwdNetworkSecurity security;
 		gs_free char *ssid_name = NULL;
 		NMSettingWireless *s_wifi;
+		NMSetting8021x *s_8021x;
+		gboolean external = FALSE;
+		guint i;
 
 		security = nm_wifi_connection_get_iwd_security (conn, NULL);
 		if (security != NM_IWD_NETWORK_SECURITY_8021X)
@@ -399,13 +410,29 @@ mirror_8021x_connection (NMIwdManager *self,
 
 		ssid_name = _nm_utils_ssid_to_utf8 (nm_setting_wireless_get_ssid (s_wifi));
 
-		/* We already have an NMSettingsConnection matching this
-		 * KnownNetwork, whether it's saved or an in-memory connection
-		 * potentially created by ourselves.  Nothing to do here.
-		 */
-		if (nm_streq (ssid_name, name))
-			return NULL;
+		if (!nm_streq (ssid_name, name))
+			continue;
+
+		s_8021x = nm_connection_get_setting_802_1x (conn);
+		for (i = 0; i < nm_setting_802_1x_get_num_eap_methods (s_8021x); i++) {
+			if (nm_streq (nm_setting_802_1x_get_eap_method (s_8021x, i), "external")) {
+				external = TRUE;
+				break;
+			}
+		}
+
+		/* Prefer returning connections for EAP method "external" */
+		if (!settings_connection || external)
+			settings_connection = sett_conn;
 	}
+
+	/* If we already have an NMSettingsConnection matching this
+	 * KnownNetwork, whether it's saved or an in-memory connection
+	 * potentially created by ourselves then we have nothing left to
+	 * do here.
+	 */
+	if (settings_connection || !create_new)
+		return settings_connection;
 
 	connection = nm_simple_connection_new ();
 
@@ -413,7 +440,6 @@ mirror_8021x_connection (NMIwdManager *self,
 	                                    NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIRELESS_SETTING_NAME,
 	                                    NM_SETTING_CONNECTION_ID, name,
 	                                    NM_SETTING_CONNECTION_UUID, nm_utils_uuid_generate_buf (uuid),
-	                                    NM_SETTING_CONNECTION_READ_ONLY, TRUE,
 	                                    NULL));
 	nm_connection_add_setting (connection, setting);
 
@@ -446,19 +472,19 @@ mirror_8021x_connection (NMIwdManager *self,
 	if (!nm_connection_normalize (connection, NULL, NULL, NULL))
 		return NULL;
 
-	settings_connection = nm_settings_add_connection (settings, connection,
-	                                                  FALSE, &error);
-	if (!settings_connection) {
+	if (!nm_settings_add_connection (priv->settings,
+	                                 connection,
+	                                 NM_SETTINGS_CONNECTION_PERSIST_MODE_IN_MEMORY_ONLY,
+	                                 NM_SETTINGS_CONNECTION_ADD_REASON_NONE,
+	                                 NM_SETTINGS_CONNECTION_INT_FLAGS_NM_GENERATED,
+	                                 &settings_connection,
+	                                 &error)) {
 		_LOGW ("failed to add a mirror NMConnection for IWD's Known Network '%s': %s",
 		       name, error->message);
 		g_error_free (error);
 		return NULL;
 	}
 
-	nm_settings_connection_set_flags (settings_connection,
-	                                  NM_SETTINGS_CONNECTION_INT_FLAGS_NM_GENERATED |
-	                                  NM_SETTINGS_CONNECTION_INT_FLAGS_UNSAVED,
-	                                  TRUE);
 	return settings_connection;
 }
 
@@ -475,7 +501,7 @@ mirror_8021x_connection_take_and_delete (NMSettingsConnection *sett_conn)
 	/* If connection has not been saved since we created it
 	 * in interface_added it too can be removed now. */
 	if (NM_FLAGS_HAS (flags, NM_SETTINGS_CONNECTION_INT_FLAGS_NM_GENERATED))
-		nm_settings_connection_delete (sett_conn, NULL);
+		nm_settings_connection_delete (sett_conn, FALSE);
 
 	g_object_unref (sett_conn);
 }
@@ -526,16 +552,19 @@ interface_added (GDBusObjectManager *object_manager, GDBusObject *object,
 		id = known_network_id_new (name, security);
 
 		data = g_hash_table_lookup (priv->known_networks, id);
-		if (data)
+		if (data) {
+			_LOGW ("DBus error: KnownNetwork already exists ('%s', %s)",
+			       name, type_str);
 			g_free (id);
-		else {
+			nm_g_object_ref_set (&data->known_network, proxy);
+		} else {
 			data = g_slice_new0 (KnownNetworkData);
 			data->known_network = g_object_ref (proxy);
 			g_hash_table_insert (priv->known_networks, id, data);
 		}
 
 		if (security == NM_IWD_NETWORK_SECURITY_8021X) {
-			sett_conn = mirror_8021x_connection (self, name);
+			sett_conn = mirror_8021x_connection (self, name, TRUE);
 
 			if (   sett_conn
 			    && sett_conn != data->mirror_connection) {
@@ -591,6 +620,55 @@ interface_removed (GDBusObjectManager *object_manager, GDBusObject *object,
 		g_hash_table_remove (priv->known_networks, &id);
 		return;
 	}
+}
+
+static void
+connection_removed (NMSettings *settings,
+                    NMSettingsConnection *sett_conn,
+                    gpointer user_data)
+{
+	NMIwdManager *self = user_data;
+	NMIwdManagerPrivate *priv = NM_IWD_MANAGER_GET_PRIVATE (self);
+	NMConnection *conn = nm_settings_connection_get_connection (sett_conn);
+	NMSettingWireless *s_wireless;
+	gboolean mapped;
+	KnownNetworkData *data;
+	KnownNetworkId id;
+
+	id.security = nm_wifi_connection_get_iwd_security (conn, &mapped);
+	if (!mapped)
+		return;
+
+	s_wireless = nm_connection_get_setting_wireless (conn);
+	id.name = _nm_utils_ssid_to_utf8 (nm_setting_wireless_get_ssid (s_wireless));
+	data = g_hash_table_lookup (priv->known_networks, &id);
+	g_free ((char *) id.name);
+	if (!data)
+		return;
+
+	if (id.security == NM_IWD_NETWORK_SECURITY_8021X) {
+		NMSettingsConnection *new_mirror_conn;
+
+		if (data->mirror_connection != sett_conn)
+			return;
+
+		g_clear_object (&data->mirror_connection);
+
+		/* Don't call Forget for an 8021x network until there's no
+		 * longer *any* matching NMSettingsConnection (debatable)
+		 */
+		new_mirror_conn = mirror_8021x_connection (self, id.name, FALSE);
+		if (new_mirror_conn) {
+			data->mirror_connection = g_object_ref (new_mirror_conn);
+			return;
+		}
+	}
+
+	if (!priv->running)
+		return;
+
+	g_dbus_proxy_call (data->known_network, "Forget",
+	                   NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
 }
 
 static gboolean
@@ -744,7 +822,7 @@ got_object_manager (GObject *object, GAsyncResult *result, gpointer user_data)
 	                                   &priv->agent_path,
 	                                   &error);
 	if (!priv->agent_id) {
-		_LOGE ("failed to export the IWD Agent: PSK/8021x WiFi networks may not work: %s",
+		_LOGE ("failed to export the IWD Agent: PSK/8021x Wi-Fi networks may not work: %s",
 		       error->message);
 		g_clear_error (&error);
 	}
@@ -796,7 +874,8 @@ nm_iwd_manager_is_known_network (NMIwdManager *self, const char *name,
 }
 
 GDBusProxy *
-nm_iwd_manager_get_dbus_interface (NMIwdManager *self, const char *path,
+nm_iwd_manager_get_dbus_interface (NMIwdManager *self,
+                                   const char *path,
                                    const char *name)
 {
 	NMIwdManagerPrivate *priv = NM_IWD_MANAGER_GET_PRIVATE (self);
@@ -820,9 +899,13 @@ nm_iwd_manager_init (NMIwdManager *self)
 {
 	NMIwdManagerPrivate *priv = NM_IWD_MANAGER_GET_PRIVATE (self);
 
-	priv->manager = g_object_ref (nm_manager_get ());
+	priv->manager = g_object_ref (NM_MANAGER_GET);
 	g_signal_connect (priv->manager, NM_MANAGER_DEVICE_ADDED,
 	                  G_CALLBACK (device_added), self);
+
+	priv->settings = g_object_ref (NM_SETTINGS_GET);
+	g_signal_connect (priv->settings, NM_SETTINGS_SIGNAL_CONNECTION_REMOVED,
+	                  G_CALLBACK (connection_removed), self);
 
 	priv->cancellable = g_cancellable_new ();
 
@@ -844,6 +927,14 @@ dispose (GObject *object)
 
 	nm_clear_g_cancellable (&priv->cancellable);
 
+	if (priv->settings) {
+		g_signal_handlers_disconnect_by_data (priv->settings, self);
+		g_clear_object (&priv->settings);
+	}
+
+	/* This may trigger mirror connection removals so it happens
+	 * after the g_signal_handlers_disconnect_by_data above.
+	 */
 	nm_clear_pointer (&priv->known_networks, g_hash_table_destroy);
 
 	if (priv->manager) {

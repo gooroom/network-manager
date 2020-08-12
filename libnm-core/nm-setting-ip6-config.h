@@ -1,22 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
  */
 
 #ifndef __NM_SETTING_IP6_CONFIG_H__
@@ -46,6 +30,8 @@ G_BEGIN_DECLS
 #define NM_SETTING_IP6_CONFIG_TOKEN "token"
 
 #define NM_SETTING_IP6_CONFIG_DHCP_DUID "dhcp-duid"
+
+#define NM_SETTING_IP6_CONFIG_RA_TIMEOUT "ra-timeout"
 
 /**
  * NM_SETTING_IP6_CONFIG_METHOD_IGNORE:
@@ -100,6 +86,15 @@ G_BEGIN_DECLS
  * supported for IPv6)
  */
 #define NM_SETTING_IP6_CONFIG_METHOD_SHARED     "shared"
+
+/**
+ * NM_SETTING_IP6_CONFIG_METHOD_DISABLED:
+ *
+ * IPv6 is disabled for the connection.
+ *
+ * Since: 1.20
+ */
+#define NM_SETTING_IP6_CONFIG_METHOD_DISABLED   "disabled"
 
 /**
  * NMSettingIP6ConfigPrivacy:
@@ -166,6 +161,8 @@ NM_AVAILABLE_IN_1_4
 const char *nm_setting_ip6_config_get_token (NMSettingIP6Config *setting);
 NM_AVAILABLE_IN_1_12
 const char *nm_setting_ip6_config_get_dhcp_duid (NMSettingIP6Config *setting);
+NM_AVAILABLE_IN_1_24
+gint32 nm_setting_ip6_config_get_ra_timeout (NMSettingIP6Config *setting);
 
 G_END_DECLS
 

@@ -1,18 +1,5 @@
 #!/usr/bin/env python
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (C) 2010 - 2011 Red Hat, Inc.
 #
@@ -24,6 +11,7 @@ import dbus
 # be handled with.
 
 bus = dbus.SystemBus()
+
 
 def merge_secrets(proxy, config, setting_name):
     try:
@@ -37,6 +25,7 @@ def merge_secrets(proxy, config, setting_name):
                 config[setting_name][key] = secrets[setting][key]
     except Exception as e:
         pass
+
 
 def dict_to_string(d, indent):
     # Try to trivially translate a dictionary's elements into nice string
@@ -61,6 +50,7 @@ def dict_to_string(d, indent):
             dstr += "%s%s: %s\n" % (indent, key, str_val)
     return dstr
 
+
 def connection_to_string(config):
     # dump a connection configuration to a the console
     for setting_name in config:
@@ -79,29 +69,31 @@ def print_connections():
     # List each connection's name, UUID, and type
     for path in connection_paths:
         con_proxy = bus.get_object(service_name, path)
-        settings_connection = dbus.Interface(con_proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+        settings_connection = dbus.Interface(
+            con_proxy, "org.freedesktop.NetworkManager.Settings.Connection"
+        )
         config = settings_connection.GetSettings()
 
         # Now get secrets too; we grab the secrets for each type of connection
         # (since there isn't a "get all secrets" call because most of the time
         # you only need 'wifi' secrets or '802.1x' secrets, not everything) and
         # merge that into the configuration data
-        merge_secrets(settings_connection, config, '802-11-wireless')
-        merge_secrets(settings_connection, config, '802-11-wireless-security')
-        merge_secrets(settings_connection, config, '802-1x')
-        merge_secrets(settings_connection, config, 'gsm')
-        merge_secrets(settings_connection, config, 'cdma')
-        merge_secrets(settings_connection, config, 'ppp')
+        merge_secrets(settings_connection, config, "802-11-wireless")
+        merge_secrets(settings_connection, config, "802-11-wireless-security")
+        merge_secrets(settings_connection, config, "802-1x")
+        merge_secrets(settings_connection, config, "gsm")
+        merge_secrets(settings_connection, config, "cdma")
+        merge_secrets(settings_connection, config, "ppp")
 
         # Get the details of the 'connection' setting
-        s_con = config['connection']
-        print("    name: %s" % s_con['id'])
-        print("    uuid: %s" % s_con['uuid'])
-        print("    type: %s" % s_con['type'])
+        s_con = config["connection"]
+        print("    name: %s" % s_con["id"])
+        print("    uuid: %s" % s_con["uuid"])
+        print("    type: %s" % s_con["type"])
         print("    ------------------------------------------")
         connection_to_string(config)
 
     print("")
 
-print_connections()
 
+print_connections()

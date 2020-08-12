@@ -1,23 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
- * Copyright 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
  */
 
 #ifndef NM_SETTING_IP_CONFIG_H
@@ -33,6 +17,24 @@
 G_BEGIN_DECLS
 
 #define NM_IP_ADDRESS_ATTRIBUTE_LABEL        "label"
+
+/**
+ * NMIPAddressCmpFlags:
+ * @NM_IP_ADDRESS_CMP_FLAGS_NONE: no flags.
+ * @NM_IP_ADDRESS_CMP_FLAGS_WITH_ATTRS: when comparing two addresses,
+ *   also consider their attributes. Warning: note that attributes are GVariants
+ *   and they don't have a total order. In other words, if the address differs only
+ *   by their attributes, the returned compare order is not total. In that case,
+ *   the return value merely indicates equality (zero) or inequality.
+ *
+ * Compare flags for nm_ip_address_cmp_full().
+ *
+ * Since: 1.22
+ */
+typedef enum { /*< flags >*/
+	NM_IP_ADDRESS_CMP_FLAGS_NONE       = 0,
+	NM_IP_ADDRESS_CMP_FLAGS_WITH_ATTRS = 0x1,
+} NMIPAddressCmpFlags;
 
 typedef struct NMIPAddress NMIPAddress;
 
@@ -51,6 +53,10 @@ void         nm_ip_address_ref                 (NMIPAddress *address);
 void         nm_ip_address_unref               (NMIPAddress *address);
 gboolean     nm_ip_address_equal               (NMIPAddress *address,
                                                 NMIPAddress *other);
+NM_AVAILABLE_IN_1_22
+int          nm_ip_address_cmp_full            (const NMIPAddress *a,
+                                                const NMIPAddress *b,
+                                                NMIPAddressCmpFlags cmp_flags);
 NMIPAddress *nm_ip_address_dup                 (NMIPAddress *address);
 
 int          nm_ip_address_get_family          (NMIPAddress *address);
@@ -94,9 +100,9 @@ void         nm_ip_route_unref               (NMIPRoute  *route);
 gboolean     nm_ip_route_equal               (NMIPRoute  *route,
                                               NMIPRoute  *other);
 
-enum {
+enum { /*< flags >*/
 	NM_IP_ROUTE_EQUAL_CMP_FLAGS_NONE         = 0,
-	NM_IP_ROUTE_EQUAL_CMP_FLAGS_WITH_ATTRS   = (1LL <<  0),
+	NM_IP_ROUTE_EQUAL_CMP_FLAGS_WITH_ATTRS   = 0x1,
 };
 
 NM_AVAILABLE_IN_1_10
@@ -143,21 +149,177 @@ gboolean     nm_ip_route_attribute_validate  (const char *name,
                                               gboolean *known,
                                               GError **error);
 
-#define NM_IP_ROUTE_ATTRIBUTE_TABLE          "table"
-#define NM_IP_ROUTE_ATTRIBUTE_SRC            "src"
-#define NM_IP_ROUTE_ATTRIBUTE_FROM           "from"
-#define NM_IP_ROUTE_ATTRIBUTE_TOS            "tos"
-#define NM_IP_ROUTE_ATTRIBUTE_ONLINK         "onlink"
-#define NM_IP_ROUTE_ATTRIBUTE_WINDOW         "window"
 #define NM_IP_ROUTE_ATTRIBUTE_CWND           "cwnd"
+#define NM_IP_ROUTE_ATTRIBUTE_FROM           "from"
 #define NM_IP_ROUTE_ATTRIBUTE_INITCWND       "initcwnd"
 #define NM_IP_ROUTE_ATTRIBUTE_INITRWND       "initrwnd"
-#define NM_IP_ROUTE_ATTRIBUTE_MTU            "mtu"
-#define NM_IP_ROUTE_ATTRIBUTE_LOCK_WINDOW    "lock-window"
 #define NM_IP_ROUTE_ATTRIBUTE_LOCK_CWND      "lock-cwnd"
 #define NM_IP_ROUTE_ATTRIBUTE_LOCK_INITCWND  "lock-initcwnd"
 #define NM_IP_ROUTE_ATTRIBUTE_LOCK_INITRWND  "lock-initrwnd"
 #define NM_IP_ROUTE_ATTRIBUTE_LOCK_MTU       "lock-mtu"
+#define NM_IP_ROUTE_ATTRIBUTE_LOCK_WINDOW    "lock-window"
+#define NM_IP_ROUTE_ATTRIBUTE_MTU            "mtu"
+#define NM_IP_ROUTE_ATTRIBUTE_ONLINK         "onlink"
+#define NM_IP_ROUTE_ATTRIBUTE_SCOPE          "scope"
+#define NM_IP_ROUTE_ATTRIBUTE_SRC            "src"
+#define NM_IP_ROUTE_ATTRIBUTE_TABLE          "table"
+#define NM_IP_ROUTE_ATTRIBUTE_TOS            "tos"
+#define NM_IP_ROUTE_ATTRIBUTE_TYPE           "type"
+#define NM_IP_ROUTE_ATTRIBUTE_WINDOW         "window"
+
+/*****************************************************************************/
+
+typedef struct NMIPRoutingRule NMIPRoutingRule;
+
+NM_AVAILABLE_IN_1_18
+GType nm_ip_routing_rule_get_type (void);
+
+NM_AVAILABLE_IN_1_18
+NMIPRoutingRule *nm_ip_routing_rule_new (int addr_family);
+
+NM_AVAILABLE_IN_1_18
+NMIPRoutingRule *nm_ip_routing_rule_new_clone (const NMIPRoutingRule *rule);
+
+NM_AVAILABLE_IN_1_18
+NMIPRoutingRule *nm_ip_routing_rule_ref (NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_unref (NMIPRoutingRule *self);
+
+NM_AVAILABLE_IN_1_18
+gboolean nm_ip_routing_rule_is_sealed (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_seal (NMIPRoutingRule *self);
+
+NM_AVAILABLE_IN_1_18
+int nm_ip_routing_rule_get_addr_family (const NMIPRoutingRule *self);
+
+NM_AVAILABLE_IN_1_18
+gboolean nm_ip_routing_rule_get_invert (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_invert (NMIPRoutingRule *self, gboolean invert);
+
+NM_AVAILABLE_IN_1_18
+gint64 nm_ip_routing_rule_get_priority (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_priority (NMIPRoutingRule *self, gint64 priority);
+
+NM_AVAILABLE_IN_1_18
+guint8 nm_ip_routing_rule_get_tos (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_tos (NMIPRoutingRule *self, guint8 tos);
+
+NM_AVAILABLE_IN_1_18
+guint8 nm_ip_routing_rule_get_ipproto (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_ipproto (NMIPRoutingRule *self, guint8 ipproto);
+
+NM_AVAILABLE_IN_1_18
+guint16 nm_ip_routing_rule_get_source_port_start (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+guint16 nm_ip_routing_rule_get_source_port_end (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_source_port (NMIPRoutingRule *self, guint16 start, guint16 end);
+
+NM_AVAILABLE_IN_1_18
+guint16 nm_ip_routing_rule_get_destination_port_start (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+guint16 nm_ip_routing_rule_get_destination_port_end (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_destination_port (NMIPRoutingRule *self, guint16 start, guint16 end);
+
+NM_AVAILABLE_IN_1_18
+guint32 nm_ip_routing_rule_get_fwmark (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+guint32 nm_ip_routing_rule_get_fwmask (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_fwmark (NMIPRoutingRule *self, guint32 fwmark, guint32 fwmask);
+
+NM_AVAILABLE_IN_1_18
+guint8 nm_ip_routing_rule_get_from_len (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+const char *nm_ip_routing_rule_get_from (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_from (NMIPRoutingRule *self,
+                                  const char *from,
+                                  guint8 len);
+
+NM_AVAILABLE_IN_1_18
+guint8 nm_ip_routing_rule_get_to_len (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+const char *nm_ip_routing_rule_get_to (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_to (NMIPRoutingRule *self,
+                                const char *to,
+                                guint8 len);
+
+NM_AVAILABLE_IN_1_18
+const char *nm_ip_routing_rule_get_iifname (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_iifname (NMIPRoutingRule *self, const char *iifname);
+
+NM_AVAILABLE_IN_1_18
+const char *nm_ip_routing_rule_get_oifname (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_oifname (NMIPRoutingRule *self, const char *oifname);
+
+NM_AVAILABLE_IN_1_18
+guint8 nm_ip_routing_rule_get_action (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_action (NMIPRoutingRule *self, guint8 action);
+
+NM_AVAILABLE_IN_1_18
+guint32 nm_ip_routing_rule_get_table (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_18
+void nm_ip_routing_rule_set_table (NMIPRoutingRule *self, guint32 table);
+
+NM_AVAILABLE_IN_1_20
+gint32 nm_ip_routing_rule_get_suppress_prefixlength (const NMIPRoutingRule *self);
+NM_AVAILABLE_IN_1_20
+void nm_ip_routing_rule_set_suppress_prefixlength (NMIPRoutingRule *self, gint32 suppress_prefixlength);
+
+NM_AVAILABLE_IN_1_18
+int nm_ip_routing_rule_cmp (const NMIPRoutingRule *rule,
+                            const NMIPRoutingRule *other);
+
+NM_AVAILABLE_IN_1_18
+gboolean nm_ip_routing_rule_validate (const NMIPRoutingRule *self,
+                                      GError **error);
+
+/**
+ * NMIPRoutingRuleAsStringFlags:
+ * @NM_IP_ROUTING_RULE_AS_STRING_FLAGS_NONE: no flags selected.
+ * @NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET: whether to allow parsing
+ *   IPv4 addresses.
+ * @NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET6: whether to allow parsing
+ *   IPv6 addresses. If both @NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET and
+ *   @NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET6 are unset, it's the same
+ *   as setting them both.
+ * @NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE: if set, ensure that the
+ *   rule verfies or fail.
+ *
+ * Since: 1.18
+ */
+typedef enum { /*< flags >*/
+	NM_IP_ROUTING_RULE_AS_STRING_FLAGS_NONE     = 0,
+
+	NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET  = 0x1,
+	NM_IP_ROUTING_RULE_AS_STRING_FLAGS_AF_INET6 = 0x2,
+	NM_IP_ROUTING_RULE_AS_STRING_FLAGS_VALIDATE = 0x4,
+} NMIPRoutingRuleAsStringFlags;
+
+NM_AVAILABLE_IN_1_18
+NMIPRoutingRule *nm_ip_routing_rule_from_string (const char *str,
+                                                 NMIPRoutingRuleAsStringFlags to_string_flags,
+                                                 GHashTable *extra_args,
+                                                 GError **error);
+
+NM_AVAILABLE_IN_1_18
+char *nm_ip_routing_rule_to_string (const NMIPRoutingRule *self,
+                                    NMIPRoutingRuleAsStringFlags to_string_flags,
+                                    GHashTable *extra_args,
+                                    GError **error);
+
+/*****************************************************************************/
 
 #define NM_TYPE_SETTING_IP_CONFIG            (nm_setting_ip_config_get_type ())
 #define NM_SETTING_IP_CONFIG(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_SETTING_IP_CONFIG, NMSettingIPConfig))
@@ -168,24 +330,29 @@ gboolean     nm_ip_route_attribute_validate  (const char *name,
 
 #define NM_SETTING_IP_CONFIG_DAD_TIMEOUT_MAX     30000
 
-#define NM_SETTING_IP_CONFIG_METHOD             "method"
-#define NM_SETTING_IP_CONFIG_DNS                "dns"
-#define NM_SETTING_IP_CONFIG_DNS_SEARCH         "dns-search"
-#define NM_SETTING_IP_CONFIG_DNS_OPTIONS        "dns-options"
-#define NM_SETTING_IP_CONFIG_DNS_PRIORITY       "dns-priority"
-#define NM_SETTING_IP_CONFIG_ADDRESSES          "addresses"
-#define NM_SETTING_IP_CONFIG_GATEWAY            "gateway"
-#define NM_SETTING_IP_CONFIG_ROUTES             "routes"
-#define NM_SETTING_IP_CONFIG_ROUTE_METRIC       "route-metric"
-#define NM_SETTING_IP_CONFIG_ROUTE_TABLE        "route-table"
-#define NM_SETTING_IP_CONFIG_IGNORE_AUTO_ROUTES "ignore-auto-routes"
-#define NM_SETTING_IP_CONFIG_IGNORE_AUTO_DNS    "ignore-auto-dns"
-#define NM_SETTING_IP_CONFIG_DHCP_HOSTNAME      "dhcp-hostname"
-#define NM_SETTING_IP_CONFIG_DHCP_SEND_HOSTNAME "dhcp-send-hostname"
-#define NM_SETTING_IP_CONFIG_NEVER_DEFAULT      "never-default"
-#define NM_SETTING_IP_CONFIG_MAY_FAIL           "may-fail"
-#define NM_SETTING_IP_CONFIG_DAD_TIMEOUT        "dad-timeout"
-#define NM_SETTING_IP_CONFIG_DHCP_TIMEOUT       "dhcp-timeout"
+#define NM_SETTING_IP_CONFIG_METHOD              "method"
+#define NM_SETTING_IP_CONFIG_DNS                 "dns"
+#define NM_SETTING_IP_CONFIG_DNS_SEARCH          "dns-search"
+#define NM_SETTING_IP_CONFIG_DNS_OPTIONS         "dns-options"
+#define NM_SETTING_IP_CONFIG_DNS_PRIORITY        "dns-priority"
+#define NM_SETTING_IP_CONFIG_ADDRESSES           "addresses"
+#define NM_SETTING_IP_CONFIG_GATEWAY             "gateway"
+#define NM_SETTING_IP_CONFIG_ROUTES              "routes"
+#define NM_SETTING_IP_CONFIG_ROUTE_METRIC        "route-metric"
+#define NM_SETTING_IP_CONFIG_ROUTE_TABLE         "route-table"
+#define NM_SETTING_IP_CONFIG_IGNORE_AUTO_ROUTES  "ignore-auto-routes"
+#define NM_SETTING_IP_CONFIG_IGNORE_AUTO_DNS     "ignore-auto-dns"
+#define NM_SETTING_IP_CONFIG_DHCP_HOSTNAME       "dhcp-hostname"
+#define NM_SETTING_IP_CONFIG_DHCP_SEND_HOSTNAME  "dhcp-send-hostname"
+#define NM_SETTING_IP_CONFIG_DHCP_HOSTNAME_FLAGS "dhcp-hostname-flags"
+#define NM_SETTING_IP_CONFIG_NEVER_DEFAULT       "never-default"
+#define NM_SETTING_IP_CONFIG_MAY_FAIL            "may-fail"
+#define NM_SETTING_IP_CONFIG_DAD_TIMEOUT         "dad-timeout"
+#define NM_SETTING_IP_CONFIG_DHCP_TIMEOUT        "dhcp-timeout"
+#define NM_SETTING_IP_CONFIG_DHCP_IAID           "dhcp-iaid"
+
+/* these are not real GObject properties. */
+#define NM_SETTING_IP_CONFIG_ROUTING_RULES      "routing-rules"
 
 #define NM_SETTING_DNS_OPTION_DEBUG                     "debug"
 #define NM_SETTING_DNS_OPTION_NDOTS                     "ndots"
@@ -202,6 +369,8 @@ gboolean     nm_ip_route_attribute_validate  (const char *name,
 #define NM_SETTING_DNS_OPTION_SINGLE_REQUEST_REOPEN     "single-request-reopen"
 #define NM_SETTING_DNS_OPTION_NO_TLD_QUERY              "no-tld-query"
 #define NM_SETTING_DNS_OPTION_USE_VC                    "use-vc"
+#define NM_SETTING_DNS_OPTION_NO_RELOAD                 "no-reload"
+#define NM_SETTING_DNS_OPTION_TRUST_AD                  "trust-ad"
 
 /**
  * NMSettingIPConfig:
@@ -216,6 +385,45 @@ typedef struct {
 	/* Padding for future expansion */
 	gpointer padding[8];
 } NMSettingIPConfigClass;
+
+/**
+ * NMDhcpHostnameFlags:
+ * @NM_DHCP_HOSTNAME_FLAG_NONE: no flag set. The default value from
+ *   Networkmanager global configuration is used. If such value is unset
+ *   or still zero, the DHCP request will use standard FQDN flags, i.e.
+ *   %NM_DHCP_HOSTNAME_FLAG_FQDN_SERV_UPDATE and
+ *   %NM_DHCP_HOSTNAME_FLAG_FQDN_ENCODED for IPv4 and
+ *   %NM_DHCP_HOSTNAME_FLAG_FQDN_SERV_UPDATE for IPv6.
+ * @NM_DHCP_HOSTNAME_FLAG_FQDN_SERV_UPDATE: whether the server should
+ *   do the A RR (FQDN-to-address) DNS updates.
+ * @NM_DHCP_HOSTNAME_FLAG_FQDN_ENCODED: if set, the FQDN is encoded
+ *   using canonical wire format. Otherwise it uses the deprecated
+ *   ASCII encoding. This flag is allowed only for DHCPv4.
+ * @NM_DHCP_HOSTNAME_FLAG_FQDN_NO_UPDATE: when not set, request the
+ *   server to perform updates (the PTR RR and possibly the A RR
+ *   based on the %NM_DHCP_HOSTNAME_FLAG_FQDN_SERV_UPDATE flag). If
+ *   this is set, the %NM_DHCP_HOSTNAME_FLAG_FQDN_SERV_UPDATE flag
+ *   should be cleared.
+ * @NM_DHCP_HOSTNAME_FLAG_FQDN_CLEAR_FLAGS: when set, no FQDN flags are
+ *   sent in the DHCP FQDN option. When cleared and all other FQDN
+ *   flags are zero, standard FQDN flags are sent. This flag is
+ *   incompatible with any other FQDN flag.
+ *
+ * #NMDhcpHostnameFlags describe flags related to the DHCP hostname and
+ * FQDN.
+ *
+ * Since: 1.22
+ */
+typedef enum { /*< flags >*/
+	NM_DHCP_HOSTNAME_FLAG_NONE             = 0x0,
+
+	NM_DHCP_HOSTNAME_FLAG_FQDN_SERV_UPDATE = 0x1,
+	NM_DHCP_HOSTNAME_FLAG_FQDN_ENCODED     = 0x2,
+	NM_DHCP_HOSTNAME_FLAG_FQDN_NO_UPDATE   = 0x4,
+
+	NM_DHCP_HOSTNAME_FLAG_FQDN_CLEAR_FLAGS = 0x8,
+
+} NMDhcpHostnameFlags;
 
 GType nm_setting_ip_config_get_type (void);
 
@@ -289,6 +497,20 @@ gint64        nm_setting_ip_config_get_route_metric           (NMSettingIPConfig
 NM_AVAILABLE_IN_1_10
 guint32       nm_setting_ip_config_get_route_table            (NMSettingIPConfig *setting);
 
+NM_AVAILABLE_IN_1_18
+guint         nm_setting_ip_config_get_num_routing_rules      (NMSettingIPConfig *setting);
+NM_AVAILABLE_IN_1_18
+NMIPRoutingRule *nm_setting_ip_config_get_routing_rule        (NMSettingIPConfig *setting,
+                                                               guint              idx);
+NM_AVAILABLE_IN_1_18
+void          nm_setting_ip_config_add_routing_rule           (NMSettingIPConfig *setting,
+                                                               NMIPRoutingRule   *routing_rule);
+NM_AVAILABLE_IN_1_18
+void          nm_setting_ip_config_remove_routing_rule        (NMSettingIPConfig *setting,
+                                                               guint              idx);
+NM_AVAILABLE_IN_1_18
+void          nm_setting_ip_config_clear_routing_rules        (NMSettingIPConfig *setting);
+
 gboolean      nm_setting_ip_config_get_ignore_auto_routes     (NMSettingIPConfig *setting);
 gboolean      nm_setting_ip_config_get_ignore_auto_dns        (NMSettingIPConfig *setting);
 
@@ -301,6 +523,11 @@ NM_AVAILABLE_IN_1_2
 int           nm_setting_ip_config_get_dad_timeout            (NMSettingIPConfig *setting);
 NM_AVAILABLE_IN_1_2
 int           nm_setting_ip_config_get_dhcp_timeout           (NMSettingIPConfig *setting);
+NM_AVAILABLE_IN_1_22
+const char   *nm_setting_ip_config_get_dhcp_iaid              (NMSettingIPConfig *setting);
+
+NM_AVAILABLE_IN_1_22
+NMDhcpHostnameFlags nm_setting_ip_config_get_dhcp_hostname_flags (NMSettingIPConfig *setting);
 
 G_END_DECLS
 

@@ -1,31 +1,16 @@
-/*-*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * (C) Copyright 2011 Red Hat, Inc.
+ * Copyright (C) 2011 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-wifi-utils.h"
 
-#include <string.h>
 #include <stdlib.h>
 
 #include "nm-utils.h"
+#include "nm-core-internal.h"
 
 static gboolean
 verify_no_wep (NMSettingWirelessSecurity *s_wsec, const char *tag, GError **error)
@@ -298,96 +283,79 @@ verify_wpa_psk (NMSettingWirelessSecurity *s_wsec,
                 guint32 rsn_flags,
                 GError **error)
 {
-	const char *key_mgmt, *auth_alg, *tmp;
-	int n;
+	const char *key_mgmt, *auth_alg;
 
 	key_mgmt = nm_setting_wireless_security_get_key_mgmt (s_wsec);
 	auth_alg = nm_setting_wireless_security_get_auth_alg (s_wsec);
 
-	if (key_mgmt) {
-		if (!strcmp (key_mgmt, "wpa-psk") || !strcmp (key_mgmt, "wpa-none")) {
-			if (s_8021x) {
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_SETTING,
-				                     _("WPA-PSK authentication is incompatible with 802.1x"));
-				g_prefix_error (error, "%s: ", NM_SETTING_802_1X_SETTING_NAME);
-				return FALSE;
-			}
+	if (!nm_streq0 (key_mgmt, "wpa-psk"))
+		return TRUE;
 
-			if (auth_alg && strcmp (auth_alg, "open")) {
-				/* WPA must use "open" authentication */
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				                     _("WPA-PSK requires 'open' authentication"));
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-				                NM_SETTING_WIRELESS_SECURITY_AUTH_ALG);
-				return FALSE;
-			}
+	if (s_8021x) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_SETTING,
+		                     _("WPA-PSK authentication is incompatible with 802.1x"));
+		g_prefix_error (error, "%s: ", NM_SETTING_802_1X_SETTING_NAME);
+		return FALSE;
+	}
+
+	if (auth_alg && !nm_streq (auth_alg, "open")) {
+		/* WPA must use "open" authentication */
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		                     _("WPA-PSK requires 'open' authentication"));
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+		                NM_SETTING_WIRELESS_SECURITY_AUTH_ALG);
+		return FALSE;
+	}
+
+	/* Make sure the AP's capabilities support WPA-PSK */
+	if (   !(wpa_flags & NM_802_11_AP_SEC_KEY_MGMT_PSK)
+	    && !(rsn_flags & NM_802_11_AP_SEC_KEY_MGMT_PSK)) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		                     _("Access point does not support PSK but setting requires it"));
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+		                NM_SETTING_WIRELESS_SECURITY_KEY_MGMT);
+		return FALSE;
+	}
+
+	if (adhoc) {
+		/* Ad-Hoc RSN requires 'rsn' proto, 'ccmp' pairwise, and 'ccmp' group */
+		if (   nm_setting_wireless_security_get_num_protos (s_wsec) != 1
+		    || !nm_streq0 (nm_setting_wireless_security_get_proto (s_wsec, 0), "rsn")) {
+			g_set_error_literal (error,
+			                     NM_CONNECTION_ERROR,
+			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+			                     _("WPA Ad-Hoc authentication requires 'rsn' protocol"));
+			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+			                NM_SETTING_WIRELESS_SECURITY_PROTO);
+			return FALSE;
 		}
 
-		if (!strcmp (key_mgmt, "wpa-none")) {
-			if (!adhoc) {
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				                     _("WPA Ad-Hoc authentication requires an Ad-Hoc mode AP"));
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SETTING_NAME,
-				                NM_SETTING_WIRELESS_MODE);
-				return FALSE;
-			}
-
-			/* Ad-Hoc WPA requires 'wpa' proto, 'none' pairwise, and 'tkip' group */
-			n = nm_setting_wireless_security_get_num_protos (s_wsec);
-			tmp = (n > 0) ? nm_setting_wireless_security_get_proto (s_wsec, 0) : NULL;
-			if (n > 1 || !tmp || strcmp (tmp, "wpa")) {
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				                     _("WPA Ad-Hoc authentication requires 'wpa' protocol"));
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-				                NM_SETTING_WIRELESS_SECURITY_PROTO);
-				return FALSE;
-			}
-
-			n = nm_setting_wireless_security_get_num_pairwise (s_wsec);
-			tmp = (n > 0) ? nm_setting_wireless_security_get_pairwise (s_wsec, 0) : NULL;
-			if (n > 1 || g_strcmp0 (tmp, "none")) {
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				                     _("WPA Ad-Hoc authentication requires 'none' pairwise cipher"));
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-				                NM_SETTING_WIRELESS_SECURITY_PAIRWISE);
-				return FALSE;
-			}
-
-			n = nm_setting_wireless_security_get_num_groups (s_wsec);
-			tmp = (n > 0) ? nm_setting_wireless_security_get_group (s_wsec, 0) : NULL;
-			if (n > 1 || !tmp || strcmp (tmp, "tkip")) {
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				                     _("WPA Ad-Hoc requires 'tkip' group cipher"));
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-				                NM_SETTING_WIRELESS_SECURITY_GROUP);
-				return FALSE;
-			}
+		if (   nm_setting_wireless_security_get_num_pairwise (s_wsec) != 1
+		    || !nm_streq0 (nm_setting_wireless_security_get_pairwise (s_wsec, 0), "ccmp")) {
+			g_set_error_literal (error,
+			                     NM_CONNECTION_ERROR,
+			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+			                     _("WPA Ad-Hoc authentication requires 'ccmp' pairwise cipher"));
+			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+			                NM_SETTING_WIRELESS_SECURITY_PAIRWISE);
+			return FALSE;
 		}
 
-		if (!strcmp (key_mgmt, "wpa-psk")) {
-			/* Make sure the AP's capabilities support WPA-PSK */
-			if (   !(wpa_flags & NM_802_11_AP_SEC_KEY_MGMT_PSK)
-			    && !(rsn_flags & NM_802_11_AP_SEC_KEY_MGMT_PSK)) {
-				g_set_error_literal (error,
-				                     NM_CONNECTION_ERROR,
-				                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				                     _("Access point does not support PSK but setting requires it"));
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-				                NM_SETTING_WIRELESS_SECURITY_KEY_MGMT);
-				return FALSE;
-			}
+		if (   nm_setting_wireless_security_get_num_groups (s_wsec) != 1
+		    || !nm_streq0 (nm_setting_wireless_security_get_group (s_wsec, 0), "ccmp")) {
+			g_set_error_literal (error,
+			                     NM_CONNECTION_ERROR,
+			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+			                     _("WPA Ad-Hoc requires 'ccmp' group cipher"));
+			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+			                NM_SETTING_WIRELESS_SECURITY_GROUP);
+			return FALSE;
 		}
 	}
 
@@ -464,61 +432,52 @@ verify_adhoc (NMSettingWirelessSecurity *s_wsec,
 {
 	const char *key_mgmt = NULL, *leap_username = NULL, *auth_alg = NULL;
 
+	if (!adhoc)
+		return TRUE;
+
 	if (s_wsec) {
 		key_mgmt = nm_setting_wireless_security_get_key_mgmt (s_wsec);
 		auth_alg = nm_setting_wireless_security_get_auth_alg (s_wsec);
 		leap_username = nm_setting_wireless_security_get_leap_username (s_wsec);
 	}
 
-	if (adhoc) {
-		if (key_mgmt && strcmp (key_mgmt, "wpa-none") && strcmp (key_mgmt, "none")) {
-			g_set_error_literal (error,
-			                     NM_CONNECTION_ERROR,
-			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("Access point mode is Ad-Hoc but setting requires Infrastructure security"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-			                NM_SETTING_WIRELESS_SECURITY_KEY_MGMT);
-			return FALSE;
-		}
+	if (key_mgmt && !NM_IN_STRSET (key_mgmt, "none", "wpa-psk")) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		                     _("Ad-Hoc mode requires 'none' or 'wpa-psk' key management"));
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+		                NM_SETTING_WIRELESS_SECURITY_KEY_MGMT);
+		return FALSE;
+	}
 
-		if (s_8021x) {
-			g_set_error_literal (error,
-			                     NM_CONNECTION_ERROR,
-			                     NM_CONNECTION_ERROR_INVALID_SETTING,
-			                     _("Ad-Hoc mode is incompatible with 802.1x security"));
-			g_prefix_error (error, "%s: ", NM_SETTING_802_1X_SETTING_NAME);
-			return FALSE;
-		}
+	if (s_8021x) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_SETTING,
+		                     _("Ad-Hoc mode is incompatible with 802.1x security"));
+		g_prefix_error (error, "%s: ", NM_SETTING_802_1X_SETTING_NAME);
+		return FALSE;
+	}
 
-		if (leap_username) {
-			g_set_error_literal (error,
-			                     NM_CONNECTION_ERROR,
-			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("Ad-Hoc mode is incompatible with LEAP security"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-			                NM_SETTING_WIRELESS_SECURITY_AUTH_ALG);
-			return FALSE;
-		}
+	if (leap_username) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		                     _("Ad-Hoc mode is incompatible with LEAP security"));
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+		                NM_SETTING_WIRELESS_SECURITY_AUTH_ALG);
+		return FALSE;
+	}
 
-		if (auth_alg && strcmp (auth_alg, "open")) {
-			g_set_error_literal (error,
-			                     NM_CONNECTION_ERROR,
-			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("Ad-Hoc mode requires 'open' authentication"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-			                NM_SETTING_WIRELESS_SECURITY_AUTH_ALG);
-			return FALSE;
-		}
-	} else {
-		if (key_mgmt && !strcmp (key_mgmt, "wpa-none")) {
-			g_set_error_literal (error,
-			                     NM_CONNECTION_ERROR,
-			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("Access point mode is Infrastructure but setting requires Ad-Hoc security"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
-			                NM_SETTING_WIRELESS_SECURITY_KEY_MGMT);
-			return FALSE;
-		}
+	if (auth_alg && !nm_streq (auth_alg, "open")) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		                     _("Ad-Hoc mode requires 'open' authentication"));
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+		                NM_SETTING_WIRELESS_SECURITY_AUTH_ALG);
+		return FALSE;
 	}
 
 	return TRUE;
@@ -528,6 +487,7 @@ gboolean
 nm_wifi_utils_complete_connection (GBytes *ap_ssid,
                                    const char *bssid,
                                    NM80211Mode ap_mode,
+                                   guint32 ap_freq,
                                    guint32 ap_flags,
                                    guint32 ap_wpa_flags,
                                    guint32 ap_rsn_flags,
@@ -541,6 +501,7 @@ nm_wifi_utils_complete_connection (GBytes *ap_ssid,
 	GBytes *ssid;
 	const char *mode, *key_mgmt, *auth_alg, *leap_username;
 	gboolean adhoc = FALSE;
+	gboolean mesh = FALSE;
 
 	s_wifi = nm_connection_get_setting_wireless (connection);
 	g_assert (s_wifi);
@@ -577,6 +538,10 @@ nm_wifi_utils_complete_connection (GBytes *ap_ssid,
 			if (ap_mode == NM_802_11_MODE_ADHOC)
 				valid = TRUE;
 			adhoc = TRUE;
+		} else if (!strcmp (mode, NM_SETTING_WIRELESS_MODE_MESH)) {
+			if (ap_mode == NM_802_11_MODE_MESH)
+				valid = TRUE;
+			mesh = TRUE;
 		}
 
 		if (valid == FALSE) {
@@ -592,8 +557,55 @@ nm_wifi_utils_complete_connection (GBytes *ap_ssid,
 		if (ap_mode == NM_802_11_MODE_ADHOC) {
 			mode = NM_SETTING_WIRELESS_MODE_ADHOC;
 			adhoc = TRUE;
+		} else if (ap_mode == NM_802_11_MODE_MESH) {
+			mode = NM_SETTING_WIRELESS_MODE_MESH;
+			mesh = TRUE;
 		}
 		g_object_set (G_OBJECT (s_wifi), NM_SETTING_WIRELESS_MODE, mode, NULL);
+	}
+
+	/* For now mesh requires channel and band, fill them only if both not present.
+	 * Do not check existing values against an existing ap/mesh point,
+	 * mesh join will start a new network if required */
+	if (mesh) {
+		const char *band;
+		guint32 channel;
+		gboolean band_valid = TRUE;
+		gboolean chan_valid = TRUE;
+		gboolean valid;
+
+		band = nm_setting_wireless_get_band (s_wifi);
+		channel = nm_setting_wireless_get_channel (s_wifi);
+
+		valid =    ((band == NULL) && (channel == 0))
+		        || ((band != NULL) && (channel != 0));
+
+		if ((band == NULL) && (channel == 0)) {
+			channel = nm_utils_wifi_freq_to_channel (ap_freq);
+			if (channel) {
+				g_object_set (s_wifi,
+				              NM_SETTING_WIRELESS_CHANNEL, channel,
+				              NULL);
+			} else {
+				chan_valid = FALSE;
+			}
+
+			band = nm_utils_wifi_freq_to_band (ap_freq);
+			if (band) {
+				g_object_set (s_wifi, NM_SETTING_WIRELESS_BAND, band, NULL);
+			} else {
+				band_valid = FALSE;
+			}
+		}
+
+		if (!valid || !chan_valid || !band_valid) {
+			g_set_error (error,
+			             NM_CONNECTION_ERROR,
+			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+			             _("connection does not match mesh point"));
+			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SETTING_NAME, NM_SETTING_WIRELESS_MODE);
+			return FALSE;
+		}
 	}
 
 	/* Security */
@@ -721,11 +733,13 @@ nm_wifi_utils_complete_connection (GBytes *ap_ssid,
 		return FALSE;
 
 	if (adhoc) {
-		g_object_set (s_wsec, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-none", NULL);
-		/* Ad-Hoc does not support RSN/WPA2 */
-		nm_setting_wireless_security_add_proto (s_wsec, "wpa");
-		nm_setting_wireless_security_add_pairwise (s_wsec, "none");
-		nm_setting_wireless_security_add_group (s_wsec, "tkip");
+		g_object_set (s_wsec,
+		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk",
+		              NM_SETTING_WIRELESS_SECURITY_AUTH_ALG, "open",
+		              NULL);
+		nm_setting_wireless_security_add_proto (s_wsec, "rsn");
+		nm_setting_wireless_security_add_pairwise (s_wsec, "ccmp");
+		nm_setting_wireless_security_add_group (s_wsec, "ccmp");
 	} else if (s_8021x) {
 		g_object_set (s_wsec,
 		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-eap",
@@ -739,6 +753,19 @@ nm_wifi_utils_complete_connection (GBytes *ap_ssid,
 		 * setting.  Since there's so much configuration required for it, there's
 		 * no way it can be automatically completed.
 		 */
+	} else if (   (key_mgmt && !strcmp (key_mgmt, "sae"))
+	           || (ap_rsn_flags & NM_802_11_AP_SEC_KEY_MGMT_SAE)) {
+		g_object_set (s_wsec,
+		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "sae",
+		              NM_SETTING_WIRELESS_SECURITY_AUTH_ALG, "open",
+		              NULL);
+	} else if (   (key_mgmt && !strcmp (key_mgmt, "owe"))
+	           || NM_FLAGS_ANY (ap_rsn_flags, NM_802_11_AP_SEC_KEY_MGMT_OWE |
+	                                          NM_802_11_AP_SEC_KEY_MGMT_OWE_TM)) {
+		g_object_set (s_wsec,
+		              NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "owe",
+		              NM_SETTING_WIRELESS_SECURITY_AUTH_ALG, "open",
+		              NULL);
 	} else if (   (key_mgmt && !strcmp (key_mgmt, "wpa-psk"))
 	           || (ap_wpa_flags & NM_802_11_AP_SEC_KEY_MGMT_PSK)
 	           || (ap_rsn_flags & NM_802_11_AP_SEC_KEY_MGMT_PSK)) {
@@ -758,25 +785,6 @@ nm_wifi_utils_complete_connection (GBytes *ap_ssid,
 	}
 
 	return TRUE;
-}
-
-guint32
-nm_wifi_utils_level_to_quality (int val)
-{
-	if (val < 0) {
-		/* Assume dBm already; rough conversion: best = -40, worst = -100 */
-		val = abs (CLAMP (val, -100, -40) + 40);  /* normalize to 0 */
-		val = 100 - (int) ((100.0 * (double) val) / 60.0);
-	} else if (val > 110 && val < 256) {
-		/* assume old-style WEXT 8-bit unsigned signal level */
-		val -= 256;  /* subtract 256 to convert to dBm */
-		val = abs (CLAMP (val, -100, -40) + 40);  /* normalize to 0 */
-		val = 100 - (int) ((100.0 * (double) val) / 60.0);
-	} else {
-		/* Assume signal is a "quality" percentage */
-	}
-
-	return CLAMP (val, 0, 100);
 }
 
 gboolean

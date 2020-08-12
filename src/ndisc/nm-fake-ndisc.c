@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-fake-ndisc.c - Fake implementation of neighbor discovery
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2013 Red Hat, Inc.
  */
 
@@ -22,7 +7,6 @@
 
 #include "nm-fake-ndisc.h"
 
-#include <string.h>
 #include <arpa/inet.h>
 
 #include "nm-ndisc-private.h"
@@ -78,7 +62,7 @@ struct _NMFakeRNDiscClass {
 
 G_DEFINE_TYPE (NMFakeNDisc, nm_fake_ndisc, NM_TYPE_NDISC)
 
-#define NM_FAKE_NDISC_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMFakeNDisc, NM_IS_FAKE_NDISC)
+#define NM_FAKE_NDISC_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMFakeNDisc, NM_IS_FAKE_NDISC, NMNDisc)
 
 /*****************************************************************************/
 
@@ -250,7 +234,7 @@ receive_ra (gpointer user_data)
 	NMNDiscDataInternal *rdata = ndisc->rdata;
 	FakeRa *ra = priv->ras->data;
 	NMNDiscConfigMap changed = 0;
-	gint32 now = nm_utils_get_monotonic_timestamp_s ();
+	gint32 now = nm_utils_get_monotonic_timestamp_sec ();
 	guint i;
 	NMNDiscDHCPLevel dhcp_level;
 
@@ -342,7 +326,7 @@ receive_ra (gpointer user_data)
 static void
 start (NMNDisc *ndisc)
 {
-	NMFakeNDiscPrivate *priv = NM_FAKE_NDISC_GET_PRIVATE ((NMFakeNDisc *) ndisc);
+	NMFakeNDiscPrivate *priv = NM_FAKE_NDISC_GET_PRIVATE (ndisc);
 	FakeRa *ra;
 
 	/* Queue up the first fake RA */
@@ -382,7 +366,7 @@ nm_fake_ndisc_new (int ifindex, const char *ifname)
 static void
 dispose (GObject *object)
 {
-	NMFakeNDiscPrivate *priv = NM_FAKE_NDISC_GET_PRIVATE ((NMFakeNDisc *) object);
+	NMFakeNDiscPrivate *priv = NM_FAKE_NDISC_GET_PRIVATE (object);
 
 	nm_clear_g_source (&priv->receive_ra_id);
 

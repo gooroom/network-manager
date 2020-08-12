@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -52,6 +39,8 @@
 #include "nmt-page-team-port.h"
 #include "nmt-page-vlan.h"
 #include "nmt-page-wifi.h"
+
+#include "nm-meta-setting-access.h"
 
 G_DEFINE_TYPE (NmtEditor, nmt_editor, NMT_TYPE_NEWT_FORM)
 
@@ -230,6 +219,8 @@ build_edit_connection (NMConnection *orig_connection)
 	settings = nm_connection_to_dbus (orig_connection, NM_CONNECTION_SERIALIZE_NO_SECRETS);
 	g_variant_iter_init (&iter, settings);
 	while (g_variant_iter_next (&iter, "{&s@a{sv}}", &setting_name, NULL)) {
+		if (!nm_meta_setting_info_editor_has_secrets (nm_meta_setting_info_editor_find_by_name (setting_name, FALSE)))
+			continue;
 		nmt_sync_op_init (&op);
 		nm_remote_connection_get_secrets_async (NM_REMOTE_CONNECTION (orig_connection),
 		                                        setting_name, NULL, got_secrets, &op);

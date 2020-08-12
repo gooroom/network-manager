@@ -1,27 +1,10 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
  * Copyright (C) 2015 Red Hat, Inc.
- *
  */
 
 #include "nm-default.h"
 
-#include <string.h>
-#include <errno.h>
 #include <arpa/inet.h>
 
 #include "nm-test-utils-core.h"
@@ -64,10 +47,10 @@ _do_test_hw_addr (NMUtilsStableType stable_type,
                   const char *ifname,
                   const char *current_mac_address,
                   const char *generate_mac_address_mask,
-                  const char **expected)
+                  const char *const *expected)
 {
 	gs_free char *generated = NULL;
-	const char **e;
+	const char *const *e;
 	gboolean found = FALSE;
 
 	for (e = expected; *e; e++) {
@@ -95,7 +78,13 @@ _do_test_hw_addr (NMUtilsStableType stable_type,
 	g_assert (found);
 }
 #define do_test_hw_addr(stable_type, stable_id, secret_key, ifname, current_mac_address, generate_mac_address_mask, ...) \
-	_do_test_hw_addr ((stable_type), (stable_id), (const guint8 *) ""secret_key"", NM_STRLEN (secret_key), (ifname), ""current_mac_address"", generate_mac_address_mask, (const char *[]) { __VA_ARGS__, NULL })
+	_do_test_hw_addr ((stable_type), \
+	                  (stable_id), \
+	                  (const guint8 *) ""secret_key"", \
+	                  NM_STRLEN (secret_key), (ifname), \
+	                  ""current_mac_address"", \
+	                  generate_mac_address_mask, \
+	                  NM_MAKE_STRV (__VA_ARGS__))
 
 static void
 test_hw_addr_gen_stable_eth (void)

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-2.1+ */
 
-#include "nm-sd-adapt.h"
+#include "nm-sd-adapt-core.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -14,7 +14,7 @@
 #include "stdio-util.h"
 
 #if 0 /* NM_IGNORED */
-char *id128_to_uuid_string(sd_id128_t id, char s[37]) {
+char *id128_to_uuid_string(sd_id128_t id, char s[static ID128_UUID_STRING_MAX]) {
         unsigned n, k = 0;
 
         assert(s);
@@ -187,16 +187,26 @@ int id128_write(const char *p, Id128Format f, sd_id128_t id, bool do_sync) {
         return id128_write_fd(fd, f, id, do_sync);
 }
 
-void id128_hash_func(const void *p, struct siphash *state) {
-        siphash24_compress(p, 16, state);
+void id128_hash_func(const sd_id128_t *p, struct siphash *state) {
+        siphash24_compress(p, sizeof(sd_id128_t), state);
 }
 
-int id128_compare_func(const void *a, const void *b) {
+int id128_compare_func(const sd_id128_t *a, const sd_id128_t *b) {
         return memcmp(a, b, 16);
 }
 
-const struct hash_ops id128_hash_ops = {
-        .hash = id128_hash_func,
-        .compare = id128_compare_func,
-};
+sd_id128_t id128_make_v4_uuid(sd_id128_t id) {
+        /* Stolen from generate_random_uuid() of drivers/char/random.c
+         * in the kernel sources */
+
+        /* Set UUID version to 4 --- truly random generation */
+        id.bytes[6] = (id.bytes[6] & 0x0F) | 0x40;
+
+        /* Set the UUID variant to DCE */
+        id.bytes[8] = (id.bytes[8] & 0x3F) | 0x80;
+
+        return id;
+}
+
+DEFINE_HASH_OPS(id128_hash_ops, sd_id128_t, id128_hash_func, id128_compare_func);
 #endif /* NM_IGNORED */

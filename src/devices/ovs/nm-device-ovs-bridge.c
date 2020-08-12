@@ -1,20 +1,6 @@
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -77,17 +63,10 @@ get_generic_capabilities (NMDevice *device)
 }
 
 static NMActStageReturn
-act_stage3_ip4_config_start (NMDevice *device,
-                             NMIP4Config **out_config,
-                             NMDeviceStateReason *out_failure_reason)
-{
-	return NM_ACT_STAGE_RETURN_IP_FAIL;
-}
-
-static NMActStageReturn
-act_stage3_ip6_config_start (NMDevice *device,
-                             NMIP6Config **out_config,
-                             NMDeviceStateReason *out_failure_reason)
+act_stage3_ip_config_start (NMDevice *device,
+                            int addr_family,
+                            gpointer *out_config,
+                            NMDeviceStateReason *out_failure_reason)
 {
 	return NM_ACT_STAGE_RETURN_IP_FAIL;
 }
@@ -146,8 +125,7 @@ nm_device_ovs_bridge_class_init (NMDeviceOvsBridgeClass *klass)
 	device_class->create_and_realize = create_and_realize;
 	device_class->unrealize = unrealize;
 	device_class->get_generic_capabilities = get_generic_capabilities;
-	device_class->act_stage3_ip4_config_start = act_stage3_ip4_config_start;
-	device_class->act_stage3_ip6_config_start = act_stage3_ip6_config_start;
+	device_class->act_stage3_ip_config_start = act_stage3_ip_config_start;
 	device_class->enslave_slave = enslave_slave;
 	device_class->release_slave = release_slave;
 }

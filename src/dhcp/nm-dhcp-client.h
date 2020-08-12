@@ -1,18 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2005 - 2010 Red Hat, Inc.
  */
 
@@ -25,8 +12,8 @@
 #include "nm-ip6-config.h"
 #include "nm-dhcp-utils.h"
 
-#define NM_DHCP_TIMEOUT_DEFAULT ((guint32) 45) /* default DHCP timeout, in seconds */
-#define NM_DHCP_TIMEOUT_INFINITY G_MAXINT32
+#define NM_DHCP_TIMEOUT_DEFAULT  ((guint32) 45) /* default DHCP timeout, in seconds */
+#define NM_DHCP_TIMEOUT_INFINITY ((guint32) G_MAXINT32)
 
 #define NM_TYPE_DHCP_CLIENT            (nm_dhcp_client_get_type ())
 #define NM_DHCP_CLIENT(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_DHCP_CLIENT, NMDhcpClient))
@@ -35,28 +22,35 @@
 #define NM_IS_DHCP_CLIENT_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), NM_TYPE_DHCP_CLIENT))
 #define NM_DHCP_CLIENT_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), NM_TYPE_DHCP_CLIENT, NMDhcpClientClass))
 
-#define NM_DHCP_CLIENT_ADDR_FAMILY  "addr-family"
-#define NM_DHCP_CLIENT_FLAGS        "flags"
-#define NM_DHCP_CLIENT_HWADDR       "hwaddr"
-#define NM_DHCP_CLIENT_IFINDEX      "ifindex"
-#define NM_DHCP_CLIENT_INTERFACE    "iface"
-#define NM_DHCP_CLIENT_MULTI_IDX    "multi-idx"
-#define NM_DHCP_CLIENT_HOSTNAME     "hostname"
-#define NM_DHCP_CLIENT_ROUTE_METRIC "route-metric"
-#define NM_DHCP_CLIENT_ROUTE_TABLE  "route-table"
-#define NM_DHCP_CLIENT_TIMEOUT      "timeout"
-#define NM_DHCP_CLIENT_UUID         "uuid"
+#define NM_DHCP_CLIENT_ADDR_FAMILY      "addr-family"
+#define NM_DHCP_CLIENT_FLAGS            "flags"
+#define NM_DHCP_CLIENT_HWADDR           "hwaddr"
+#define NM_DHCP_CLIENT_BROADCAST_HWADDR "broadcast-hwaddr"
+#define NM_DHCP_CLIENT_IFINDEX          "ifindex"
+#define NM_DHCP_CLIENT_INTERFACE        "iface"
+#define NM_DHCP_CLIENT_MULTI_IDX        "multi-idx"
+#define NM_DHCP_CLIENT_HOSTNAME         "hostname"
+#define NM_DHCP_CLIENT_MUD_URL          "mud-url"
+#define NM_DHCP_CLIENT_ROUTE_METRIC     "route-metric"
+#define NM_DHCP_CLIENT_ROUTE_TABLE      "route-table"
+#define NM_DHCP_CLIENT_TIMEOUT          "timeout"
+#define NM_DHCP_CLIENT_UUID             "uuid"
+#define NM_DHCP_CLIENT_IAID             "iaid"
+#define NM_DHCP_CLIENT_IAID_EXPLICIT    "iaid-explicit"
+#define NM_DHCP_CLIENT_HOSTNAME_FLAGS   "hostname-flags"
 
 #define NM_DHCP_CLIENT_SIGNAL_STATE_CHANGED "state-changed"
 #define NM_DHCP_CLIENT_SIGNAL_PREFIX_DELEGATED "prefix-delegated"
 
 typedef enum {
 	NM_DHCP_STATE_UNKNOWN = 0,
-	NM_DHCP_STATE_BOUND,        /* new lease or lease changed */
+	NM_DHCP_STATE_BOUND,        /* new lease */
+	NM_DHCP_STATE_EXTENDED,     /* lease extended */
 	NM_DHCP_STATE_TIMEOUT,      /* timed out contacting server */
 	NM_DHCP_STATE_DONE,         /* client quit or stopped */
 	NM_DHCP_STATE_EXPIRE,       /* lease expired or NAKed */
 	NM_DHCP_STATE_FAIL,         /* failed for some reason */
+	NM_DHCP_STATE_TERMINATED,   /* client is no longer running */
 	__NM_DHCP_STATE_MAX,
 	NM_DHCP_STATE_MAX = __NM_DHCP_STATE_MAX - 1,
 } NMDhcpState;
@@ -80,6 +74,13 @@ typedef struct {
 	gboolean (*ip4_start)     (NMDhcpClient *self,
 	                           const char *anycast_addr,
 	                           const char *last_ip4_address,
+	                           GError **error);
+
+	gboolean (*accept)        (NMDhcpClient *self,
+	                           GError **error);
+
+	gboolean (*decline)       (NMDhcpClient *self,
+	                           const char *error_message,
 	                           GError **error);
 
 	gboolean (*ip6_start)     (NMDhcpClient *self,
@@ -122,6 +123,8 @@ GBytes *nm_dhcp_client_get_duid (NMDhcpClient *self);
 
 GBytes *nm_dhcp_client_get_hw_addr (NMDhcpClient *self);
 
+GBytes *nm_dhcp_client_get_broadcast_hw_addr (NMDhcpClient *self);
+
 guint32 nm_dhcp_client_get_route_table (NMDhcpClient *self);
 
 void nm_dhcp_client_set_route_table (NMDhcpClient *self, guint32 route_table);
@@ -132,9 +135,16 @@ void nm_dhcp_client_set_route_metric (NMDhcpClient *self, guint32 route_metric);
 
 guint32 nm_dhcp_client_get_timeout (NMDhcpClient *self);
 
+guint32 nm_dhcp_client_get_iaid (NMDhcpClient *self);
+
+gboolean nm_dhcp_client_get_iaid_explicit (NMDhcpClient *self);
+
 GBytes *nm_dhcp_client_get_client_id (NMDhcpClient *self);
 
 const char *nm_dhcp_client_get_hostname (NMDhcpClient *self);
+const char *nm_dhcp_client_get_mud_url (NMDhcpClient *self);
+
+NMDhcpHostnameFlags nm_dhcp_client_get_hostname_flags (NMDhcpClient *self);
 
 gboolean nm_dhcp_client_get_info_only (NMDhcpClient *self);
 
@@ -154,6 +164,13 @@ gboolean nm_dhcp_client_start_ip6 (NMDhcpClient *self,
                                    NMSettingIP6ConfigPrivacy privacy,
                                    guint needed_prefixes,
                                    GError **error);
+
+gboolean nm_dhcp_client_accept (NMDhcpClient *self,
+                                GError **error);
+
+gboolean nm_dhcp_client_decline (NMDhcpClient *self,
+                                 const char *error_message,
+                                 GError **error);
 
 void nm_dhcp_client_stop (NMDhcpClient *self, gboolean release);
 
@@ -185,19 +202,28 @@ void nm_dhcp_client_set_client_id_bin (NMDhcpClient *self,
                                        const guint8 *client_id,
                                        gsize len);
 
+void nm_dhcp_client_emit_ipv6_prefix_delegated (NMDhcpClient *self,
+                                                const NMPlatformIP6Address *prefix);
+
 /*****************************************************************************
  * Client data
  *****************************************************************************/
 
 typedef struct {
-	GType (*get_type)(void);
+	GType (*get_type) (void);
+	GType (*get_type_per_addr_family) (int addr_family);
 	const char *name;
 	const char *(*get_path) (void);
+	bool experimental:1;
 } NMDhcpClientFactory;
+
+GType nm_dhcp_nettools_get_type (void);
 
 extern const NMDhcpClientFactory _nm_dhcp_client_factory_dhcpcanon;
 extern const NMDhcpClientFactory _nm_dhcp_client_factory_dhclient;
 extern const NMDhcpClientFactory _nm_dhcp_client_factory_dhcpcd;
 extern const NMDhcpClientFactory _nm_dhcp_client_factory_internal;
+extern const NMDhcpClientFactory _nm_dhcp_client_factory_systemd;
+extern const NMDhcpClientFactory _nm_dhcp_client_factory_nettools;
 
 #endif /* __NETWORKMANAGER_DHCP_CLIENT_H__ */

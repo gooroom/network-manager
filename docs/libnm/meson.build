@@ -1,12 +1,18 @@
-doc_module = libnm_name
+# SPDX-License-Identifier: LGPL-2.1+
+
+src_dirs = [
+  libnm_core_inc,
+  libnm_inc,
+]
 
 private_headers = [
   'common.h',
-  'nm-crypto.h',
-  'nm-crypto-impl.h',
-  'nm-dbus-helpers.h',
   'nm-core-internal.h',
+  'nm-core-tests-enum-types.h',
   'nm-core-types-internal.h',
+  'nm-crypto-impl.h',
+  'nm-crypto.h',
+  'nm-dbus-helpers.h',
   'nm-device-private.h',
   'nm-dhcp4-config.h',
   'nm-dhcp6-config.h',
@@ -17,37 +23,46 @@ private_headers = [
   'nm-object-private.h',
   'nm-property-compare.h',
   'nm-remote-connection-private.h',
-  'nm-remote-settings.h',
   'nm-setting-private.h',
   'nm-utils-private.h',
-  'nm-core-tests-enum-types.h',
+
+  'test-general-enums.h',
+
   'nm-keyfile-internal.h',
   'nm-keyfile-utils.h',
-  'test-general-enums.h'
+
+  'nm-auth-subject.h',
+  'nm-common-macros.h',
+  'nm-ethtool-utils.h',
+  'nm-libnm-core-utils.h',
+
+  'nm-dispatcher-api.h',
+  'nm-libnm-core-aux.h',
 ]
 
-configure_file(
-  input: version_xml + '.in',
-  output: version_xml,
-  configuration: version_conf
+scan_args = [
+  '--rebuild-types',
+  '--rebuild-sections',
+  '--ignore-decorators=NM_AVAILABLE_IN_\d_\d\d?|NM_DEPRECATED_IN_\d_\d\d?',
+  '--ignore-headers=' + ' '.join(private_headers),
+]
+
+version_xml = configure_file(
+  input: 'version.xml.in',
+  output: '@BASENAME@',
+  configuration: data_conf,
 )
 
 gnome.gtkdoc(
-  doc_module,
-  main_xml: doc_module + '-docs.xml',
-  src_dir: [
-    libnm_core_inc,
-    libnm_inc
-  ],
+  libnm_name,
+  main_xml: libnm_name + '-docs.xml',
+  src_dir: src_dirs,
   dependencies: libnm_dep,
-  scan_args: [
-    '--rebuild-types',
-    '--rebuild-sections',
-    '--ignore-headers=' + ' '.join(private_headers)
-  ],
+  scan_args: scan_args,
   scanobjs_args: '--type-init-func="g_type_init();"',
-  fixxref_args: '--html-dir=' + join_paths(nm_prefix, gnome.gtkdoc_html_dir(doc_module)),
-  gobject_typesfile: doc_module + '.types',
-  html_assets: doc_module + '.png',
-  install: true
+  fixxref_args: '--html-dir=' + join_paths(nm_prefix, gnome.gtkdoc_html_dir(libnm_name)),
+  gobject_typesfile: libnm_name + '.types',
+  html_assets: 'libnm.png',
+  content_files: version_xml,
+  install: true,
 )

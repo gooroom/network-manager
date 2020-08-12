@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2008 - 2012 Red Hat, Inc.
  */
 
@@ -163,6 +148,13 @@ nm_active_connection_set_state_flags (NMActiveConnection *self,
 	nm_active_connection_set_state_flags_full (self, state_flags, state_flags);
 }
 
+static inline void
+nm_active_connection_set_state_flags_clear (NMActiveConnection *self,
+                                            NMActivationStateFlags state_flags)
+{
+	nm_active_connection_set_state_flags_full (self, NM_ACTIVATION_STATE_FLAG_NONE, state_flags);
+}
+
 NMDevice *    nm_active_connection_get_device (NMActiveConnection *self);
 
 gboolean      nm_active_connection_set_device (NMActiveConnection *self, NMDevice *device);
@@ -184,6 +176,8 @@ void          nm_active_connection_set_parent (NMActiveConnection *self,
 NMActivationType nm_active_connection_get_activation_type (NMActiveConnection *self);
 
 NMActivationReason nm_active_connection_get_activation_reason (NMActiveConnection *self);
+
+NMKeepAlive  *nm_active_connection_get_keep_alive (NMActiveConnection *self);
 
 void          nm_active_connection_clear_secrets (NMActiveConnection *self);
 

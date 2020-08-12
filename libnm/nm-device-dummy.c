@@ -1,51 +1,34 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
-
 #include "nm-device-dummy.h"
+
 #include "nm-object-private.h"
 #include "nm-setting-dummy.h"
 #include "nm-setting-connection.h"
 
+/*****************************************************************************/
+
+struct _NMDeviceDummy {
+	NMDevice parent;
+};
+
+struct _NMDeviceDummyClass {
+	NMDeviceClass parent;
+};
+
 G_DEFINE_TYPE (NMDeviceDummy, nm_device_dummy, NM_TYPE_DEVICE)
 
-#define NM_DEVICE_DUMMY_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_DUMMY, NMDeviceDummyPrivate))
-
-typedef struct {
-	char *hw_address;
-} NMDeviceDummyPrivate;
-
-enum {
-	PROP_0,
-	PROP_HW_ADDRESS,
-
-	LAST_PROP
-};
+#define NM_DEVICE_DUMMY_GET_PRIVATE(self) _NM_GET_PRIVATE(self, NMDeviceDummy, NM_IS_DEVICE_DUMMY, NMObject, NMDevice)
 
 /*****************************************************************************/
 
 /**
- * nm_device_dummy_get_hw_address:
+ * nm_device_dummy_get_hw_address: (skip)
  * @device: a #NMDeviceDummy
  *
  * Gets the hardware (MAC) address of the #NMDeviceDummy
@@ -54,13 +37,15 @@ enum {
  * device, and must not be modified.
  *
  * Since: 1.10
+ *
+ * Deprecated: 1.24: Use nm_device_get_hw_address() instead.
  **/
 const char *
 nm_device_dummy_get_hw_address (NMDeviceDummy *device)
 {
 	g_return_val_if_fail (NM_IS_DEVICE_DUMMY (device), NULL);
 
-	return nm_str_not_empty (NM_DEVICE_DUMMY_GET_PRIVATE (device)->hw_address);
+	return nm_device_get_hw_address (NM_DEVICE (device));
 }
 
 static gboolean
@@ -93,12 +78,6 @@ get_setting_type (NMDevice *device)
 	return NM_TYPE_SETTING_DUMMY;
 }
 
-static const char *
-get_hw_address (NMDevice *device)
-{
-	return nm_device_dummy_get_hw_address (NM_DEVICE_DUMMY (device));
-}
-
 /*****************************************************************************/
 
 static void
@@ -106,79 +85,20 @@ nm_device_dummy_init (NMDeviceDummy *device)
 {
 }
 
-static void
-init_dbus (NMObject *object)
-{
-	NMDeviceDummyPrivate *priv = NM_DEVICE_DUMMY_GET_PRIVATE (object);
-	const NMPropertiesInfo property_info[] = {
-		{ NM_DEVICE_DUMMY_HW_ADDRESS, &priv->hw_address },
-		{ NULL },
-	};
-
-	NM_OBJECT_CLASS (nm_device_dummy_parent_class)->init_dbus (object);
-
-	_nm_object_register_properties (object,
-	                                NM_DBUS_INTERFACE_DEVICE_DUMMY,
-	                                property_info);
-}
-
-static void
-dispose (GObject *object)
-{
-	NMDeviceDummyPrivate *priv = NM_DEVICE_DUMMY_GET_PRIVATE (object);
-
-	g_clear_pointer (&priv->hw_address, g_free);
-
-	G_OBJECT_CLASS (nm_device_dummy_parent_class)->dispose (object);
-}
-
-static void
-get_property (GObject *object,
-              guint prop_id,
-              GValue *value,
-              GParamSpec *pspec)
-{
-	NMDeviceDummy *device = NM_DEVICE_DUMMY (object);
-
-	switch (prop_id) {
-	case PROP_HW_ADDRESS:
-		g_value_set_string (value, nm_device_dummy_get_hw_address (device));
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
-}
+const NMLDBusMetaIface _nml_dbus_meta_iface_nm_device_dummy = NML_DBUS_META_IFACE_INIT (
+	NM_DBUS_INTERFACE_DEVICE_DUMMY,
+	nm_device_dummy_get_type,
+	NML_DBUS_META_INTERFACE_PRIO_INSTANTIATE_HIGH,
+	NML_DBUS_META_IFACE_DBUS_PROPERTIES (
+		NML_DBUS_META_PROPERTY_INIT_FCN ("HwAddress", 0, "s", _nm_device_notify_update_prop_hw_address ),
+	),
+);
 
 static void
 nm_device_dummy_class_init (NMDeviceDummyClass *dummy_class)
 {
-	GObjectClass *object_class = G_OBJECT_CLASS (dummy_class);
-	NMObjectClass *nm_object_class = NM_OBJECT_CLASS (dummy_class);
 	NMDeviceClass *device_class = NM_DEVICE_CLASS (dummy_class);
 
-	g_type_class_add_private (dummy_class, sizeof (NMDeviceDummyPrivate));
-
-	object_class->dispose = dispose;
-	object_class->get_property = get_property;
-
-	nm_object_class->init_dbus = init_dbus;
-
 	device_class->connection_compatible = connection_compatible;
-	device_class->get_hw_address = get_hw_address;
-	device_class->get_setting_type = get_setting_type;
-
-	/**
-	 * NMDeviceDummy:hw-address:
-	 *
-	 * The active hardware (MAC) address of the device.
-	 *
-	 * Since: 1.10
-	 **/
-	g_object_class_install_property
-		(object_class, PROP_HW_ADDRESS,
-		 g_param_spec_string (NM_DEVICE_DUMMY_HW_ADDRESS, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	device_class->get_setting_type      = get_setting_type;
 }

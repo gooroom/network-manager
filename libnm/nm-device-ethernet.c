@@ -1,74 +1,67 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2008 Novell, Inc.
- * Copyright 2007 - 2012 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2012 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
+#include "nm-device-ethernet.h"
 
 #include "nm-setting-connection.h"
 #include "nm-setting-wired.h"
 #include "nm-setting-pppoe.h"
 #include "nm-utils.h"
-
-#include "nm-device-ethernet.h"
 #include "nm-object-private.h"
 
-G_DEFINE_TYPE (NMDeviceEthernet, nm_device_ethernet, NM_TYPE_DEVICE)
+/*****************************************************************************/
 
-#define NM_DEVICE_ETHERNET_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_ETHERNET, NMDeviceEthernetPrivate))
-
-typedef struct {
-	char *hw_address;
-	char *perm_hw_address;
-	guint32 speed;
-	gboolean carrier;
-	char **s390_subchannels;
-} NMDeviceEthernetPrivate;
-
-enum {
-	PROP_0,
-	PROP_HW_ADDRESS,
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
 	PROP_PERM_HW_ADDRESS,
 	PROP_SPEED,
 	PROP_CARRIER,
 	PROP_S390_SUBCHANNELS,
+);
 
-	LAST_PROP
+typedef struct {
+	char **s390_subchannels;
+	char *perm_hw_address;
+	guint32 speed;
+	bool carrier;
+} NMDeviceEthernetPrivate;
+
+struct _NMDeviceEthernet {
+	NMDevice parent;
+	NMDeviceEthernetPrivate _priv;
 };
 
+struct _NMDeviceEthernetClass {
+	NMDeviceClass parent;
+};
+
+G_DEFINE_TYPE (NMDeviceEthernet, nm_device_ethernet, NM_TYPE_DEVICE)
+
+#define NM_DEVICE_ETHERNET_GET_PRIVATE(self) _NM_GET_PRIVATE(self, NMDeviceEthernet, NM_IS_DEVICE_ETHERNET, NMObject, NMDevice)
+
+/*****************************************************************************/
+
 /**
- * nm_device_ethernet_get_hw_address:
+ * nm_device_ethernet_get_hw_address: (skip)
  * @device: a #NMDeviceEthernet
  *
  * Gets the active hardware (MAC) address of the #NMDeviceEthernet
  *
  * Returns: the active hardware address. This is the internal string used by the
  * device, and must not be modified.
+ *
+ * Deprecated: 1.24: Use nm_device_get_hw_address() instead.
  **/
 const char *
 nm_device_ethernet_get_hw_address (NMDeviceEthernet *device)
 {
 	g_return_val_if_fail (NM_IS_DEVICE_ETHERNET (device), NULL);
 
-	return nm_str_not_empty (NM_DEVICE_ETHERNET_GET_PRIVATE (device)->hw_address);
+	return nm_device_get_hw_address (NM_DEVICE (device));
 }
 
 /**
@@ -85,7 +78,7 @@ nm_device_ethernet_get_permanent_hw_address (NMDeviceEthernet *device)
 {
 	g_return_val_if_fail (NM_IS_DEVICE_ETHERNET (device), NULL);
 
-	return nm_str_not_empty (NM_DEVICE_ETHERNET_GET_PRIVATE (device)->perm_hw_address);
+	return _nml_coerce_property_str_not_empty (NM_DEVICE_ETHERNET_GET_PRIVATE (device)->perm_hw_address);
 }
 
 /**
@@ -131,24 +124,12 @@ nm_device_ethernet_get_carrier (NMDeviceEthernet *device)
  *
  * Since: 1.2
  **/
-const char * const *
+const char *const*
 nm_device_ethernet_get_s390_subchannels (NMDeviceEthernet *device)
 {
 	g_return_val_if_fail (NM_IS_DEVICE_ETHERNET (device), NULL);
 
-	return (const char * const *) NM_DEVICE_ETHERNET_GET_PRIVATE (device)->s390_subchannels;
-}
-
-static guint32
-_subchannels_count_num (const char * const *array)
-{
-	int i;
-
-	if (!array)
-		return 0;
-	for (i = 0; array[i]; i++)
-		/* NOP */;
-	return i;
+	return (const char *const*) NM_DEVICE_ETHERNET_GET_PRIVATE (device)->s390_subchannels;
 }
 
 static gboolean
@@ -156,14 +137,14 @@ match_subchans (NMDeviceEthernet *self, NMSettingWired *s_wired, gboolean *try_m
 {
 	NMDeviceEthernetPrivate *priv = NM_DEVICE_ETHERNET_GET_PRIVATE (self);
 	const char * const *subchans;
-	guint32 num1, num2;
-	int i, j;
+	gsize num1, num2;
+	gsize i, j;
 
 	*try_mac = TRUE;
 
 	subchans = nm_setting_wired_get_s390_subchannels (s_wired);
-	num1 = _subchannels_count_num (subchans);
-	num2 = _subchannels_count_num ((const char * const *) priv->s390_subchannels);
+	num1 = NM_PTRARRAY_LEN (subchans);
+	num2 = NM_PTRARRAY_LEN (priv->s390_subchannels);
 	/* connection has no subchannels */
 	if (num1 == 0)
 		return TRUE;
@@ -229,7 +210,7 @@ connection_compatible (NMDevice *device, NMConnection *connection, GError **erro
 			/* Virtual devices will have empty permanent addr but they should not be excluded
 			 * from the MAC address check specified in the connection */
 			if (*perm_addr == 0)
-				perm_addr = nm_device_ethernet_get_hw_address (NM_DEVICE_ETHERNET (device));
+				perm_addr = nm_device_get_hw_address (NM_DEVICE (device));
 
 			if (!nm_utils_hwaddr_valid (perm_addr, ETH_ALEN)) {
 				g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_FAILED,
@@ -270,12 +251,6 @@ get_setting_type (NMDevice *device)
 	return NM_TYPE_SETTING_WIRED;
 }
 
-static const char *
-get_hw_address (NMDevice *device)
-{
-	return nm_device_ethernet_get_hw_address (NM_DEVICE_ETHERNET (device));
-}
-
 /*****************************************************************************/
 
 static void
@@ -284,31 +259,10 @@ nm_device_ethernet_init (NMDeviceEthernet *device)
 }
 
 static void
-init_dbus (NMObject *object)
-{
-	NMDeviceEthernetPrivate *priv = NM_DEVICE_ETHERNET_GET_PRIVATE (object);
-	const NMPropertiesInfo property_info[] = {
-		{ NM_DEVICE_ETHERNET_HW_ADDRESS,           &priv->hw_address },
-		{ NM_DEVICE_ETHERNET_PERMANENT_HW_ADDRESS, &priv->perm_hw_address },
-		{ NM_DEVICE_ETHERNET_SPEED,                &priv->speed },
-		{ NM_DEVICE_ETHERNET_CARRIER,              &priv->carrier },
-		{ NM_DEVICE_ETHERNET_S390_SUBCHANNELS,     &priv->s390_subchannels },
-		{ NULL },
-	};
-
-	NM_OBJECT_CLASS (nm_device_ethernet_parent_class)->init_dbus (object);
-
-	_nm_object_register_properties (object,
-	                                NM_DBUS_INTERFACE_DEVICE_WIRED,
-	                                property_info);
-}
-
-static void
 finalize (GObject *object)
 {
 	NMDeviceEthernetPrivate *priv = NM_DEVICE_ETHERNET_GET_PRIVATE (object);
 
-	g_free (priv->hw_address);
 	g_free (priv->perm_hw_address);
 	g_strfreev (priv->s390_subchannels);
 
@@ -325,9 +279,6 @@ get_property (GObject *object,
 	NMDeviceEthernetPrivate *priv = NM_DEVICE_ETHERNET_GET_PRIVATE (device);
 
 	switch (prop_id) {
-	case PROP_HW_ADDRESS:
-		g_value_set_string (value, nm_device_ethernet_get_hw_address (device));
-		break;
 	case PROP_PERM_HW_ADDRESS:
 		g_value_set_string (value, nm_device_ethernet_get_permanent_hw_address (device));
 		break;
@@ -346,74 +297,73 @@ get_property (GObject *object,
 	}
 }
 
+/* TODO: implemented Veth. */
+const NMLDBusMetaIface _nml_dbus_meta_iface_nm_device_veth = NML_DBUS_META_IFACE_INIT (
+	NM_DBUS_INTERFACE_DEVICE_VETH,
+	NULL,
+	NML_DBUS_META_INTERFACE_PRIO_NONE,
+	NML_DBUS_META_IFACE_DBUS_PROPERTIES (
+		NML_DBUS_META_PROPERTY_INIT_TODO ("Peer", "o"),
+	),
+);
+
+const NMLDBusMetaIface _nml_dbus_meta_iface_nm_device_wired = NML_DBUS_META_IFACE_INIT_PROP (
+	NM_DBUS_INTERFACE_DEVICE_WIRED,
+	nm_device_ethernet_get_type,
+	NML_DBUS_META_INTERFACE_PRIO_INSTANTIATE_HIGH,
+	NML_DBUS_META_IFACE_DBUS_PROPERTIES (
+		NML_DBUS_META_PROPERTY_INIT_B   ("Carrier",         PROP_CARRIER,          NMDeviceEthernet, _priv.carrier                            ),
+		NML_DBUS_META_PROPERTY_INIT_FCN ("HwAddress",       0,                     "s",              _nm_device_notify_update_prop_hw_address ),
+		NML_DBUS_META_PROPERTY_INIT_S   ("PermHwAddress",   PROP_PERM_HW_ADDRESS,  NMDeviceEthernet, _priv.perm_hw_address                    ),
+		NML_DBUS_META_PROPERTY_INIT_AS  ("S390Subchannels", PROP_S390_SUBCHANNELS, NMDeviceEthernet, _priv.s390_subchannels                   ),
+		NML_DBUS_META_PROPERTY_INIT_U   ("Speed",           PROP_SPEED,            NMDeviceEthernet, _priv.speed                              ),
+	),
+);
+
 static void
 nm_device_ethernet_class_init (NMDeviceEthernetClass *eth_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (eth_class);
-	NMObjectClass *nm_object_class = NM_OBJECT_CLASS (eth_class);
 	NMDeviceClass *device_class = NM_DEVICE_CLASS (eth_class);
 
-	g_type_class_add_private (eth_class, sizeof (NMDeviceEthernetPrivate));
-
-	/* virtual methods */
-	object_class->finalize = finalize;
 	object_class->get_property = get_property;
-
-	nm_object_class->init_dbus = init_dbus;
+	object_class->finalize     = finalize;
 
 	device_class->connection_compatible = connection_compatible;
-	device_class->get_setting_type = get_setting_type;
-	device_class->get_hw_address = get_hw_address;
-
-	/* properties */
-
-	/**
-	 * NMDeviceEthernet:hw-address:
-	 *
-	 * The active hardware (MAC) address of the device.
-	 **/
-	g_object_class_install_property
-		(object_class, PROP_HW_ADDRESS,
-		 g_param_spec_string (NM_DEVICE_ETHERNET_HW_ADDRESS, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	device_class->get_setting_type      = get_setting_type;
 
 	/**
 	 * NMDeviceEthernet:perm-hw-address:
 	 *
 	 * The permanent hardware (MAC) address of the device.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_PERM_HW_ADDRESS,
-		 g_param_spec_string (NM_DEVICE_ETHERNET_PERMANENT_HW_ADDRESS, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_PERM_HW_ADDRESS] =
+	    g_param_spec_string (NM_DEVICE_ETHERNET_PERMANENT_HW_ADDRESS, "", "",
+	                         NULL,
+	                         G_PARAM_READABLE |
+	                         G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMDeviceEthernet:speed:
 	 *
 	 * The speed of the device.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_SPEED,
-		 g_param_spec_uint (NM_DEVICE_ETHERNET_SPEED, "", "",
-		                    0, G_MAXUINT32, 0,
-		                    G_PARAM_READABLE |
-		                    G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_SPEED] =
+	    g_param_spec_uint (NM_DEVICE_ETHERNET_SPEED, "", "",
+	                       0, G_MAXUINT32, 0,
+	                       G_PARAM_READABLE |
+	                       G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMDeviceEthernet:carrier:
 	 *
 	 * Whether the device has carrier.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_CARRIER,
-		 g_param_spec_boolean (NM_DEVICE_ETHERNET_CARRIER, "", "",
-		                       FALSE,
-		                       G_PARAM_READABLE |
-		                       G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_CARRIER] =
+	    g_param_spec_boolean (NM_DEVICE_ETHERNET_CARRIER, "", "",
+	                          FALSE,
+	                          G_PARAM_READABLE |
+	                          G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMDeviceEthernet:s390-subchannels:
@@ -423,10 +373,11 @@ nm_device_ethernet_class_init (NMDeviceEthernetClass *eth_class)
 	 *
 	 * Since: 1.2
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_S390_SUBCHANNELS,
-		 g_param_spec_boxed (NM_DEVICE_ETHERNET_S390_SUBCHANNELS, "", "",
-		                     G_TYPE_STRV,
-		                     G_PARAM_READABLE |
-		                     G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_S390_SUBCHANNELS] =
+	    g_param_spec_boxed (NM_DEVICE_ETHERNET_S390_SUBCHANNELS, "", "",
+	                        G_TYPE_STRV,
+	                        G_PARAM_READABLE |
+	                        G_PARAM_STATIC_STRINGS);
+
+	_nml_dbus_meta_class_init_with_properties (object_class, &_nml_dbus_meta_iface_nm_device_wired);
 }

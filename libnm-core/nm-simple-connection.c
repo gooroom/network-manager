@@ -1,27 +1,13 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2008 Novell, Inc.
- * Copyright 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-simple-connection.h"
+
 #include "nm-setting-private.h"
 
 /**
@@ -32,11 +18,15 @@
  * but might be used in the process of creating a new one.
  **/
 
+/*****************************************************************************/
+
 static void nm_simple_connection_interface_init (NMConnectionInterface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (NMSimpleConnection, nm_simple_connection, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (NM_TYPE_CONNECTION, nm_simple_connection_interface_init);
                          )
+
+/*****************************************************************************/
 
 static void
 nm_simple_connection_init (NMSimpleConnection *self)
@@ -137,6 +127,10 @@ nm_simple_connection_new_clone (NMConnection *connection)
 static void
 dispose (GObject *object)
 {
+#if NM_MORE_ASSERTS
+	g_signal_handlers_disconnect_by_data (object, (gpointer) &_nmtst_connection_unchanging_user_data);
+#endif
+
 	nm_connection_clear_secrets (NM_CONNECTION (object));
 
 	G_OBJECT_CLASS (nm_simple_connection_parent_class)->dispose (object);

@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2017 Intel Corporation
  */
 
@@ -40,14 +25,12 @@
 #define NM_DEVICE_IWD_SCANNING            NM_DEVICE_WIFI_SCANNING
 #define NM_DEVICE_IWD_LAST_SCAN           NM_DEVICE_WIFI_LAST_SCAN
 
-#define NM_DEVICE_IWD_SCANNING_PROHIBITED  NM_DEVICE_WIFI_SCANNING_PROHIBITED
-
 typedef struct _NMDeviceIwd NMDeviceIwd;
 typedef struct _NMDeviceIwdClass NMDeviceIwdClass;
 
 GType nm_device_iwd_get_type (void);
 
-NMDevice *nm_device_iwd_new (const char *iface, NMDeviceWifiCapabilities capabilities);
+NMDevice *nm_device_iwd_new (const char *iface);
 
 void nm_device_iwd_set_dbus_object (NMDeviceIwd *device, GDBusObject *object);
 

@@ -1,20 +1,6 @@
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -33,11 +19,11 @@
  * necessary for Open vSwitch interfaces.
  **/
 
-enum {
-	PROP_0,
+/*****************************************************************************/
+
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
 	PROP_TYPE,
-	LAST_PROP
-};
+);
 
 /**
  * NMSettingOvsInterface:
@@ -78,33 +64,32 @@ nm_setting_ovs_interface_get_interface_type (NMSettingOvsInterface *self)
 
 int
 _nm_setting_ovs_interface_verify_interface_type (NMSettingOvsInterface *self,
+                                                 const char *type,
                                                  NMConnection *connection,
                                                  gboolean normalize,
                                                  gboolean *out_modified,
+                                                 const char **out_normalized_type,
                                                  GError **error)
 {
-	gboolean has_patch;
-	const char *type;
+	const char *type_from_setting = NULL;
+	const char *type_setting = NULL;
 	const char *connection_type;
 	gboolean is_ovs_connection_type;
-	gboolean missing_patch_setting = FALSE;
 
-	g_return_val_if_fail (NM_IS_SETTING_OVS_INTERFACE (self), FALSE);
 	if (normalize) {
+		g_return_val_if_fail (NM_IS_SETTING_OVS_INTERFACE (self), FALSE);
 		g_return_val_if_fail (NM_IS_CONNECTION (connection), FALSE);
 		nm_assert (self == nm_connection_get_setting_ovs_interface (connection));
-	} else
+	} else {
+		g_return_val_if_fail (!self || NM_IS_SETTING_OVS_INTERFACE (self), FALSE);
 		g_return_val_if_fail (!connection || NM_IS_CONNECTION (connection), FALSE);
+	}
 
 	NM_SET_OUT (out_modified, FALSE);
-
-	type = self ? self->type : NULL;
+	NM_SET_OUT (out_normalized_type, NULL);
 
 	if (   type
-	    && !NM_IN_STRSET (type,
-	                      "internal",
-	                      "system",
-	                      "patch")) {
+	    && !NM_IN_STRSET (type, "internal", "system", "patch", "dpdk")) {
 		g_set_error (error,
 		             NM_CONNECTION_ERROR,
 		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
@@ -114,8 +99,10 @@ _nm_setting_ovs_interface_verify_interface_type (NMSettingOvsInterface *self,
 		return FALSE;
 	}
 
-	if (!connection)
+	if (!connection) {
+		NM_SET_OUT (out_normalized_type, type);
 		return TRUE;
+	}
 
 	connection_type = nm_connection_get_connection_type (connection);
 	if (!connection_type) {
@@ -163,9 +150,26 @@ _nm_setting_ovs_interface_verify_interface_type (NMSettingOvsInterface *self,
 		is_ovs_connection_type = FALSE;
 	}
 
-	has_patch = !!nm_connection_get_setting_by_name (connection, NM_SETTING_OVS_PATCH_SETTING_NAME);
+	if (nm_connection_get_setting_by_name (connection, NM_SETTING_OVS_PATCH_SETTING_NAME)) {
+		type_from_setting = "patch";
+		type_setting = NM_SETTING_OVS_PATCH_SETTING_NAME;
+	}
 
-	if (has_patch) {
+	if (nm_connection_get_setting_by_name (connection, NM_SETTING_OVS_DPDK_SETTING_NAME)) {
+		if (type_from_setting) {
+			g_set_error (error,
+			             NM_CONNECTION_ERROR,
+			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+			             _("A connection can not have both '%s' and '%s' settings at the same time"),
+			             NM_SETTING_OVS_DPDK_SETTING_NAME,
+			             type_setting);
+			return FALSE;
+		}
+		type_from_setting = "dpdk";
+		type_setting = NM_SETTING_OVS_DPDK_SETTING_NAME;
+	}
+
+	if (type_from_setting) {
 		if (!is_ovs_connection_type) {
 			g_set_error (error,
 			             NM_CONNECTION_ERROR,
@@ -176,20 +180,23 @@ _nm_setting_ovs_interface_verify_interface_type (NMSettingOvsInterface *self,
 			g_prefix_error (error, "%s.%s: ", NM_SETTING_OVS_INTERFACE_SETTING_NAME, NM_SETTING_OVS_INTERFACE_TYPE);
 			return FALSE;
 		}
+
 		if (type) {
-			if (!nm_streq (type, "patch")) {
+			if (!nm_streq (type, type_from_setting)) {
 				g_set_error (error,
 				             NM_CONNECTION_ERROR,
 				             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-				             _("A connection with '%s' setting needs to be of 'patch' interface type, not '%s'"),
-				             NM_SETTING_OVS_PATCH_SETTING_NAME,
+				             _("A connection with '%s' setting needs to be of '%s' interface type, not '%s'"),
+				             type_setting,
+				             type_from_setting,
 				             type);
 				g_prefix_error (error, "%s.%s: ", NM_SETTING_OVS_INTERFACE_SETTING_NAME, NM_SETTING_OVS_INTERFACE_TYPE);
 				return FALSE;
 			}
+			NM_SET_OUT (out_normalized_type, type);
 			return TRUE;
 		}
-		type = "patch";
+		type = type_from_setting;
 		goto normalize;
 	} else {
 		if (nm_streq0 (type, "patch")) {
@@ -203,13 +210,18 @@ _nm_setting_ovs_interface_verify_interface_type (NMSettingOvsInterface *self,
 		}
 	}
 
-	if (type)
+	if (type) {
+		NM_SET_OUT (out_normalized_type, type);
 		return TRUE;
+	}
 
 	if (is_ovs_connection_type)
 		type = "internal";
 	else
 		type = "system";
+
+	NM_SET_OUT (out_normalized_type, type);
+
 normalize:
 	if (!normalize) {
 		if (!self) {
@@ -224,8 +236,6 @@ normalize:
 			             NM_CONNECTION_ERROR_MISSING_PROPERTY,
 			             _("Missing ovs interface type"));
 			g_prefix_error (error, "%s.%s: ", NM_SETTING_OVS_INTERFACE_SETTING_NAME, NM_SETTING_OVS_INTERFACE_TYPE);
-		}
-		if (missing_patch_setting) {
 		}
 		return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
 	}
@@ -246,9 +256,9 @@ static int
 verify (NMSetting *setting, NMConnection *connection, GError **error)
 {
 	NMSettingOvsInterface *self = NM_SETTING_OVS_INTERFACE (setting);
+	NMSettingConnection *s_con = NULL;
 
 	if (connection) {
-		NMSettingConnection *s_con;
 		const char *slave_type;
 
 		s_con = nm_connection_get_setting_connection (connection);
@@ -287,8 +297,10 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 	}
 
 	return _nm_setting_ovs_interface_verify_interface_type (self,
+	                                                        self->type,
 	                                                        connection,
 	                                                        FALSE,
+	                                                        NULL,
 	                                                        NULL,
 	                                                        error);
 }
@@ -366,8 +378,8 @@ nm_setting_ovs_interface_class_init (NMSettingOvsInterfaceClass *klass)
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
 	NMSettingClass *setting_class = NM_SETTING_CLASS (klass);
 
-	object_class->set_property = set_property;
 	object_class->get_property = get_property;
+	object_class->set_property = set_property;
 	object_class->finalize     = finalize;
 
 	setting_class->verify = verify;
@@ -375,18 +387,18 @@ nm_setting_ovs_interface_class_init (NMSettingOvsInterfaceClass *klass)
 	/**
 	 * NMSettingOvsInterface:type:
 	 *
-	 * The interface type. Either "internal", or empty.
+	 * The interface type. Either "internal", "system", "patch", "dpdk", or empty.
 	 *
 	 * Since: 1.10
 	 **/
-	g_object_class_install_property
-	        (object_class, PROP_TYPE,
-	         g_param_spec_string (NM_SETTING_OVS_INTERFACE_TYPE, "", "",
-	                              NULL,
-	                              G_PARAM_READWRITE |
-	                              G_PARAM_CONSTRUCT |
-	                              NM_SETTING_PARAM_INFERRABLE |
-	                              G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_TYPE] =
+	    g_param_spec_string (NM_SETTING_OVS_INTERFACE_TYPE, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         NM_SETTING_PARAM_INFERRABLE |
+	                         G_PARAM_STATIC_STRINGS);
+
+	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 
 	_nm_setting_class_commit (setting_class, NM_META_SETTING_TYPE_OVS_INTERFACE);
 }

@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2011 - 2012 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2011 - 2012 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -197,7 +182,7 @@ update_properties (NMDevice *device)
 
 	g_return_if_fail (NM_IS_DEVICE_VLAN (device));
 
-	priv = NM_DEVICE_VLAN_GET_PRIVATE ((NMDeviceVlan *) device);
+	priv = NM_DEVICE_VLAN_GET_PRIVATE (device);
 
 	ifindex = nm_device_get_ifindex (device);
 
@@ -236,12 +221,12 @@ create_and_realize (NMDevice *device,
                     const NMPlatformLink **out_plink,
                     GError **error)
 {
-	NMDeviceVlanPrivate *priv = NM_DEVICE_VLAN_GET_PRIVATE ((NMDeviceVlan *) device);
+	NMDeviceVlanPrivate *priv = NM_DEVICE_VLAN_GET_PRIVATE (device);
 	const char *iface = nm_device_get_iface (device);
 	NMSettingVlan *s_vlan;
 	int parent_ifindex;
 	guint vlan_id;
-	NMPlatformError plerr;
+	int r;
 
 	s_vlan = nm_connection_get_setting_vlan (connection);
 	g_assert (s_vlan);
@@ -271,18 +256,18 @@ create_and_realize (NMDevice *device,
 
 	vlan_id = nm_setting_vlan_get_id (s_vlan);
 
-	plerr = nm_platform_link_vlan_add (nm_device_get_platform (device),
-	                                   iface,
-	                                   parent_ifindex,
-	                                   vlan_id,
-	                                   nm_setting_vlan_get_flags (s_vlan),
-	                                   out_plink);
-	if (plerr != NM_PLATFORM_ERROR_SUCCESS) {
+	r = nm_platform_link_vlan_add (nm_device_get_platform (device),
+	                               iface,
+	                               parent_ifindex,
+	                               vlan_id,
+	                               nm_setting_vlan_get_flags (s_vlan),
+	                               out_plink);
+	if (r < 0) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
 		             "Failed to create VLAN interface '%s' for '%s': %s",
 		             iface,
 		             nm_connection_get_id (connection),
-		             nm_platform_error_to_string_a (plerr));
+		             nm_strerror (r));
 		return FALSE;
 	}
 
@@ -333,7 +318,7 @@ is_available (NMDevice *device, NMDeviceCheckDevAvailableFlags flags)
 static gboolean
 check_connection_compatible (NMDevice *device, NMConnection *connection, GError **error)
 {
-	NMDeviceVlanPrivate *priv = NM_DEVICE_VLAN_GET_PRIVATE ((NMDeviceVlan *) device);
+	NMDeviceVlanPrivate *priv = NM_DEVICE_VLAN_GET_PRIVATE (device);
 	NMSettingVlan *s_vlan;
 	const char *parent;
 
@@ -398,6 +383,7 @@ complete_connection (NMDevice *device,
 	                           existing_connections,
 	                           NULL,
 	                           _("VLAN connection"),
+	                           NULL,
 	                           NULL,
 	                           TRUE);
 
@@ -477,14 +463,6 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 {
 	NMDevice *parent_device;
 	NMSettingVlan *s_vlan;
-	NMActStageReturn ret;
-
-	ret = NM_DEVICE_CLASS (nm_device_vlan_parent_class)->act_stage1_prepare (device, out_failure_reason);
-	if (ret != NM_ACT_STAGE_RETURN_SUCCESS)
-		return ret;
-
-	if (!nm_device_hw_addr_set_cloned (device, nm_device_get_applied_connection (device), FALSE))
-		return NM_ACT_STAGE_RETURN_FAILURE;
 
 	/* Change MAC address to parent's one if needed */
 	parent_device = nm_device_parent_get_device (device);
@@ -493,11 +471,12 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 		parent_mtu_maybe_changed (parent_device, NULL, device);
 	}
 
-	s_vlan = (NMSettingVlan *) nm_device_get_applied_setting (device, NM_TYPE_SETTING_VLAN);
+	s_vlan = nm_device_get_applied_setting (device, NM_TYPE_SETTING_VLAN);
 	if (s_vlan) {
 		gs_free NMVlanQosMapping *ingress_map = NULL;
 		gs_free NMVlanQosMapping *egress_map = NULL;
-		guint n_ingress_map = 0, n_egress_map = 0;
+		guint n_ingress_map = 0;
+		guint n_egress_map = 0;
 
 		_nm_setting_vlan_get_priorities (s_vlan,
 		                                 NM_VLAN_INGRESS_MAP,
@@ -520,27 +499,7 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 		                              n_egress_map);
 	}
 
-	return ret;
-}
-
-static guint32
-get_configured_mtu (NMDevice *self, NMDeviceMtuSource *out_source)
-{
-	guint32 mtu = 0;
-	int ifindex;
-
-	mtu = nm_device_get_configured_mtu_for_wired (self, out_source);
-	if (*out_source != NM_DEVICE_MTU_SOURCE_NONE)
-		return mtu;
-
-	/* Inherit the MTU from parent device, if any */
-	ifindex = nm_device_parent_get_ifindex (self);
-	if (ifindex > 0) {
-		mtu = nm_platform_link_get_mtu (nm_device_get_platform (NM_DEVICE (self)), ifindex);
-		*out_source = NM_DEVICE_MTU_SOURCE_PARENT;
-	}
-
-	return mtu;
+	return NM_ACT_STAGE_RETURN_SUCCESS;
 }
 
 /*****************************************************************************/
@@ -598,13 +557,15 @@ nm_device_vlan_class_init (NMDeviceVlanClass *klass)
 	device_class->connection_type_supported = NM_SETTING_VLAN_SETTING_NAME;
 	device_class->connection_type_check_compatible = NM_SETTING_VLAN_SETTING_NAME;
 	device_class->link_types = NM_DEVICE_DEFINE_LINK_TYPES (NM_LINK_TYPE_VLAN);
+	device_class->mtu_parent_delta = 0; /* VLANs can have the same MTU of parent */
 
 	device_class->create_and_realize = create_and_realize;
 	device_class->link_changed = link_changed;
 	device_class->unrealize_notify = unrealize_notify;
 	device_class->get_generic_capabilities = get_generic_capabilities;
+	device_class->act_stage1_prepare_set_hwaddr_ethernet = TRUE;
 	device_class->act_stage1_prepare = act_stage1_prepare;
-	device_class->get_configured_mtu = get_configured_mtu;
+	device_class->get_configured_mtu = nm_device_get_configured_mtu_wired_parent;
 	device_class->is_available = is_available;
 	device_class->parent_changed_notify = parent_changed_notify;
 

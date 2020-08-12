@@ -1,33 +1,8 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * shvar.h
- *
- * Interface for non-destructively reading/writing files containing
- * only shell variable declarations and full-line comments.
- *
- * Includes explicit inheritance mechanism intended for use with
- * Red Hat Linux ifcfg-* files.  There is no protection against
- * inheritance loops; they will generally cause stack overflows.
- * Furthermore, they are only intended for one level of inheritance;
- * the value setting algorithm assumes this.
- *
- * Copyright 1999 Red Hat, Inc.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+ * Copyright (C) 1999 Red Hat, Inc.
  */
+
 #ifndef _SHVAR_H
 #define _SHVAR_H
 
@@ -40,6 +15,8 @@ typedef enum {
 	SV_KEY_TYPE_TC                      = (1LL << 3),
 	SV_KEY_TYPE_USER                    = (1LL << 4),
 	SV_KEY_TYPE_SRIOV_VF                = (1LL << 5),
+	SV_KEY_TYPE_ROUTING_RULE4           = (1LL << 6),
+	SV_KEY_TYPE_ROUTING_RULE6           = (1LL << 7),
 } SvKeyType;
 
 const char *svFileGetName (const shvarFile *s);
@@ -47,13 +24,21 @@ const char *svFileGetName (const shvarFile *s);
 void _nmtst_svFileSetName (shvarFile *s, const char *fileName);
 void _nmtst_svFileSetModified (shvarFile *s);
 
+/*****************************************************************************/
+
+shvarFile *svFile_new (const char *name,
+                       int fd,
+                       const char *content);
+
 /* Create the file <name>, return a shvarFile (never fails) */
 shvarFile *svCreateFile (const char *name);
 
 /* Open the file <name>, return shvarFile on success, NULL on failure */
 shvarFile *svOpenFile (const char *name, GError **error);
 
-const char *svFindFirstKeyWithPrefix (shvarFile *s, const char *key_prefix);
+/*****************************************************************************/
+
+const char *svFindFirstNumberedKey (shvarFile *s, const char *key_prefix);
 
 /* Get the value associated with the key, and leave the current pointer
  * pointing at the line containing the value.  The char* returned MUST
@@ -67,7 +52,13 @@ char *svGetValueStr_cp (shvarFile *s, const char *key);
 
 int svParseBoolean (const char *value, int def);
 
+gint64 svNumberedParseKey (const char *key);
+
 GHashTable *svGetKeys (shvarFile *s, SvKeyType match_key_type);
+
+const char **svGetKeysSorted (shvarFile *s,
+                              SvKeyType match_key_type,
+                              guint *out_len);
 
 /* return TRUE if <key> resolves to any truth value (e.g. "yes", "y", "true")
  * return FALSE if <key> resolves to any non-truth value (e.g. "no", "n", "false")
@@ -89,12 +80,14 @@ gboolean svGetValueEnum (shvarFile *s, const char *key,
 gboolean svSetValue (shvarFile *s, const char *key, const char *value);
 gboolean svSetValueStr (shvarFile *s, const char *key, const char *value);
 gboolean svSetValueBoolean (shvarFile *s, const char *key, gboolean value);
+gboolean svSetValueBoolean_cond_true (shvarFile *s, const char *key, gboolean value);
 gboolean svSetValueInt64 (shvarFile *s, const char *key, gint64 value);
 gboolean svSetValueInt64_cond (shvarFile *s, const char *key, gboolean do_set, gint64 value);
 gboolean svSetValueEnum (shvarFile *s, const char *key, GType gtype, int value);
 
 gboolean svUnsetValue (shvarFile *s, const char *key);
 gboolean svUnsetAll (shvarFile *s, SvKeyType match_key_type);
+gboolean svUnsetDirtyWellknown (shvarFile *s, NMTernary new_dirty_value);
 
 /* Write the current contents iff modified.  Returns FALSE on error
  * and TRUE on success.  Do not write if no values have been modified.
@@ -103,6 +96,13 @@ gboolean svUnsetAll (shvarFile *s, SvKeyType match_key_type);
  * open() syscall.
  */
 gboolean svWriteFile (shvarFile *s, int mode, GError **error);
+
+static inline gboolean
+svWriteFileWithoutDirtyWellknown (shvarFile *s, int mode, GError **error)
+{
+	svUnsetDirtyWellknown (s, NM_TERNARY_FALSE);
+	return svWriteFile (s, mode, error);
+}
 
 /* Close the file descriptor (if open) and free the shvarFile. */
 void svCloseFile (shvarFile *s);

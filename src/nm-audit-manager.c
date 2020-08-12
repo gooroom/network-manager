@@ -1,35 +1,19 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager audit support
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2015 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2015 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-audit-manager.h"
 
-#include <errno.h>
-#include <string.h>
 #if HAVE_LIBAUDIT
 #include <libaudit.h>
 #endif
 
-#include "nm-auth-subject.h"
+#include "nm-libnm-core-intern/nm-auth-subject.h"
 #include "nm-config.h"
+#include "nm-dbus-manager.h"
 #include "settings/nm-settings-connection.h"
 
 /*****************************************************************************/
@@ -187,9 +171,15 @@ nm_audit_log (NMAuditManager *self, GPtrArray *fields, const char *file,
 }
 
 static void
-_audit_log_helper (NMAuditManager *self, GPtrArray *fields, const char *file,
-                   guint line, const char *func, const char *op, gboolean result,
-                   gpointer subject_context, const char *reason)
+_audit_log_helper (NMAuditManager *self,
+                   GPtrArray *fields,
+                   const char *file,
+                   guint line,
+                   const char *func,
+                   const char *op,
+                   gboolean result,
+                   gpointer subject_context,
+                   const char *reason)
 {
 	AuditField op_field = { }, pid_field = { }, uid_field = { };
 	AuditField result_field = { }, reason_field = { };
@@ -206,11 +196,12 @@ _audit_log_helper (NMAuditManager *self, GPtrArray *fields, const char *file,
 		else if (G_IS_DBUS_METHOD_INVOCATION (subject_context)) {
 			GDBusMethodInvocation *context = subject_context;
 
-			subject = subject_free = nm_auth_subject_new_unix_process_from_context (context);
+			subject = subject_free = nm_dbus_manager_new_auth_subject_from_context (context);
 		} else
 			g_warn_if_reached ();
 	}
-	if (subject && nm_auth_subject_is_unix_process (subject)) {
+	if (subject &&
+	    nm_auth_subject_get_subject_type (subject) == NM_AUTH_SUBJECT_TYPE_UNIX_PROCESS) {
 		pid = nm_auth_subject_get_unix_process_pid (subject);
 		uid = nm_auth_subject_get_unix_process_uid (subject);
 		if (pid != G_MAXULONG) {
@@ -249,9 +240,16 @@ nm_audit_manager_audit_enabled (NMAuditManager *self)
 }
 
 void
-_nm_audit_manager_log_connection_op (NMAuditManager *self, const char *file, guint line,
-                                     const char *func, const char *op, NMSettingsConnection *connection,
-                                     gboolean result, const char *args, gpointer subject_context, const char *reason)
+_nm_audit_manager_log_connection_op (NMAuditManager *self,
+                                     const char *file,
+                                     guint line,
+                                     const char *func,
+                                     const char *op,
+                                     NMSettingsConnection *connection,
+                                     gboolean result,
+                                     const char *args,
+                                     gpointer subject_context,
+                                     const char *reason)
 {
 	gs_unref_ptrarray GPtrArray *fields = NULL;
 	AuditField uuid_field = { }, name_field = { }, args_field = { };
@@ -337,15 +335,17 @@ init_auditd (NMAuditManager *self)
 {
 	NMAuditManagerPrivate *priv = NM_AUDIT_MANAGER_GET_PRIVATE (self);
 	NMConfigData *data = nm_config_get_data (priv->config);
+	int errsv;
 
 	if (nm_config_data_get_value_boolean (data, NM_CONFIG_KEYFILE_GROUP_LOGGING,
-	                                      NM_CONFIG_KEYFILE_KEY_AUDIT,
+	                                      NM_CONFIG_KEYFILE_KEY_LOGGING_AUDIT,
 	                                      NM_CONFIG_DEFAULT_LOGGING_AUDIT_BOOL)) {
 		if (priv->auditd_fd < 0) {
 			priv->auditd_fd = audit_open ();
-			if (priv->auditd_fd < 0)
-				_LOGE (LOGD_CORE, "failed to open auditd socket: %s", strerror (errno));
-			else
+			if (priv->auditd_fd < 0) {
+				errsv = errno;
+				_LOGE (LOGD_CORE, "failed to open auditd socket: %s", nm_strerror_native (errsv));
+			} else
 				_LOGD (LOGD_CORE, "socket created");
 		}
 	} else {

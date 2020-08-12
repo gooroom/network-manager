@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2013 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -47,7 +32,7 @@ struct _NMDeviceGenericClass {
 
 G_DEFINE_TYPE (NMDeviceGeneric, nm_device_generic, NM_TYPE_DEVICE)
 
-#define NM_DEVICE_GENERIC_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDeviceGeneric, NM_IS_DEVICE_GENERIC)
+#define NM_DEVICE_GENERIC_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDeviceGeneric, NM_IS_DEVICE_GENERIC, NMDevice)
 
 /*****************************************************************************/
 
@@ -65,8 +50,8 @@ get_generic_capabilities (NMDevice *device)
 static const char *
 get_type_description (NMDevice *device)
 {
-	if (NM_DEVICE_GENERIC_GET_PRIVATE ((NMDeviceGeneric *) device)->type_description)
-		return NM_DEVICE_GENERIC_GET_PRIVATE ((NMDeviceGeneric *) device)->type_description;
+	if (NM_DEVICE_GENERIC_GET_PRIVATE (device)->type_description)
+		return NM_DEVICE_GENERIC_GET_PRIVATE (device)->type_description;
 	return NM_DEVICE_CLASS (nm_device_generic_parent_class)->get_type_description (device);
 }
 
@@ -79,7 +64,7 @@ realize_start_notify (NMDevice *device, const NMPlatformLink *plink)
 
 	NM_DEVICE_CLASS (nm_device_generic_parent_class)->realize_start_notify (device, plink);
 
-	g_clear_pointer (&priv->type_description, g_free);
+	nm_clear_g_free (&priv->type_description);
 	ifindex = nm_device_get_ip_ifindex (NM_DEVICE (self));
 	if (ifindex > 0)
 		priv->type_description = g_strdup (nm_platform_link_get_type_name (nm_device_get_platform (device), ifindex));
@@ -196,7 +181,7 @@ dispose (GObject *object)
 	NMDeviceGeneric *self = NM_DEVICE_GENERIC (object);
 	NMDeviceGenericPrivate *priv = NM_DEVICE_GENERIC_GET_PRIVATE (self);
 
-	g_clear_pointer (&priv->type_description, g_free);
+	nm_clear_g_free (&priv->type_description);
 
 	G_OBJECT_CLASS (nm_device_generic_parent_class)->dispose (object);
 }

@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-ndisc.h - Perform IPv6 neighbor discovery
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2013 Red Hat, Inc.
  */
 
@@ -31,6 +16,9 @@
 #include "platform/nm-platform.h"
 #include "platform/nmp-object.h"
 
+#define NM_RA_TIMEOUT_DEFAULT    ((gint32) 0)
+#define NM_RA_TIMEOUT_INFINITY   G_MAXINT32
+
 #define NM_TYPE_NDISC            (nm_ndisc_get_type ())
 #define NM_NDISC(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_NDISC, NMNDisc))
 #define NM_NDISC_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), NM_TYPE_NDISC, NMNDiscClass))
@@ -46,11 +34,12 @@
 #define NM_NDISC_STABLE_TYPE    "stable-type"
 #define NM_NDISC_NODE_TYPE      "node-type"
 #define NM_NDISC_MAX_ADDRESSES  "max-addresses"
+#define NM_NDISC_RA_TIMEOUT     "ra-timeout"
 #define NM_NDISC_ROUTER_SOLICITATIONS "router-solicitations"
 #define NM_NDISC_ROUTER_SOLICITATION_INTERVAL "router-solicitation-interval"
 
-#define NM_NDISC_CONFIG_RECEIVED "config-received"
-#define NM_NDISC_RA_TIMEOUT      "ra-timeout"
+#define NM_NDISC_CONFIG_RECEIVED   "config-received"
+#define NM_NDISC_RA_TIMEOUT_SIGNAL "ra-timeout-signal"
 
 typedef enum {
 	NM_NDISC_DHCP_LEVEL_UNKNOWN,
@@ -113,6 +102,8 @@ typedef enum {
 	NM_NDISC_CONFIG_DNS_DOMAINS                         = 1 << 5,
 	NM_NDISC_CONFIG_HOP_LIMIT                           = 1 << 6,
 	NM_NDISC_CONFIG_MTU                                 = 1 << 7,
+	NM_NDISC_CONFIG_REACHABLE_TIME                      = 1 << 8,
+	NM_NDISC_CONFIG_RETRANS_TIMER                       = 1 << 9,
 } NMNDiscConfigMap;
 
 typedef enum {
@@ -138,6 +129,8 @@ typedef struct {
 	NMNDiscDHCPLevel dhcp_level;
 	guint32 mtu;
 	int hop_limit;
+	guint32 reachable_time_ms;
+	guint32 retrans_timer_ms;
 
 	guint gateways_n;
 	guint addresses_n;

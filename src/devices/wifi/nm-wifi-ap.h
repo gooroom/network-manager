@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2004 - 2017 Red Hat, Inc.
  * Copyright (C) 2006 - 2008 Novell, Inc.
  */
@@ -48,20 +33,21 @@ typedef struct {
 	NMDBusObject parent;
 	NMDevice *wifi_device;
 	CList aps_lst;
+	NMRefString *_supplicant_path;
 	struct _NMWifiAPPrivate *_priv;
 } NMWifiAP;
+
+struct _NMSupplicantBssInfo;
 
 typedef struct _NMWifiAPClass NMWifiAPClass;
 
 GType nm_wifi_ap_get_type (void);
 
-NMWifiAP *   nm_wifi_ap_new_from_properties      (const char *supplicant_path,
-                                                  GVariant *properties);
-NMWifiAP *   nm_wifi_ap_new_fake_from_connection (NMConnection *connection);
+NMWifiAP *nm_wifi_ap_new_from_properties (const struct _NMSupplicantBssInfo *bss_info);
+NMWifiAP *nm_wifi_ap_new_fake_from_connection (NMConnection *connection);
 
-gboolean          nm_wifi_ap_update_from_properties   (NMWifiAP *ap,
-                                                       const char *supplicant_path,
-                                                       GVariant *properties);
+gboolean nm_wifi_ap_update_from_properties (NMWifiAP *ap,
+                                            const struct _NMSupplicantBssInfo *bss_info);
 
 gboolean          nm_wifi_ap_check_compatible         (NMWifiAP *self,
                                                        NMConnection *connection);
@@ -71,7 +57,14 @@ gboolean          nm_wifi_ap_complete_connection      (NMWifiAP *self,
                                                        gboolean lock_bssid,
                                                        GError **error);
 
-const char *      nm_wifi_ap_get_supplicant_path      (NMWifiAP *ap);
+static inline NMRefString *
+nm_wifi_ap_get_supplicant_path (NMWifiAP *ap)
+{
+	g_return_val_if_fail (NM_IS_WIFI_AP (ap), NULL);
+
+	return ap->_supplicant_path;
+}
+
 GBytes           *nm_wifi_ap_get_ssid                 (const NMWifiAP *ap);
 gboolean          nm_wifi_ap_set_ssid_arr             (NMWifiAP *ap,
                                                        const guint8 *ssid,
@@ -96,19 +89,18 @@ gboolean          nm_wifi_ap_get_fake                 (const NMWifiAP *ap);
 gboolean          nm_wifi_ap_set_fake                 (NMWifiAP *ap,
                                                        gboolean fake);
 NM80211ApFlags    nm_wifi_ap_get_flags                (const NMWifiAP *self);
+gboolean          nm_wifi_ap_get_metered              (const NMWifiAP *self);
 
 const char       *nm_wifi_ap_to_string                (const NMWifiAP *self,
                                                        char *str_buf,
                                                        gulong buf_len,
-                                                       gint32 now_s);
+                                                       gint64 now_msec);
 
 const char      **nm_wifi_aps_get_paths        (const CList *aps_lst_head,
                                                 gboolean include_without_ssid);
 
 NMWifiAP         *nm_wifi_aps_find_first_compatible (const CList *aps_lst_head,
                                                      NMConnection *connection);
-
-NMWifiAP         *nm_wifi_aps_find_by_supplicant_path (const CList *aps_lst_head, const char *path);
 
 NMWifiAP         *nm_wifi_ap_lookup_for_device (NMDevice *device, const char *exported_path);
 

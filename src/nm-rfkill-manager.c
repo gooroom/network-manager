@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2009 - 2013 Red Hat, Inc.
  */
 
@@ -22,10 +7,9 @@
 
 #include "nm-rfkill-manager.h"
 
-#include <string.h>
 #include <libudev.h>
 
-#include "nm-utils/nm-udev-utils.h"
+#include "nm-udev-aux/nm-udev-utils.h"
 
 /*****************************************************************************/
 
@@ -82,7 +66,7 @@ static const char *
 rfkill_type_to_desc (RfKillType rtype)
 {
 	if (rtype == 0)
-		return "WiFi";
+		return "Wi-Fi";
 	else if (rtype == 1)
 		return "WWAN";
 	else if (rtype == 2)

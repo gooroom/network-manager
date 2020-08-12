@@ -1,20 +1,6 @@
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2018 Lubomir Rintel <lkundrak@v3.sk>
+ * Copyright (C) 2018 Lubomir Rintel <lkundrak@v3.sk>
  */
 
 #ifndef __NM_SETTING_WPAN_H__
@@ -39,6 +25,11 @@ G_BEGIN_DECLS
 #define NM_SETTING_WPAN_MAC_ADDRESS        "mac-address"
 #define NM_SETTING_WPAN_PAN_ID             "pan-id"
 #define NM_SETTING_WPAN_SHORT_ADDRESS      "short-address"
+#define NM_SETTING_WPAN_PAGE               "page"
+#define NM_SETTING_WPAN_CHANNEL            "channel"
+
+#define NM_SETTING_WPAN_PAGE_DEFAULT    -1
+#define NM_SETTING_WPAN_CHANNEL_DEFAULT -1
 
 typedef struct _NMSettingWpanClass NMSettingWpanClass;
 
@@ -53,6 +44,10 @@ NM_AVAILABLE_IN_1_14
 guint16     nm_setting_wpan_get_pan_id             (NMSettingWpan *setting);
 NM_AVAILABLE_IN_1_14
 guint16     nm_setting_wpan_get_short_address      (NMSettingWpan *setting);
+NM_AVAILABLE_IN_1_16
+gint16      nm_setting_wpan_get_page               (NMSettingWpan *setting);
+NM_AVAILABLE_IN_1_16
+gint16      nm_setting_wpan_get_channel            (NMSettingWpan *setting);
 
 G_END_DECLS
 

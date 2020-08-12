@@ -1,30 +1,14 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2015 Red Hat, Inc.
- *
+ * Copyright (C) 2010 - 2015 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
-#include <string.h>
 #include <sys/wait.h>
 
 #include "NetworkManager.h"
-#include "nm-dbus-compat.h"
+#include "nm-std-aux/nm-dbus-compat.h"
 
 #include "nm-test-libnm-utils.h"
 
@@ -56,24 +40,6 @@ name_exists (GDBusConnection *c, const char *name)
 
 	return exists;
 }
-
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-static DBusGProxy *
-_libdbus_create_proxy_test (DBusGConnection *bus)
-{
-	DBusGProxy *proxy;
-
-	proxy = dbus_g_proxy_new_for_name (bus,
-	                                   NM_DBUS_SERVICE,
-	                                   NM_DBUS_PATH,
-	                                   "org.freedesktop.NetworkManager.LibnmGlibTest");
-	g_assert (proxy);
-
-	dbus_g_proxy_set_default_timeout (proxy, G_MAXINT);
-
-	return proxy;
-}
-#endif
 
 typedef struct {
 	GMainLoop *mainloop;
@@ -161,7 +127,7 @@ nmtstc_service_init (void)
 		g_source_attach (timeout_source, context);
 
 		child_source = g_child_watch_source_new (info->pid);
-		g_source_set_callback (child_source, (GSourceFunc)(void (*) (void)) _service_init_wait_child_wait, &data, NULL);
+		g_source_set_callback (child_source, G_SOURCE_FUNC (_service_init_wait_child_wait), &data, NULL);
 		g_source_attach (child_source, context);
 
 		had_timeout = !nmtst_main_loop_run (data.mainloop, 30000);
@@ -202,11 +168,6 @@ nmtstc_service_init (void)
 	                                     NULL, &error);
 	g_assert_no_error (error);
 
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-	info->libdbus.bus = dbus_g_bus_get (DBUS_BUS_SESSION, &error);
-	g_assert_no_error (error);
-	g_assert (info->libdbus.bus);
-#endif
 	return info;
 }
 
@@ -223,10 +184,6 @@ nmtstc_service_cleanup (NMTstcServiceInfo *info)
 	nm_close (nm_steal_fd (&info->keepalive_fd));
 
 	g_clear_object (&info->proxy);
-
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-	g_clear_pointer (&info->libdbus.bus, dbus_g_connection_unref);
-#endif
 
 	if (info->pid != NM_PID_T_INVAL) {
 		kill (info->pid, SIGTERM);
@@ -256,11 +213,10 @@ again_wait:
 	g_free (info);
 }
 
-#if !((NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB)
 typedef struct {
 	GMainLoop *loop;
 	const char *ifname;
-	char *path;
+	const char *path;
 	NMDevice *device;
 } AddDeviceInfo;
 
@@ -271,19 +227,15 @@ device_added_cb (NMClient *client,
 {
 	AddDeviceInfo *info = user_data;
 
-	g_assert (device);
+	g_assert (info);
+	g_assert (!info->device);
+
+	g_assert (NM_IS_DEVICE (device));
 	g_assert_cmpstr (nm_object_get_path (NM_OBJECT (device)), ==, info->path);
 	g_assert_cmpstr (nm_device_get_iface (device), ==, info->ifname);
 
-	info->device = device;
+	info->device = g_object_ref (device);
 	g_main_loop_quit (info->loop);
-}
-
-static gboolean
-timeout (gpointer user_data)
-{
-	g_assert_not_reached ();
-	return G_SOURCE_REMOVE;
 }
 
 static GVariant *
@@ -319,39 +271,53 @@ call_add_device (GDBusProxy *proxy, const char *method, const char *ifname, GErr
 }
 
 static NMDevice *
-add_device_common (NMTstcServiceInfo *sinfo, NMClient *client,
-                   const char *method, const char *ifname,
-                   const char *hwaddr, const char **subchannels)
+add_device_common (NMTstcServiceInfo *sinfo,
+                   NMClient *client,
+                   const char *method,
+                   const char *ifname,
+                   const char *hwaddr,
+                   const char **subchannels)
 {
+	nm_auto_unref_gmainloop GMainLoop *loop = NULL;
+	gs_unref_variant GVariant *ret = NULL;
+	gs_free_error GError *error = NULL;
 	AddDeviceInfo info;
-	GError *error = NULL;
-	GVariant *ret;
-	guint timeout_id;
 
-	if (g_strcmp0 (method, "AddWiredDevice") == 0)
+	g_assert (sinfo);
+	g_assert (NM_IS_CLIENT (client));
+
+	if (nm_streq0 (method, "AddWiredDevice"))
 		ret = call_add_wired_device (sinfo->proxy, ifname, hwaddr, subchannels, &error);
 	else
 		ret = call_add_device (sinfo->proxy, method, ifname, &error);
 
-	g_assert_no_error (error);
-	g_assert (ret);
+	nmtst_assert_success (ret, error);
 	g_assert_cmpstr (g_variant_get_type_string (ret), ==, "(o)");
-	g_variant_get (ret, "(o)", &info.path);
-	g_variant_unref (ret);
 
-	/* Wait for libnm to find the device */
-	info.ifname = ifname;
-	info.loop = g_main_loop_new (NULL, FALSE);
-	g_signal_connect (client, "device-added",
-	                  G_CALLBACK (device_added_cb), &info);
-	timeout_id = g_timeout_add_seconds (5, timeout, NULL);
-	g_main_loop_run (info.loop);
+	/* Wait for NMClient to find the device */
 
-	g_source_remove (timeout_id);
+	loop = g_main_loop_new (nm_client_get_main_context (client), FALSE);
+
+	info = (AddDeviceInfo) {
+		.ifname = ifname,
+		.loop   = loop,
+	};
+	g_variant_get (ret, "(&o)", &info.path);
+
+	g_signal_connect (client,
+	                  NM_CLIENT_DEVICE_ADDED,
+	                  G_CALLBACK (device_added_cb),
+	                  &info);
+
+	if (!nmtst_main_loop_run (loop, 5000))
+		g_assert_not_reached ();
+
 	g_signal_handlers_disconnect_by_func (client, device_added_cb, &info);
-	g_free (info.path);
-	g_main_loop_unref (info.loop);
 
+	g_assert (NM_IS_DEVICE (info.device));
+
+	g_assert (info.device == nm_client_get_device_by_path (client, nm_object_get_path (NM_OBJECT (info.device))));
+	g_object_unref (info.device);
 	return info.device;
 }
 
@@ -369,7 +335,6 @@ nmtstc_service_add_wired_device (NMTstcServiceInfo *sinfo, NMClient *client,
 {
 	return add_device_common (sinfo, client, "AddWiredDevice", ifname, hwaddr, subchannels);
 }
-#endif
 
 void
 nmtstc_service_add_connection (NMTstcServiceInfo *sinfo,
@@ -377,41 +342,10 @@ nmtstc_service_add_connection (NMTstcServiceInfo *sinfo,
                                gboolean verify_connection,
                                char **out_path)
 {
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-	gs_unref_hashtable GHashTable *new_settings = NULL;
-	gboolean success;
-	gs_free_error GError *error = NULL;
-	gs_free char *path = NULL;
-	gs_unref_object DBusGProxy *proxy = NULL;
-
-	g_assert (sinfo);
-	g_assert (NM_IS_CONNECTION (connection));
-
-	new_settings = nm_connection_to_hash (connection, NM_SETTING_HASH_FLAG_ALL);
-
-	proxy = _libdbus_create_proxy_test (sinfo->libdbus.bus);
-
-	success = dbus_g_proxy_call (proxy,
-	                             "AddConnection",
-	                             &error,
-	                             DBUS_TYPE_G_MAP_OF_MAP_OF_VARIANT, new_settings,
-	                             G_TYPE_BOOLEAN, verify_connection,
-	                             G_TYPE_INVALID,
-	                             DBUS_TYPE_G_OBJECT_PATH, &path,
-	                             G_TYPE_INVALID);
-	g_assert_no_error (error);
-	g_assert (success);
-
-	g_assert (path && *path);
-
-	if (out_path)
-		*out_path = g_strdup (path);
-#else
 	nmtstc_service_add_connection_variant (sinfo,
 	                                       nm_connection_to_dbus (connection, NM_CONNECTION_SERIALIZE_ALL),
 	                                       verify_connection,
 	                                       out_path);
-#endif
 }
 
 void
@@ -451,37 +385,10 @@ nmtstc_service_update_connection (NMTstcServiceInfo *sinfo,
 		path = nm_connection_get_path (connection);
 	g_assert (path);
 
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-	{
-		gs_unref_hashtable GHashTable *new_settings = NULL;
-		gboolean success;
-		gs_free_error GError *error = NULL;
-		gs_unref_object DBusGProxy *proxy = NULL;
-
-		g_assert (sinfo);
-		g_assert (NM_IS_CONNECTION (connection));
-
-		new_settings = nm_connection_to_hash (connection, NM_SETTING_HASH_FLAG_ALL);
-
-		proxy = _libdbus_create_proxy_test (sinfo->libdbus.bus);
-
-		success = dbus_g_proxy_call (proxy,
-		                             "UpdateConnection",
-		                             &error,
-		                             DBUS_TYPE_G_OBJECT_PATH, path,
-		                             DBUS_TYPE_G_MAP_OF_MAP_OF_VARIANT, new_settings,
-		                             G_TYPE_BOOLEAN, verify_connection,
-		                             G_TYPE_INVALID,
-		                             G_TYPE_INVALID);
-		g_assert_no_error (error);
-		g_assert (success);
-	}
-#else
 	nmtstc_service_update_connection_variant (sinfo,
 	                                          path,
 	                                          nm_connection_to_dbus (connection, NM_CONNECTION_SERIALIZE_ALL),
 	                                          verify_connection);
-#endif
 }
 
 void
@@ -512,52 +419,219 @@ nmtstc_service_update_connection_variant (NMTstcServiceInfo *sinfo,
 
 /*****************************************************************************/
 
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_GLIB
-NMClient *
-nmtstc_nm_client_new (void)
+typedef struct {
+	GType gtype;
+	GMainLoop *loop;
+	GObject *obj;
+	bool call_nm_client_new_async:1;
+} NMTstcObjNewData;
+
+static void
+_context_object_new_do_cb (GObject *source_object,
+                           GAsyncResult *res,
+                           gpointer user_data)
 {
-	NMClient *client;
-	DBusGConnection *bus;
-	GError *error = NULL;
-	gboolean success;
+	NMTstcObjNewData *d = user_data;
+	gs_free_error GError *error = NULL;
 
-	bus = dbus_g_bus_get (DBUS_BUS_SESSION, &error);
-	g_assert_no_error (error);
-	g_assert (bus);
+	g_assert (!d->obj);
 
-	client = g_object_new (NM_TYPE_CLIENT,
-	                       NM_OBJECT_DBUS_CONNECTION, bus,
-	                       NM_OBJECT_DBUS_PATH, NM_DBUS_PATH,
-	                       NULL);
-	g_assert (client != NULL);
+	if (d->call_nm_client_new_async) {
+		d->obj = G_OBJECT (nm_client_new_finish (res,
+		                                         nmtst_get_rand_bool () ? &error : NULL));
+	} else {
+		d->obj = g_async_initable_new_finish (G_ASYNC_INITABLE (source_object),
+		                                      res,
+		                                      nmtst_get_rand_bool () ? &error : NULL);
+	}
 
-	dbus_g_connection_unref (bus);
+	nmtst_assert_success (G_IS_OBJECT (d->obj), error);
+	g_assert (G_OBJECT_TYPE (d->obj) == d->gtype);
 
-	success = g_initable_init (G_INITABLE (client), NULL, &error);
-	g_assert_no_error (error);
-	g_assert (success == TRUE);
-
-	return client;
+	g_main_loop_quit (d->loop);
 }
 
-NMRemoteSettings *
-nmtstc_nm_remote_settings_new (void)
+static GObject *
+_context_object_new_do (GType gtype,
+                        gboolean sync,
+                        const char *first_property_name,
+                        va_list var_args)
 {
-	NMRemoteSettings *settings;
-	DBusGConnection *bus;
-	GError *error = NULL;
+	gs_free_error GError *error = NULL;
+	GObject *obj;
 
-	bus = dbus_g_bus_get (DBUS_BUS_SESSION, &error);
-	g_assert_no_error (error);
-	g_assert (bus);
+	/* Create a GObject instance synchronously, and arbitrarily use either
+	 * the sync or async constructor.
+	 *
+	 * Note that the sync and async construct differ in one important aspect:
+	 * the async constructor iterates the current g_main_context_get_thread_default(),
+	 * while the sync constructor does not! Aside from that, both should behave
+	 * pretty much the same way. */
 
-	settings = nm_remote_settings_new (bus);
-	g_assert (settings);
+	if (sync) {
+		nm_auto_destroy_and_unref_gsource GSource *source = NULL;
 
-	dbus_g_connection_unref (bus);
+		if (nmtst_get_rand_bool ()) {
+			/* the current main context must not be iterated! */
+			source = g_idle_source_new ();
+			g_source_set_callback (source, nmtst_g_source_assert_not_called, NULL, NULL);
+			g_source_attach (source, g_main_context_get_thread_default ());
+		}
 
-	return settings;
+		if (   gtype != NM_TYPE_CLIENT
+		    || first_property_name
+		    || nmtst_get_rand_bool ()) {
+			gboolean success;
+
+			if (   first_property_name
+			    || nmtst_get_rand_bool ())
+				obj = g_object_new_valist (gtype, first_property_name, var_args);
+			else
+				obj = g_object_new (gtype, NULL);
+
+			success = g_initable_init (G_INITABLE (obj),
+			                           NULL,
+			                           nmtst_get_rand_bool () ? &error : NULL);
+			nmtst_assert_success (success, error);
+		} else {
+			obj = G_OBJECT (nm_client_new (NULL,
+			                               nmtst_get_rand_bool () ? &error : NULL));
+		}
+	} else {
+		nm_auto_unref_gmainloop GMainLoop *loop = NULL;
+		NMTstcObjNewData d = {
+			.gtype                    = gtype,
+			.loop                     = NULL,
+		};
+		gs_unref_object GObject *obj2 = NULL;
+
+		loop = g_main_loop_new (g_main_context_get_thread_default (), FALSE);
+		d.loop = loop;
+
+		if (   gtype != NM_TYPE_CLIENT
+		    || first_property_name
+		    || nmtst_get_rand_bool ()) {
+			if (   first_property_name
+			    || nmtst_get_rand_bool ())
+				obj2 = g_object_new_valist (gtype, first_property_name, var_args);
+			else
+				obj2 = g_object_new (gtype, NULL);
+
+			g_async_initable_init_async (G_ASYNC_INITABLE (obj2),
+			                             G_PRIORITY_DEFAULT,
+			                             NULL,
+			                             _context_object_new_do_cb,
+			                             &d);
+		} else {
+			d.call_nm_client_new_async = TRUE;
+			nm_client_new_async (NULL,
+			                     _context_object_new_do_cb,
+			                     &d);
+		}
+		g_main_loop_run (loop);
+		obj = d.obj;
+		g_assert (!obj2 || obj == obj2);
+	}
+
+	nmtst_assert_success (G_IS_OBJECT (obj), error);
+	g_assert (G_OBJECT_TYPE (obj) == gtype);
+	return obj;
 }
-#endif
 
-/*****************************************************************************/
+typedef struct {
+	GType gtype;
+	const char *first_property_name;
+	va_list var_args;
+	GMainLoop *loop;
+	GObject *obj;
+	bool sync;
+} NewSyncInsideDispatchedData;
+
+static gboolean
+_context_object_new_inside_loop_do (gpointer user_data)
+{
+	NewSyncInsideDispatchedData *d = user_data;
+
+	g_assert (d->loop);
+	g_assert (!d->obj);
+
+	d->obj = nmtstc_context_object_new_valist (d->gtype, d->sync, d->first_property_name, d->var_args);
+	g_main_loop_quit (d->loop);
+	return G_SOURCE_CONTINUE;
+}
+
+static GObject *
+_context_object_new_inside_loop (GType gtype,
+                                 gboolean sync,
+                                 const char *first_property_name,
+                                 va_list var_args)
+{
+	GMainContext *context = g_main_context_get_thread_default ();
+	nm_auto_unref_gmainloop GMainLoop *loop = g_main_loop_new (context, FALSE);
+	NewSyncInsideDispatchedData d = {
+		.gtype               = gtype,
+		.first_property_name = first_property_name,
+		.sync                = sync,
+		.loop                = loop,
+	};
+	nm_auto_destroy_and_unref_gsource GSource *source = NULL;
+
+	va_copy (d.var_args, var_args);
+
+	source = g_idle_source_new ();
+	g_source_set_callback (source, _context_object_new_inside_loop_do, &d, NULL);
+	g_source_attach (source, context);
+
+	g_main_loop_run (loop);
+
+	va_end (d.var_args);
+
+	g_assert (G_IS_OBJECT (d.obj));
+	g_assert (G_OBJECT_TYPE (d.obj) == gtype);
+	return d.obj;
+}
+
+gpointer
+nmtstc_context_object_new_valist (GType gtype,
+                                  gboolean allow_iterate_main_context,
+                                  const char *first_property_name,
+                                  va_list var_args)
+{
+	gboolean inside_loop;
+	gboolean sync;
+
+	if (!allow_iterate_main_context) {
+		sync = TRUE;
+		inside_loop = FALSE;
+	} else {
+		/* The caller allows to iterate the main context. That that point,
+		 * we can both use the synchronous and the asynchronous initialization,
+		 * both should yield the same result. Choose one randomly. */
+		sync = nmtst_get_rand_bool ();
+		inside_loop = ((nmtst_get_rand_uint32 () % 3) == 0);
+	}
+
+	if (inside_loop) {
+		/* Create the obj on an idle handler of the current context.
+		 * In practice, it should make no difference, which this check
+		 * tries to prove. */
+		return _context_object_new_inside_loop (gtype, sync, first_property_name, var_args);
+	}
+
+	return _context_object_new_do (gtype, sync, first_property_name, var_args);
+}
+
+gpointer
+nmtstc_context_object_new (GType gtype,
+                           gboolean allow_iterate_main_context,
+                           const char *first_property_name,
+                           ...)
+{
+	GObject *obj;
+	va_list var_args;
+
+	va_start (var_args, first_property_name);
+	obj = nmtstc_context_object_new_valist (gtype, allow_iterate_main_context, first_property_name, var_args);
+	va_end (var_args);
+	return obj;
+}

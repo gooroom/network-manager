@@ -1,22 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2016 Atul Anand <atulhjp@gmail.com>.
- * Copyright 2016 - 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2016 Atul Anand <atulhjp@gmail.com>.
+ * Copyright (C) 2016 - 2017 Red Hat, Inc.
  */
 
 #ifndef __NETWORKMANAGER_PACRUNNER_MANAGER_H__
@@ -31,22 +16,20 @@
 
 typedef struct _NMPacrunnerManagerClass NMPacrunnerManagerClass;
 
-typedef struct _NMPacrunnerCallId NMPacrunnerCallId;
+typedef struct _NMPacrunnerConfId NMPacrunnerConfId;
 
 GType nm_pacrunner_manager_get_type (void);
 
 NMPacrunnerManager *nm_pacrunner_manager_get (void);
 
-NMPacrunnerCallId *nm_pacrunner_manager_send (NMPacrunnerManager *self,
-                                              const char *iface,
-                                              NMProxyConfig *proxy_config,
-                                              NMIP4Config *ip4_config,
-                                              NMIP6Config *ip6_config);
+NMPacrunnerConfId *nm_pacrunner_manager_add (NMPacrunnerManager *self,
+                                             NMProxyConfig *proxy_config,
+                                             const char *iface,
+                                             NMIP4Config *ip4_config,
+                                             NMIP6Config *ip6_config);
 
-void nm_pacrunner_manager_remove (NMPacrunnerManager *self,
-                                  NMPacrunnerCallId *call_id);
+void nm_pacrunner_manager_remove (NMPacrunnerConfId *conf_id);
 
-gboolean nm_pacrunner_manager_remove_clear (NMPacrunnerManager *self,
-                                            NMPacrunnerCallId **p_call_id);
+gboolean nm_pacrunner_manager_remove_clear (NMPacrunnerConfId **p_conf_id);
 
 #endif /* __NETWORKMANAGER_PACRUNNER_MANAGER_H__ */

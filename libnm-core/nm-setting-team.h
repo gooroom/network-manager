@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2013 Jiri Pirko <jiri@resnulli.us>
+ * Copyright (C) 2013 Jiri Pirko <jiri@resnulli.us>
  */
 
 #ifndef __NM_SETTING_TEAM_H__
@@ -43,9 +28,9 @@ G_BEGIN_DECLS
  */
 typedef enum { /*< flags >*/
 	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_NONE              = 0, /*< skip >*/
-	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_VALIDATE_ACTIVE   = (1 << 1),
-	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_VALIDATE_INACTIVE = (1 << 2),
-	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_SEND_ALWAYS       = (1 << 3)
+	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_VALIDATE_ACTIVE   = 0x2,
+	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_VALIDATE_INACTIVE = 0x4,
+	NM_TEAM_LINK_WATCHER_ARP_PING_FLAG_SEND_ALWAYS       = 0x8,
 } NMTeamLinkWatcherArpPingFlags;
 
 #define NM_TEAM_LINK_WATCHER_ETHTOOL   "ethtool"
@@ -74,32 +59,44 @@ NMTeamLinkWatcher *nm_team_link_watcher_new_arp_ping (int init_wait,
                                                       const char *source_host,
                                                       NMTeamLinkWatcherArpPingFlags flags,
                                                       GError **error);
+NM_AVAILABLE_IN_1_16
+NMTeamLinkWatcher *nm_team_link_watcher_new_arp_ping2 (int init_wait,
+                                                       int interval,
+                                                       int missed_max,
+                                                       int vlanid,
+                                                       const char *target_host,
+                                                       const char *source_host,
+                                                       NMTeamLinkWatcherArpPingFlags flags,
+                                                       GError **error);
 NM_AVAILABLE_IN_1_12
 void nm_team_link_watcher_ref                    (NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
 void nm_team_link_watcher_unref                  (NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-gboolean nm_team_link_watcher_equal              (NMTeamLinkWatcher *watcher, NMTeamLinkWatcher *other);
+gboolean nm_team_link_watcher_equal              (const NMTeamLinkWatcher *watcher,
+                                                  const NMTeamLinkWatcher *other);
 NM_AVAILABLE_IN_1_12
-NMTeamLinkWatcher *nm_team_link_watcher_dup      (NMTeamLinkWatcher *watcher);
+NMTeamLinkWatcher *nm_team_link_watcher_dup      (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-const char *nm_team_link_watcher_get_name        (NMTeamLinkWatcher *watcher);
+const char *nm_team_link_watcher_get_name        (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-int nm_team_link_watcher_get_delay_up            (NMTeamLinkWatcher *watcher);
+int nm_team_link_watcher_get_delay_up            (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-int nm_team_link_watcher_get_delay_down          (NMTeamLinkWatcher *watcher);
+int nm_team_link_watcher_get_delay_down          (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-int nm_team_link_watcher_get_init_wait           (NMTeamLinkWatcher *watcher);
+int nm_team_link_watcher_get_init_wait           (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-int nm_team_link_watcher_get_interval            (NMTeamLinkWatcher *watcher);
+int nm_team_link_watcher_get_interval            (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-int nm_team_link_watcher_get_missed_max          (NMTeamLinkWatcher *watcher);
+int nm_team_link_watcher_get_missed_max          (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-const char *nm_team_link_watcher_get_target_host (NMTeamLinkWatcher *watcher);
+const char *nm_team_link_watcher_get_target_host (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-const char *nm_team_link_watcher_get_source_host (NMTeamLinkWatcher *watcher);
+const char *nm_team_link_watcher_get_source_host (const NMTeamLinkWatcher *watcher);
 NM_AVAILABLE_IN_1_12
-NMTeamLinkWatcherArpPingFlags nm_team_link_watcher_get_flags (NMTeamLinkWatcher *watcher);
+NMTeamLinkWatcherArpPingFlags nm_team_link_watcher_get_flags (const NMTeamLinkWatcher *watcher);
+NM_AVAILABLE_IN_1_16
+int nm_team_link_watcher_get_vlanid              (const NMTeamLinkWatcher *watcher);
 
 #define NM_TYPE_SETTING_TEAM            (nm_setting_team_get_type ())
 #define NM_SETTING_TEAM(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_SETTING_TEAM, NMSettingTeam))

@@ -1,32 +1,15 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2004 - 2018 Red Hat, Inc.
- * Copyright 2005 - 2008 Novell, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2004 - 2018 Red Hat, Inc.
+ * Copyright (C) 2005 - 2008 Novell, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-core-utils.h"
 
-#include <errno.h>
 #include <fcntl.h>
 #include <fnmatch.h>
-#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <resolv.h>
@@ -39,10 +22,11 @@
 #include <net/if_arp.h>
 #include <net/ethernet.h>
 
-#include "nm-utils/nm-random-utils.h"
-#include "nm-utils/nm-io-utils.h"
-#include "nm-utils/unaligned.h"
-#include "nm-utils/nm-secret-utils.h"
+#include "nm-std-aux/unaligned.h"
+#include "nm-glib-aux/nm-random-utils.h"
+#include "nm-glib-aux/nm-io-utils.h"
+#include "nm-glib-aux/nm-secret-utils.h"
+#include "nm-glib-aux/nm-time-utils.h"
 #include "nm-utils.h"
 #include "nm-core-internal.h"
 #include "nm-setting-connection.h"
@@ -50,6 +34,10 @@
 #include "nm-setting-ip6-config.h"
 #include "nm-setting-wireless.h"
 #include "nm-setting-wireless-security.h"
+
+#ifdef __NM_SD_UTILS_H__
+#error "nm-core-utils.c should stay independent of systemd utils. Are you looking for NetworkMangerUtils.c? "
+#endif
 
 G_STATIC_ASSERT (sizeof (NMUtilsTestFlags) <= sizeof (int));
 
@@ -125,6 +113,8 @@ static void
 _nm_singleton_instance_weak_cb (gpointer data,
                                 GObject *where_the_object_was)
 {
+	nm_assert (g_slist_find (_singletons, where_the_object_was));
+
 	_singletons = g_slist_remove (_singletons, where_the_object_was);
 }
 
@@ -140,8 +130,10 @@ _nm_singleton_instance_destroy (void)
 
 		g_object_weak_unref (instance, _nm_singleton_instance_weak_cb, NULL);
 
-		if (instance->ref_count > 1)
-			nm_log_dbg (LOGD_CORE, "disown %s singleton (%p)", G_OBJECT_TYPE_NAME (instance), instance);
+		if (instance->ref_count > 1) {
+			nm_log_dbg (LOGD_CORE, "disown %s singleton ("NM_HASH_OBFUSCATE_PTR_FMT")",
+			            G_OBJECT_TYPE_NAME (instance), NM_HASH_OBFUSCATE_PTR (instance));
+		}
 
 		g_object_unref (instance);
 	}
@@ -237,98 +229,6 @@ nm_ethernet_address_is_valid (gconstpointer addr, gssize len)
 	}
 
 	return TRUE;
-}
-
-gconstpointer
-nm_utils_ipx_address_clear_host_address (int family, gpointer dst, gconstpointer src, guint8 plen)
-{
-	g_return_val_if_fail (src, NULL);
-	g_return_val_if_fail (dst, NULL);
-
-	switch (family) {
-	case AF_INET:
-		g_return_val_if_fail (plen <= 32, NULL);
-		*((guint32 *) dst) = nm_utils_ip4_address_clear_host_address (*((guint32 *) src), plen);
-		break;
-	case AF_INET6:
-		g_return_val_if_fail (plen <= 128, NULL);
-		nm_utils_ip6_address_clear_host_address (dst, src, plen);
-		break;
-	default:
-		g_return_val_if_reached (NULL);
-	}
-	return dst;
-}
-
-/* nm_utils_ip4_address_clear_host_address:
- * @addr: source ip6 address
- * @plen: prefix length of network
- *
- * returns: the input address, with the host address set to 0.
- */
-in_addr_t
-nm_utils_ip4_address_clear_host_address (in_addr_t addr, guint8 plen)
-{
-	return addr & _nm_utils_ip4_prefix_to_netmask (plen);
-}
-
-/* nm_utils_ip6_address_clear_host_address:
- * @dst: destination output buffer, will contain the network part of the @src address
- * @src: source ip6 address
- * @plen: prefix length of network
- *
- * Note: this function is self assignment safe, to update @src inplace, set both
- * @dst and @src to the same destination or set @src NULL.
- */
-const struct in6_addr *
-nm_utils_ip6_address_clear_host_address (struct in6_addr *dst, const struct in6_addr *src, guint8 plen)
-{
-	g_return_val_if_fail (plen <= 128, NULL);
-	g_return_val_if_fail (dst, NULL);
-
-	if (!src)
-		src = dst;
-
-	if (plen < 128) {
-		guint nbytes = plen / 8;
-		guint nbits = plen % 8;
-
-		if (nbytes && dst != src)
-			memcpy (dst, src, nbytes);
-		if (nbits) {
-			dst->s6_addr[nbytes] = (src->s6_addr[nbytes] & (0xFF << (8 - nbits)));
-			nbytes++;
-		}
-		if (nbytes <= 15)
-			memset (&dst->s6_addr[nbytes], 0, 16 - nbytes);
-	} else if (src != dst)
-		*dst = *src;
-
-	return dst;
-}
-
-int
-nm_utils_ip6_address_same_prefix_cmp (const struct in6_addr *addr_a, const struct in6_addr *addr_b, guint8 plen)
-{
-	int nbytes;
-	guint8 va, vb, m;
-
-	if (plen >= 128)
-		NM_CMP_DIRECT_MEMCMP (addr_a, addr_b, sizeof (struct in6_addr));
-	else {
-		nbytes = plen / 8;
-		if (nbytes)
-			NM_CMP_DIRECT_MEMCMP (addr_a, addr_b, nbytes);
-
-		plen = plen % 8;
-		if (plen != 0) {
-			m = ~((1 << (8 - plen)) - 1);
-			va = ((((const guint8 *) addr_a))[nbytes]) & m;
-			vb = ((((const guint8 *) addr_b))[nbytes]) & m;
-			NM_CMP_DIRECT (va, vb);
-		}
-	}
-	return 0;
 }
 
 /*****************************************************************************/
@@ -437,6 +337,7 @@ nm_utils_modprobe (GError **error, gboolean suppress_error_logging, const char *
 	/* construct the argument list */
 	argv = g_ptr_array_sized_new (4);
 	g_ptr_array_add (argv, "/sbin/modprobe");
+	g_ptr_array_add (argv, "--use-blacklist");
 	g_ptr_array_add (argv, (char *) arg1);
 
 	va_start (ap, arg1);
@@ -535,7 +436,7 @@ static const char *
 _kc_waited_to_string (char *buf, gint64 wait_start_us)
 #define _kc_waited_to_string(buf, wait_start_us) ( G_STATIC_ASSERT_EXPR(sizeof (buf) == KC_WAITED_TO_STRING && sizeof ((buf)[0]) == 1), _kc_waited_to_string (buf, wait_start_us) )
 {
-	g_snprintf (buf, KC_WAITED_TO_STRING, " (%ld usec elapsed)", (long) (nm_utils_get_monotonic_timestamp_us () - wait_start_us));
+	g_snprintf (buf, KC_WAITED_TO_STRING, " (%ld usec elapsed)", (long) (nm_utils_get_monotonic_timestamp_usec () - wait_start_us));
 	return buf;
 }
 
@@ -571,11 +472,11 @@ _kc_cb_timeout_grace_period (void *user_data)
 		/* ESRCH means, process does not exist or is already a zombie. */
 		if (errsv != ESRCH) {
 			nm_log_err (LOGD_CORE | data->log_domain, "%s: kill(SIGKILL) returned unexpected return value %d: (%s, %d)",
-			            data->log_name, ret, strerror (errsv), errsv);
+			            data->log_name, ret, nm_strerror_native (errsv), errsv);
 		}
 	} else {
 		nm_log_dbg (data->log_domain, "%s: process not terminated after %ld usec. Sending SIGKILL signal",
-		            data->log_name, (long) (nm_utils_get_monotonic_timestamp_us () - data->async.wait_start_us));
+		            data->log_name, (long) (nm_utils_get_monotonic_timestamp_usec () - data->async.wait_start_us));
 	}
 
 	return G_SOURCE_REMOVE;
@@ -657,7 +558,7 @@ nm_utils_kill_child_async (pid_t pid, int sig, NMLogDomain log_domain,
 		/* ECHILD means, the process is not a child/does not exist or it has SIGCHILD blocked. */
 		if (errsv != ECHILD) {
 			nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": unexpected error while waitpid: %s (%d)",
-			            LOG_NAME_ARGS, strerror (errsv), errsv);
+			            LOG_NAME_ARGS, nm_strerror_native (errsv), errsv);
 			_kc_invoke_callback (pid, log_domain, log_name, callback, user_data, FALSE, -1);
 			return;
 		}
@@ -669,7 +570,7 @@ nm_utils_kill_child_async (pid_t pid, int sig, NMLogDomain log_domain,
 		/* ESRCH means, process does not exist or is already a zombie. */
 		if (errsv != ESRCH) {
 			nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": unexpected error sending %s: %s (%d)",
-			            LOG_NAME_ARGS, _kc_signal_to_string (sig), strerror (errsv), errsv);
+			            LOG_NAME_ARGS, _kc_signal_to_string (sig), nm_strerror_native (errsv), errsv);
 			_kc_invoke_callback (pid, log_domain, log_name, callback, user_data, FALSE, -1);
 			return;
 		}
@@ -683,14 +584,14 @@ nm_utils_kill_child_async (pid_t pid, int sig, NMLogDomain log_domain,
 		} else {
 			errsv = errno;
 			nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": failed due to unexpected return value %ld by waitpid (%s, %d) after sending %s",
-			            LOG_NAME_ARGS, (long) ret, strerror (errsv), errsv, _kc_signal_to_string (sig));
+			            LOG_NAME_ARGS, (long) ret, nm_strerror_native (errsv), errsv, _kc_signal_to_string (sig));
 			_kc_invoke_callback (pid, log_domain, log_name, callback, user_data, FALSE, -1);
 		}
 		return;
 	}
 
 	data = _kc_async_data_alloc (pid, log_domain, log_name, callback, user_data);
-	data->async.wait_start_us = nm_utils_get_monotonic_timestamp_us ();
+	data->async.wait_start_us = nm_utils_get_monotonic_timestamp_usec ();
 
 	if (sig != SIGKILL && wait_before_kill_msec > 0) {
 		data->async.source_timeout_kill_id = g_timeout_add (wait_before_kill_msec, _kc_cb_timeout_grace_period, data);
@@ -705,7 +606,7 @@ nm_utils_kill_child_async (pid_t pid, int sig, NMLogDomain log_domain,
 	g_child_watch_add (pid, _kc_cb_watch_child, data);
 }
 
-static inline gulong
+static gulong
 _sleep_duration_convert_ms_to_us (guint32 sleep_duration_msec)
 {
 	if (sleep_duration_msec > 0) {
@@ -723,7 +624,7 @@ _sleep_duration_convert_ms_to_us (guint32 sleep_duration_msec)
  * @log_domain: log debug information for this domain. Errors and warnings are logged both
  * as %LOGD_CORE and @log_domain.
  * @log_name: name of the process to kill for logging.
- * @child_status: (out) (allow-none): return the exit status of the child, if no error occured.
+ * @child_status: (out) (allow-none): return the exit status of the child, if no error occurred.
  * @wait_before_kill_msec: Waittime in milliseconds before sending %SIGKILL signal. Set this value
  * to zero, not to send %SIGKILL. If @sig is already %SIGKILL, this parameter has not effect.
  * @sleep_duration_msec: the synchronous function sleeps repeatedly waiting for the child to terminate.
@@ -732,7 +633,7 @@ _sleep_duration_convert_ms_to_us (guint32 sleep_duration_msec)
  * Kill a child process synchronously and wait. The function first checks if the child already terminated
  * and if it did, return the exit status. Otherwise send one @sig signal. @sig  will always be
  * sent unless the child already exited. If the child does not exit within @wait_before_kill_msec milliseconds,
- * the function will send %SIGKILL and waits for the child indefinitly. If @wait_before_kill_msec is zero, no
+ * the function will send %SIGKILL and waits for the child indefinitely. If @wait_before_kill_msec is zero, no
  * %SIGKILL signal will be sent.
  *
  * In case of error, errno is preserved to contain the last reason of failure.
@@ -765,7 +666,7 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 		/* ECHILD means, the process is not a child/does not exist or it has SIGCHILD blocked. */
 		if (errsv != ECHILD) {
 			nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": unexpected error while waitpid: %s (%d)",
-			            LOG_NAME_ARGS, strerror (errsv), errsv);
+			            LOG_NAME_ARGS, nm_strerror_native (errsv), errsv);
 			goto out;
 		}
 	}
@@ -776,7 +677,7 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 		/* ESRCH means, process does not exist or is already a zombie. */
 		if (errsv != ESRCH) {
 			nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": failed to send %s: %s (%d)",
-			            LOG_NAME_ARGS, _kc_signal_to_string (sig), strerror (errsv), errsv);
+			            LOG_NAME_ARGS, _kc_signal_to_string (sig), nm_strerror_native (errsv), errsv);
 		} else {
 			/* let's try again with waitpid, probably there was a race... */
 			ret = waitpid (pid, &status, 0);
@@ -787,13 +688,13 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 			} else {
 				errsv = errno;
 				nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": failed due to unexpected return value %ld by waitpid (%s, %d) after sending %s",
-				            LOG_NAME_ARGS, (long) ret, strerror (errsv), errsv, _kc_signal_to_string (sig));
+				            LOG_NAME_ARGS, (long) ret, nm_strerror_native (errsv), errsv, _kc_signal_to_string (sig));
 			}
 		}
 		goto out;
 	}
 
-	wait_start_us = nm_utils_get_monotonic_timestamp_us ();
+	wait_start_us = nm_utils_get_monotonic_timestamp_usec ();
 
 	/* wait for the process to terminated... */
 	if (sig != SIGKILL) {
@@ -818,7 +719,7 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 				/* ECHILD means, the process is not a child/does not exist or it has SIGCHILD blocked. */
 				if (errsv != ECHILD) {
 					nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": after sending %s, waitpid failed with %s (%d)%s",
-					            LOG_NAME_ARGS, _kc_signal_to_string (sig), strerror (errsv), errsv,
+					            LOG_NAME_ARGS, _kc_signal_to_string (sig), nm_strerror_native (errsv), errsv,
 					           was_waiting ? _kc_waited_to_string (buf_wait, wait_start_us) : "");
 					goto out;
 				}
@@ -827,7 +728,7 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 			if (!wait_until)
 				break;
 
-			now = nm_utils_get_monotonic_timestamp_us ();
+			now = nm_utils_get_monotonic_timestamp_usec ();
 			if (now >= wait_until)
 				break;
 
@@ -857,7 +758,7 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 				/* ESRCH means, process does not exist or is already a zombie. */
 				if (errsv != ESRCH) {
 					nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": failed to send SIGKILL (after sending %s), %s (%d)",
-								LOG_NAME_ARGS, _kc_signal_to_string (sig), strerror (errsv), errsv);
+								LOG_NAME_ARGS, _kc_signal_to_string (sig), nm_strerror_native (errsv), errsv);
 					goto out;
 				}
 			}
@@ -875,7 +776,7 @@ nm_utils_kill_child_sync (pid_t pid, int sig, NMLogDomain log_domain, const char
 
 		if (errsv != EINTR) {
 			nm_log_err (LOGD_CORE | log_domain, LOG_NAME_FMT ": after sending %s%s, waitpid failed with %s (%d)%s",
-			            LOG_NAME_ARGS, _kc_signal_to_string (sig), send_kill ? " and SIGKILL" : "", strerror (errsv), errsv,
+			            LOG_NAME_ARGS, _kc_signal_to_string (sig), send_kill ? " and SIGKILL" : "", nm_strerror_native (errsv), errsv,
 			            _kc_waited_to_string (buf_wait, wait_start_us));
 			goto out;
 		}
@@ -909,7 +810,7 @@ out:
  * @sleep_duration_msec: the synchronous function sleeps repeatedly waiting for the child to terminate.
  *   Set to zero, to use the default (meaning 20 wakeups per seconds).
  * @max_wait_msec: if 0, waits indefinitely until the process is gone (or a zombie). Otherwise, this
- *   is the maxium wait time until returning. If @max_wait_msec is non-zero but smaller then @wait_before_kill_msec,
+ *   is the maximum wait time until returning. If @max_wait_msec is non-zero but smaller then @wait_before_kill_msec,
  *   we will not send a final %SIGKILL.
  *
  * Kill a non-child process synchronously and wait. This function will not return before the
@@ -963,14 +864,14 @@ nm_utils_kill_process_sync (pid_t pid, guint64 start_time, int sig, NMLogDomain 
 			            LOG_NAME_ARGS, _kc_signal_to_string (sig));
 		} else {
 			nm_log_warn (LOGD_CORE | log_domain, LOG_NAME_PROCESS_FMT ": failed to send %s: %s (%d)",
-			             LOG_NAME_ARGS, _kc_signal_to_string (sig), strerror (errsv), errsv);
+			             LOG_NAME_ARGS, _kc_signal_to_string (sig), nm_strerror_native (errsv), errsv);
 		}
 		return;
 	}
 
 	/* wait for the process to terminate... */
 
-	wait_start_us = nm_utils_get_monotonic_timestamp_us ();
+	wait_start_us = nm_utils_get_monotonic_timestamp_usec ();
 
 	sleep_duration_usec = _sleep_duration_convert_ms_to_us (sleep_duration_msec);
 	if (sig != SIGKILL && wait_before_kill_msec)
@@ -1014,14 +915,14 @@ nm_utils_kill_process_sync (pid_t pid, guint64 start_time, int sig, NMLogDomain 
 				            was_waiting ? _kc_waited_to_string (buf_wait, wait_start_us) : "");
 			} else {
 				nm_log_warn (LOGD_CORE | log_domain, LOG_NAME_PROCESS_FMT ": failed to kill(%ld, 0): %s (%d)%s",
-				             LOG_NAME_ARGS, (long int) pid, strerror (errsv), errsv,
+				             LOG_NAME_ARGS, (long int) pid, nm_strerror_native (errsv), errsv,
 				             was_waiting ? _kc_waited_to_string (buf_wait, wait_start_us) : "");
 			}
 			return;
 		}
 
 		sleep_time = sleep_duration_usec;
-		now = nm_utils_get_monotonic_timestamp_us ();
+		now = nm_utils_get_monotonic_timestamp_usec ();
 
 		if (   max_wait_until != 0
 		    && now >= max_wait_until) {
@@ -1050,7 +951,7 @@ nm_utils_kill_process_sync (pid_t pid, guint64 start_time, int sig, NMLogDomain 
 						            LOG_NAME_ARGS, _kc_waited_to_string (buf_wait, wait_start_us));
 					} else {
 						nm_log_warn (LOGD_CORE | log_domain, LOG_NAME_PROCESS_FMT ": failed to send SIGKILL (after sending %s), %s (%d)%s",
-						             LOG_NAME_ARGS, _kc_signal_to_string (sig), strerror (errsv), errsv,
+						             LOG_NAME_ARGS, _kc_signal_to_string (sig), nm_strerror_native (errsv), errsv,
 						             _kc_waited_to_string (buf_wait, wait_start_us));
 					}
 					return;
@@ -1102,7 +1003,7 @@ const char *const NM_PATHS_DEFAULT[] = {
 };
 
 const char *
-nm_utils_find_helper(const char *progname, const char *try_first, GError **error)
+nm_utils_find_helper (const char *progname, const char *try_first, GError **error)
 {
 	return nm_utils_file_search_in_paths (progname, try_first, NM_PATHS_DEFAULT, G_FILE_TEST_IS_EXECUTABLE, NULL, NULL, error);
 }
@@ -1129,13 +1030,17 @@ nm_utils_read_link_absolute (const char *link_file, GError **error)
 		return ln;
 
 	dirname = g_path_get_dirname (link_file);
-	if (!g_path_is_absolute (link_file)) {
-		gs_free char *dirname_rel = dirname;
+	if (!g_path_is_absolute (dirname)) {
 		gs_free char *current_dir = g_get_current_dir ();
 
-		dirname = g_build_filename (current_dir, dirname_rel, NULL);
-	}
-	ln_abs = g_build_filename (dirname, ln, NULL);
+		/* @link_file argument was not an absolute path in the first place.
+		 * That actually may be a bug, because the CWD is not well defined
+		 * in most cases. Anyway, apparently we were able to load the file
+		 * even from a relative path. So, when making the link absolute, we
+		 * also need to prepend the CWD. */
+		ln_abs = g_build_filename (current_dir, dirname, ln, NULL);
+	} else
+		ln_abs = g_build_filename (dirname, ln, NULL);
 	g_free (dirname);
 	g_free (ln);
 	return ln_abs;
@@ -1143,13 +1048,10 @@ nm_utils_read_link_absolute (const char *link_file, GError **error)
 
 /*****************************************************************************/
 
-#define MAC_TAG "mac:"
-#define INTERFACE_NAME_TAG "interface-name:"
-#define DEVICE_TYPE_TAG "type:"
-#define DRIVER_TAG "driver:"
-#define SUBCHAN_TAG "s390-subchannels:"
-#define DHCP_PLUGIN_TAG "dhcp-plugin:"
-#define EXCEPT_TAG "except:"
+#define DEVICE_TYPE_TAG                         "type:"
+#define DRIVER_TAG                              "driver:"
+#define DHCP_PLUGIN_TAG                         "dhcp-plugin:"
+#define EXCEPT_TAG                              "except:"
 #define MATCH_TAG_CONFIG_NM_VERSION             "nm-version:"
 #define MATCH_TAG_CONFIG_NM_VERSION_MIN         "nm-version-min:"
 #define MATCH_TAG_CONFIG_NM_VERSION_MAX         "nm-version-max:"
@@ -1348,10 +1250,10 @@ match_device_eval (const char *spec_str,
 		       && nm_streq (spec_str, match_data->device_type);
 	}
 
-	if (_MATCH_CHECK (spec_str, MAC_TAG))
+	if (_MATCH_CHECK (spec_str, NM_MATCH_SPEC_MAC_TAG))
 		return match_device_hwaddr_eval (spec_str, match_data);
 
-	if (_MATCH_CHECK (spec_str, INTERFACE_NAME_TAG)) {
+	if (_MATCH_CHECK (spec_str, NM_MATCH_SPEC_INTERFACE_NAME_TAG)) {
 		gboolean use_pattern = FALSE;
 
 		if (spec_str[0] == '=')
@@ -1403,7 +1305,7 @@ match_device_eval (const char *spec_str,
 		                                  match_data->driver_version ?: "");
 	}
 
-	if (_MATCH_CHECK (spec_str, SUBCHAN_TAG))
+	if (_MATCH_CHECK (spec_str, NM_MATCH_SPEC_S390_SUBCHANNELS_TAG))
 		return match_data_s390_subchannels_eval (spec_str, match_data);
 
 	if (_MATCH_CHECK (spec_str, DHCP_PLUGIN_TAG))
@@ -1796,31 +1698,161 @@ nm_match_spec_join (GSList *specs)
 	return g_string_free (str, FALSE);
 }
 
+static void
+_pattern_parse (const char *input,
+                const char **out_pattern,
+                gboolean *out_is_inverted,
+                gboolean *out_is_mandatory)
+{
+	gboolean is_inverted = FALSE;
+	gboolean is_mandatory = FALSE;
+
+	if (input[0] == '&') {
+		input++;
+		is_mandatory = TRUE;
+		if (input[0] == '!') {
+			input++;
+			is_inverted = TRUE;
+		}
+		goto out;
+	}
+
+	if (input[0] == '|') {
+		input++;
+		if (input[0] == '!') {
+			input++;
+			is_inverted = TRUE;
+		}
+		goto out;
+	}
+
+	if (input[0] == '!') {
+		input++;
+		is_inverted = TRUE;
+		is_mandatory = TRUE;
+		goto out;
+	}
+
+out:
+	if (input[0] == '\\')
+		input++;
+
+	*out_pattern = input;
+	*out_is_inverted = is_inverted;
+	*out_is_mandatory = is_mandatory;
+}
+
 gboolean
 nm_wildcard_match_check (const char *str,
                          const char *const *patterns,
                          guint num_patterns)
 {
-	guint i, neg = 0;
+	gboolean has_optional = FALSE;
+	gboolean has_any_optional = FALSE;
+	guint i;
 
 	for (i = 0; i < num_patterns; i++) {
-		if (patterns[i][0] == '!') {
-			neg++;
-			if (!fnmatch (patterns[i] + 1, str, 0))
+		gboolean is_inverted;
+		gboolean is_mandatory;
+		gboolean match;
+		const char *p;
+
+		_pattern_parse (patterns[i], &p, &is_inverted, &is_mandatory);
+
+		match = (fnmatch (p, str, 0) == 0);
+		if (is_inverted)
+			match = !match;
+
+		if (is_mandatory) {
+			if (!match)
 				return FALSE;
+		} else {
+			has_any_optional = TRUE;
+			if (match)
+				has_optional = TRUE;
 		}
 	}
 
-	if (neg == num_patterns)
-		return TRUE;
+	return    has_optional
+	       || !has_any_optional;
+}
 
-	for (i = 0; i < num_patterns; i++) {
-		if (   patterns[i][0] != '!'
-		    && !fnmatch (patterns[i], str, 0))
-			return TRUE;
+/*****************************************************************************/
+
+static gboolean
+_kernel_cmdline_match (const char *const*proc_cmdline,
+                       const char *pattern)
+{
+
+	if (proc_cmdline) {
+		gboolean has_equal = (!!strchr (pattern, '='));
+		gsize pattern_len = strlen (pattern);
+
+		for (; proc_cmdline[0]; proc_cmdline++) {
+			const char *c = proc_cmdline[0];
+
+			if (has_equal) {
+				/* if pattern contains '=' compare full key=value */
+				if (nm_streq (c, pattern))
+					return TRUE;
+				continue;
+			}
+
+			/* otherwise consider pattern as key only */
+			if (   strncmp (c, pattern, pattern_len) == 0
+			    && NM_IN_SET (c[pattern_len], '\0', '='))
+				return TRUE;
+		}
 	}
 
 	return FALSE;
+}
+
+gboolean
+nm_utils_kernel_cmdline_match_check (const char *const*proc_cmdline,
+                                     const char *const*patterns,
+                                     guint num_patterns,
+                                     GError **error)
+{
+	gboolean has_optional = FALSE;
+	gboolean has_any_optional = FALSE;
+	guint i;
+
+	for (i = 0; i < num_patterns; i++) {
+		const char *element = patterns[i];
+		gboolean is_inverted = FALSE;
+		gboolean is_mandatory = FALSE;
+		gboolean match;
+		const char *p;
+
+		_pattern_parse (element, &p, &is_inverted, &is_mandatory);
+
+		match = _kernel_cmdline_match (proc_cmdline, p);
+		if (is_inverted)
+			match = !match;
+
+		if (is_mandatory) {
+			if (!match) {
+				nm_utils_error_set (error, NM_UTILS_ERROR_CONNECTION_AVAILABLE_TEMPORARY,
+				                    "device does not satisfy match.kernel-command-line property %s",
+				                    patterns[i]);
+				return FALSE;
+			}
+		} else {
+			has_any_optional = TRUE;
+			if (match)
+				has_optional = TRUE;
+		}
+	}
+
+	if (   !has_optional
+	    && has_any_optional) {
+		nm_utils_error_set (error, NM_UTILS_ERROR_CONNECTION_AVAILABLE_TEMPORARY,
+		                    "device does not satisfy any match.kernel-command-line property");
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 /*****************************************************************************/
@@ -1939,173 +1971,6 @@ nm_utils_cmp_connection_by_autoconnect_priority (NMConnection *a, NMConnection *
 
 /*****************************************************************************/
 
-static gint64 monotonic_timestamp_offset_sec;
-static int monotonic_timestamp_clock_mode = 0;
-
-static void
-monotonic_timestamp_get (struct timespec *tp)
-{
-	int clock_mode = 0;
-	int err = 0;
-
-	switch (monotonic_timestamp_clock_mode) {
-	case 0:
-		/* the clock is not yet initialized (first run) */
-		err = clock_gettime (CLOCK_BOOTTIME, tp);
-		if (err == -1 && errno == EINVAL) {
-			clock_mode = 2;
-			err = clock_gettime (CLOCK_MONOTONIC, tp);
-		} else
-			clock_mode = 1;
-		break;
-	case 1:
-		/* default, return CLOCK_BOOTTIME */
-		err = clock_gettime (CLOCK_BOOTTIME, tp);
-		break;
-	case 2:
-		/* fallback, return CLOCK_MONOTONIC. Kernels prior to 2.6.39
-		 * (released on 18 May, 2011) don't support CLOCK_BOOTTIME. */
-		err = clock_gettime (CLOCK_MONOTONIC, tp);
-		break;
-	}
-
-	g_assert (err == 0); (void)err;
-	g_assert (tp->tv_nsec >= 0 && tp->tv_nsec < NM_UTILS_NS_PER_SECOND);
-
-	if (G_LIKELY (clock_mode == 0))
-		return;
-
-	/* Calculate an offset for the time stamp.
-	 *
-	 * We always want positive values, because then we can initialize
-	 * a timestamp with 0 and be sure, that it will be less then any
-	 * value nm_utils_get_monotonic_timestamp_*() might return.
-	 * For this to be true also for nm_utils_get_monotonic_timestamp_s() at
-	 * early boot, we have to shift the timestamp to start counting at
-	 * least from 1 second onward.
-	 *
-	 * Another advantage of shifting is, that this way we make use of the whole 31 bit
-	 * range of signed int, before the time stamp for nm_utils_get_monotonic_timestamp_s()
-	 * wraps (~68 years).
-	 **/
-	monotonic_timestamp_offset_sec = (- ((gint64) tp->tv_sec)) + 1;
-	monotonic_timestamp_clock_mode = clock_mode;
-
-	if (nm_logging_enabled (LOGL_DEBUG, LOGD_CORE)) {
-		time_t now = time (NULL);
-		struct tm tm;
-		char s[255];
-
-		strftime (s, sizeof (s), "%Y-%m-%d %H:%M:%S", localtime_r (&now, &tm));
-		nm_log_dbg (LOGD_CORE, "monotonic timestamp started counting 1.%09ld seconds ago with "
-		                       "an offset of %lld.0 seconds to %s (local time is %s)",
-		                       tp->tv_nsec, (long long) -monotonic_timestamp_offset_sec,
-		                       clock_mode == 1 ? "CLOCK_BOOTTIME" : "CLOCK_MONOTONIC", s);
-	}
-}
-
-/**
- * nm_utils_get_monotonic_timestamp_ns:
- *
- * Returns: a monotonically increasing time stamp in nanoseconds,
- * starting at an unspecified offset. See clock_gettime(), %CLOCK_BOOTTIME.
- *
- * The returned value will start counting at an undefined point
- * in the past and will always be positive.
- *
- * All the nm_utils_get_monotonic_timestamp_*s functions return the same
- * timestamp but in different scales (nsec, usec, msec, sec).
- **/
-gint64
-nm_utils_get_monotonic_timestamp_ns (void)
-{
-	struct timespec tp = { 0 };
-
-	monotonic_timestamp_get (&tp);
-
-	/* Although the result will always be positive, we return a signed
-	 * integer, which makes it easier to calculate time differences (when
-	 * you want to subtract signed values).
-	 **/
-	return (((gint64) tp.tv_sec) + monotonic_timestamp_offset_sec) * NM_UTILS_NS_PER_SECOND +
-	       tp.tv_nsec;
-}
-
-/**
- * nm_utils_get_monotonic_timestamp_us:
- *
- * Returns: a monotonically increasing time stamp in microseconds,
- * starting at an unspecified offset. See clock_gettime(), %CLOCK_BOOTTIME.
- *
- * The returned value will start counting at an undefined point
- * in the past and will always be positive.
- *
- * All the nm_utils_get_monotonic_timestamp_*s functions return the same
- * timestamp but in different scales (nsec, usec, msec, sec).
- **/
-gint64
-nm_utils_get_monotonic_timestamp_us (void)
-{
-	struct timespec tp = { 0 };
-
-	monotonic_timestamp_get (&tp);
-
-	/* Although the result will always be positive, we return a signed
-	 * integer, which makes it easier to calculate time differences (when
-	 * you want to subtract signed values).
-	 **/
-	return (((gint64) tp.tv_sec) + monotonic_timestamp_offset_sec) * ((gint64) G_USEC_PER_SEC) +
-	       (tp.tv_nsec / (NM_UTILS_NS_PER_SECOND/G_USEC_PER_SEC));
-}
-
-/**
- * nm_utils_get_monotonic_timestamp_ms:
- *
- * Returns: a monotonically increasing time stamp in milliseconds,
- * starting at an unspecified offset. See clock_gettime(), %CLOCK_BOOTTIME.
- *
- * The returned value will start counting at an undefined point
- * in the past and will always be positive.
- *
- * All the nm_utils_get_monotonic_timestamp_*s functions return the same
- * timestamp but in different scales (nsec, usec, msec, sec).
- **/
-gint64
-nm_utils_get_monotonic_timestamp_ms (void)
-{
-	struct timespec tp = { 0 };
-
-	monotonic_timestamp_get (&tp);
-
-	/* Although the result will always be positive, we return a signed
-	 * integer, which makes it easier to calculate time differences (when
-	 * you want to subtract signed values).
-	 **/
-	return (((gint64) tp.tv_sec) + monotonic_timestamp_offset_sec) * ((gint64) 1000) +
-	       (tp.tv_nsec / (NM_UTILS_NS_PER_SECOND/1000));
-}
-
-/**
- * nm_utils_get_monotonic_timestamp_s:
- *
- * Returns: nm_utils_get_monotonic_timestamp_ms() in seconds (throwing
- * away sub second parts). The returned value will always be positive.
- *
- * This value wraps after roughly 68 years which should be fine for any
- * practical purpose.
- *
- * All the nm_utils_get_monotonic_timestamp_*s functions return the same
- * timestamp but in different scales (nsec, usec, msec, sec).
- **/
-gint32
-nm_utils_get_monotonic_timestamp_s (void)
-{
-	struct timespec tp = { 0 };
-
-	monotonic_timestamp_get (&tp);
-	return (((gint64) tp.tv_sec) + monotonic_timestamp_offset_sec);
-}
-
 typedef struct
 {
 	const char *name;
@@ -2192,7 +2057,7 @@ _log_connection_get_property (NMSetting *setting, const char *name)
 		return g_strdup ("****");
 
 	if (!_nm_setting_get_property (setting, name, &val))
-		g_return_val_if_reached (FALSE);
+		return g_strdup ("<unknown>");
 
 	if (G_VALUE_HOLDS_STRING (&val)) {
 		const char *val_s;
@@ -2295,7 +2160,7 @@ nm_utils_log_connection_diff (NMConnection *connection,
 		return;
 	}
 
-	/* FIXME: it doesn't nicely show the content of NMSettingVpn, becuase nm_connection_diff() does not
+	/* FIXME: it doesn't nicely show the content of NMSettingVpn, because nm_connection_diff() does not
 	 * expand the hash values. */
 
 	sorted_hashes = _log_connection_sort_hashes (connection, diff_base, connection_diff);
@@ -2385,49 +2250,6 @@ out:
 	g_array_free (sorted_hashes, TRUE);
 }
 
-/**
- * nm_utils_monotonic_timestamp_as_boottime:
- * @timestamp: the monotonic-timestamp that should be converted into CLOCK_BOOTTIME.
- * @timestamp_ns_per_tick: How many nano seconds make one unit of @timestamp? E.g. if
- * @timestamp is in unit seconds, pass %NM_UTILS_NS_PER_SECOND; @timestamp in nano
- * seconds, pass 1; @timestamp in milli seconds, pass %NM_UTILS_NS_PER_SECOND/1000; etc.
- *
- * Returns: the monotonic-timestamp as CLOCK_BOOTTIME, as returned by clock_gettime().
- * The unit is the same as the passed in @timestamp basd on @timestamp_ns_per_tick.
- * E.g. if you passed @timestamp in as seconds, it will return boottime in seconds.
- * If @timestamp is a non-positive, it returns -1. Note that a (valid) monotonic-timestamp
- * is always positive.
- *
- * On older kernels that don't support CLOCK_BOOTTIME, the returned time is instead CLOCK_MONOTONIC.
- **/
-gint64
-nm_utils_monotonic_timestamp_as_boottime (gint64 timestamp, gint64 timestamp_ns_per_tick)
-{
-	gint64 offset;
-
-	/* only support ns-per-tick being a multiple of 10. */
-	g_return_val_if_fail (timestamp_ns_per_tick == 1
-	                      || (timestamp_ns_per_tick > 0 &&
-	                          timestamp_ns_per_tick <= NM_UTILS_NS_PER_SECOND &&
-	                          timestamp_ns_per_tick % 10 == 0),
-	                      -1);
-
-	/* Check that the timestamp is in a valid range. */
-	g_return_val_if_fail (timestamp >= 0, -1);
-
-	/* if the caller didn't yet ever fetch a monotonic-timestamp, he cannot pass any meaningful
-	 * value (because he has no idea what these timestamps would be). That would be a bug. */
-	g_return_val_if_fail (monotonic_timestamp_clock_mode != 0, -1);
-
-	/* calculate the offset of monotonic-timestamp to boottime. offset_s is <= 1. */
-	offset = monotonic_timestamp_offset_sec * (NM_UTILS_NS_PER_SECOND / timestamp_ns_per_tick);
-
-	/* check for overflow. */
-	g_return_val_if_fail (offset > 0 || timestamp < G_MAXINT64 + offset, G_MAXINT64);
-
-	return timestamp - offset;
-}
-
 #define IPV6_PROPERTY_DIR "/proc/sys/net/ipv6/conf/"
 #define IPV4_PROPERTY_DIR "/proc/sys/net/ipv4/conf/"
 G_STATIC_ASSERT (sizeof (IPV4_PROPERTY_DIR) == sizeof (IPV6_PROPERTY_DIR));
@@ -2453,7 +2275,7 @@ nm_utils_sysctl_ip_conf_path (int addr_family, char *buf, const char *ifname, co
 	nm_assert (buf);
 	nm_assert_addr_family (addr_family);
 
-	g_assert (nm_utils_is_valid_iface_name (ifname, NULL));
+	g_assert (nm_utils_ifname_valid_kernel (ifname, NULL));
 	property = NM_ASSERT_VALID_PATH_COMPONENT (property);
 
 	len = g_snprintf (buf,
@@ -2471,7 +2293,7 @@ nm_utils_sysctl_ip_conf_is_path (int addr_family, const char *path, const char *
 {
 	g_return_val_if_fail (path, FALSE);
 	NM_ASSERT_VALID_PATH_COMPONENT (property);
-	g_assert (!ifname || nm_utils_is_valid_iface_name (ifname, NULL));
+	g_assert (!ifname || nm_utils_ifname_valid_kernel (ifname, NULL));
 
 	if (addr_family == AF_INET) {
 		if (!g_str_has_prefix (path, IPV4_PROPERTY_DIR))
@@ -2504,7 +2326,7 @@ nm_utils_sysctl_ip_conf_is_path (int addr_family, const char *path, const char *
 			return FALSE;
 		memcpy (buf, path, l);
 		buf[l] = '\0';
-		if (!nm_utils_is_valid_iface_name (buf, NULL))
+		if (!nm_utils_ifname_valid_kernel (buf, NULL))
 			return FALSE;
 		path = slash + 1;
 	}
@@ -2595,11 +2417,11 @@ _uuid_data_init (UuidData *uuid_data,
 	uuid_data->is_fake = is_fake;
 	if (packed) {
 		G_STATIC_ASSERT_EXPR (sizeof (uuid_data->str) >= (sizeof (*uuid) * 2 + 1));
-		_nm_utils_bin2hexstr_full (uuid,
-		                           sizeof (*uuid),
-		                           '\0',
-		                           FALSE,
-		                           uuid_data->str);
+		nm_utils_bin2hexstr_full (uuid,
+		                          sizeof (*uuid),
+		                          '\0',
+		                          FALSE,
+		                          uuid_data->str);
 	} else {
 		G_STATIC_ASSERT_EXPR (sizeof (uuid_data->str) >= 37);
 		_nm_utils_uuid_unparse (uuid, uuid_data->str);
@@ -2629,17 +2451,17 @@ again:
 		 * where our configured SYSCONFDIR is.  Alternatively, it might be in
 		 * LOCALSTATEDIR /lib/dbus/machine-id.
 		 */
-		if (   nm_utils_file_get_contents (-1, "/etc/machine-id", 100*1024, 0, &content, NULL, NULL) >= 0
-		    || nm_utils_file_get_contents (-1, LOCALSTATEDIR"/lib/dbus/machine-id", 100*1024, 0, &content, NULL, NULL) >= 0) {
+		if (   nm_utils_file_get_contents (-1, "/etc/machine-id",                   100*1024, 0, &content, NULL, NULL, NULL)
+		    || nm_utils_file_get_contents (-1, LOCALSTATEDIR"/lib/dbus/machine-id", 100*1024, 0, &content, NULL, NULL, NULL)) {
 			g_strstrip (content);
-			if (_nm_utils_hexstr2bin_full (content,
-			                               FALSE,
-			                               FALSE,
-			                               NULL,
-			                               16,
-			                               (guint8 *) &uuid,
-			                               sizeof (uuid),
-			                               NULL)) {
+			if (nm_utils_hexstr2bin_full (content,
+			                              FALSE,
+			                              FALSE,
+			                              NULL,
+			                              16,
+			                              (guint8 *) &uuid,
+			                              sizeof (uuid),
+			                              NULL)) {
 				if (!nm_utils_uuid_is_null (&uuid)) {
 					/* an all-zero machine-id is not valid. */
 					is_fake = FALSE;
@@ -2661,7 +2483,7 @@ again:
 			if (nm_utils_host_id_get (&seed_bin, &seed_len)) {
 				/* we have no valid machine-id. Generate a fake one by hashing
 				 * the secret-key. This key is commonly persisted, so it should be
-				 * stable accross reboots (despite having a broken system without
+				 * stable across reboots (despite having a broken system without
 				 * proper machine-id). */
 				fake_type = "secret-key";
 				hash_seed = "ab085f06-b629-46d1-a553-84eeba5683b6";
@@ -2742,7 +2564,7 @@ _host_id_read_timestamp (gboolean use_secret_key_file,
 	    && stat (SECRET_KEY_FILE, &st) == 0) {
 		/* don't check for overflow or timestamps in the future. We get whatever
 		 * (bogus) date is on the file. */
-		*out_timestamp_ns = (st.st_mtim.tv_sec * NM_UTILS_NS_PER_SECOND) + st.st_mtim.tv_nsec;
+		*out_timestamp_ns = nm_utils_timespec_to_nsec (&st.st_mtim);
 		return TRUE;
 	}
 
@@ -2758,16 +2580,16 @@ _host_id_read_timestamp (gboolean use_secret_key_file,
 	 * the secret_key) if we are unable to access the secret_key file in the first place.
 	 *
 	 * Pick a random timestamp from the past two years. Yes, this timestamp
-	 * is not stable accross restarts, but apparently neither is the host-id
+	 * is not stable across restarts, but apparently neither is the host-id
 	 * nor the secret_key itself. */
 
-#define EPOCH_TWO_YEARS  (G_GINT64_CONSTANT (2 * 365 * 24 * 3600) * NM_UTILS_NS_PER_SECOND)
+#define EPOCH_TWO_YEARS  (G_GINT64_CONSTANT (2 * 365 * 24 * 3600) * NM_UTILS_NSEC_PER_SEC)
 
 	v = nm_hash_siphash42 (1156657133u, host_id, host_id_len);
 
 	now = time (NULL);
 	*out_timestamp_ns = NM_MAX ((gint64) 1,
-	                            (now * NM_UTILS_NS_PER_SECOND) - ((gint64) (v % ((guint64) (EPOCH_TWO_YEARS)))));
+	                            (now * NM_UTILS_NSEC_PER_SEC) - ((gint64) (v % ((guint64) (EPOCH_TWO_YEARS)))));
 	return FALSE;
 }
 
@@ -2813,13 +2635,14 @@ _host_id_read (guint8 **out_host_id,
 	GError *error = NULL;
 	gboolean success;
 
-	if (nm_utils_file_get_contents (-1,
-	                                SECRET_KEY_FILE,
-	                                10*1024,
-	                                NM_UTILS_FILE_GET_CONTENTS_FLAG_SECRET,
-	                                (char **) &file_content.str,
-	                                &file_content.len,
-	                                &error) < 0) {
+	if (!nm_utils_file_get_contents (-1,
+	                                 SECRET_KEY_FILE,
+	                                 10*1024,
+	                                 NM_UTILS_FILE_GET_CONTENTS_FLAG_SECRET,
+	                                 &file_content.str,
+	                                 &file_content.len,
+	                                 NULL,
+	                                 &error)) {
 		if (!nm_utils_error_is_notfound (error)) {
 			nm_log_warn (LOGD_CORE, "secret-key: failure reading secret key in \"%s\": %s (generate new key)",
 			             SECRET_KEY_FILE, error->message);
@@ -2896,7 +2719,8 @@ _host_id_read (guint8 **out_host_id,
 		} else if (!nm_utils_file_set_contents (SECRET_KEY_FILE,
 		                                        (const char *) new_content,
 		                                        len,
-		                                        0077,
+		                                        0600,
+		                                        NULL,
 		                                        &error)) {
 			nm_log_warn (LOGD_CORE, "secret-key: failure to persist secret key in \"%s\" (%s) (use non-persistent key)",
 			             SECRET_KEY_FILE, error->message);
@@ -3007,9 +2831,14 @@ again:
 		NMUuid uuid;
 		gboolean is_fake = FALSE;
 
-		nm_utils_file_get_contents (-1, "/proc/sys/kernel/random/boot_id", 0,
+		nm_utils_file_get_contents (-1,
+		                            "/proc/sys/kernel/random/boot_id",
+		                            0,
 		                            NM_UTILS_FILE_GET_CONTENTS_FLAG_NONE,
-		                            &contents, NULL, NULL);
+		                            &contents,
+		                            NULL,
+		                            NULL,
+		                            NULL);
 		if (   !contents
 		    || !_nm_utils_uuid_parse (nm_strstrip (contents), &uuid)) {
 			/* generate a random UUID instead. */
@@ -3038,6 +2867,53 @@ const NMUuid *
 nm_utils_boot_id_bin (void)
 {
 	return &_boot_id_get ()->bin;
+}
+
+/*****************************************************************************/
+
+const char *
+nm_utils_proc_cmdline (void)
+{
+	static const char *volatile proc_cmdline_cached = NULL;
+	const char *proc_cmdline;
+
+again:
+	proc_cmdline = g_atomic_pointer_get (&proc_cmdline_cached);
+	if (G_UNLIKELY (!proc_cmdline)) {
+		gs_free char *str = NULL;
+
+		g_file_get_contents ("/proc/cmdline", &str, NULL, NULL);
+		str = nm_str_realloc (str);
+
+		proc_cmdline = str ?: "";
+		if (!g_atomic_pointer_compare_and_exchange (&proc_cmdline_cached, NULL, proc_cmdline))
+			goto again;
+
+		g_steal_pointer (&str);
+	}
+
+	return proc_cmdline;
+}
+
+const char *const*
+nm_utils_proc_cmdline_split (void)
+{
+	static const char *const*volatile proc_cmdline_cached = NULL;
+	const char *const*proc_cmdline;
+
+again:
+	proc_cmdline = g_atomic_pointer_get (&proc_cmdline_cached);
+	if (G_UNLIKELY (!proc_cmdline)) {
+		gs_strfreev char **split = NULL;
+
+		split = nm_utils_strsplit_quoted (nm_utils_proc_cmdline ());
+		if (!g_atomic_pointer_compare_and_exchange (&proc_cmdline_cached, NULL, (gpointer) split))
+			goto again;
+
+		proc_cmdline = (const char *const*) g_steal_pointer (&split);
+	}
+
+	return proc_cmdline;
 }
 
 /*****************************************************************************/
@@ -3292,22 +3168,22 @@ nm_utils_ipv6_interface_identifier_get_from_token (NMUtilsIPv6IfaceId *iid,
 /**
  * nm_utils_inet6_interface_identifier_to_token:
  * @iid: %NMUtilsIPv6IfaceId interface identifier
- * @buf: the destination buffer or %NULL
+ * @buf: the destination buffer of at least %NM_UTILS_INET_ADDRSTRLEN
+ *   bytes.
  *
  * Converts the interface identifier to a string token.
- * If the destination buffer it set, set it is used to store the
- * resulting token, otherwise an internal static buffer is used.
- * The buffer needs to be %NM_UTILS_INET_ADDRSTRLEN characters long.
  *
- * Returns: a statically allocated array. Do not g_free().
+ * Returns: the input buffer filled with the id as string.
  */
 const char *
-nm_utils_inet6_interface_identifier_to_token (NMUtilsIPv6IfaceId iid, char *buf)
+nm_utils_inet6_interface_identifier_to_token (NMUtilsIPv6IfaceId iid,
+                                              char buf[static INET6_ADDRSTRLEN])
 {
 	struct in6_addr i6_token = { .s6_addr = { 0, } };
 
+	nm_assert (buf);
 	nm_utils_ipv6_addr_set_interface_identifier (&i6_token, iid);
-	return nm_utils_inet6_ntop (&i6_token, buf);
+	return _nm_utils_inet6_ntop (&i6_token, buf);
 }
 
 /*****************************************************************************/
@@ -3328,7 +3204,7 @@ nm_utils_stable_id_generated_complete (const char *stable_id_generated)
 	guint8 buf[NM_UTILS_CHECKSUM_LENGTH_SHA1];
 	char *base64;
 
-	/* for NM_UTILS_STABLE_TYPE_GENERATED we genererate a possibly long string
+	/* for NM_UTILS_STABLE_TYPE_GENERATED we generate a possibly long string
 	 * by doing text-substitutions in nm_utils_stable_id_parse().
 	 *
 	 * Let's shorten the (possibly) long stable_id to something more compact. */
@@ -3382,7 +3258,7 @@ nm_utils_stable_id_parse (const char *stable_id,
 	 * of ${...} patterns.
 	 *
 	 * At first, it looks a bit like bash parameter substitution.
-	 * In contrast however, the process is unambigious so that the resulting
+	 * In contrast however, the process is unambiguous so that the resulting
 	 * effective id differs if:
 	 *  - the original, untranslated stable-id differs
 	 *  - or any of the subsitutions differs.
@@ -3446,7 +3322,7 @@ nm_utils_stable_id_parse (const char *stable_id,
 			_stable_id_append (str, hwaddr);
 		else if (g_str_has_prefix (&stable_id[i], "${RANDOM}")) {
 			/* RANDOM makes not so much sense for cloned-mac-address
-			 * as the result is simmilar to specyifing "cloned-mac-address=random".
+			 * as the result is similar to specyifing "cloned-mac-address=random".
 			 * It makes however sense for RFC 7217 Stable Privacy IPv6 addresses
 			 * where this is effectively the only way to generate a different
 			 * (random) host identifier for each connect.
@@ -3780,14 +3656,52 @@ nm_utils_dhcp_client_id_mac (int arp_type,
 	return g_bytes_new_take (client_id_buf, hwaddr_len + 1);
 }
 
+#define HASH_KEY ((const guint8[16]) { 0x80, 0x11, 0x8c, 0xc2, 0xfe, 0x4a, 0x03, 0xee, 0x3e, 0xd6, 0x0c, 0x6f, 0x36, 0x39, 0x14, 0x09 })
+
+/**
+ * nm_utils_create_dhcp_iaid:
+ * @legacy_unstable_byteorder: legacy behavior is to generate a u32 iaid which
+ *   is endianness dependent. This is to preserve backward compatibility.
+ *   For non-legacy behavior, the returned integer is in stable endianness,
+ *   and corresponds to legacy behavior on little endian systems.
+ * @interface_id: the seed for hashing when generating the ID. Usually,
+ *   this is the interface name.
+ * @interface_id_len: length of @interface_id
+ *
+ * This corresponds to systemd's dhcp_identifier_set_iaid() for generating
+ * a IAID for the interface.
+ *
+ * Returns: the IAID in host byte order. */
+guint32
+nm_utils_create_dhcp_iaid (gboolean legacy_unstable_byteorder,
+                           const guint8 *interface_id,
+                           gsize interface_id_len)
+{
+	guint64 u64;
+	guint32 u32;
+
+	u64 = c_siphash_hash (HASH_KEY, interface_id, interface_id_len);
+	u32 = (u64 & 0xffffffffu) ^ (u64 >> 32);
+	if (legacy_unstable_byteorder) {
+		/* legacy systemd code dhcp_identifier_set_iaid() generates the iaid
+		 * dependent on the host endianness. Since this function returns the IAID
+		 * in native-byte order, we need to account for that.
+		 *
+		 * On little endian systems, we want the legacy-behavior is identical to
+		 * the endianness-agnostic behavior. So, we need to swap the bytes on
+		 * big-endian systems.
+		 *
+		 * (https://github.com/systemd/systemd/pull/10614). */
+		return htole32 (u32);
+	} else {
+		/* we return the value as-is, in native byte order. */
+		return u32;
+	}
+}
+
 /**
  * nm_utils_dhcp_client_id_systemd_node_specific_full:
- * @legacy_unstable_byteorder: historically, the code would generate a iaid
- *   dependent on host endianness. This is undesirable, if backward compatibility
- *   are not a concern, generate stable endianness.
- * @interface_id: a binary identifer that is hashed into the DUID.
- *   Comonly this is the interface-name, but it may be the MAC address.
- * @interface_id_len: the length of @interface_id.
+ * @iaid: the IAID (identity association identifier) in native byte order
  * @machine_id: the binary identifier for the machine. It is hashed
  *   into the DUID. It commonly is /etc/machine-id (parsed in binary as NMUuid).
  * @machine_id_len: the length of the @machine_id.
@@ -3799,13 +3713,10 @@ nm_utils_dhcp_client_id_mac (int arp_type,
  * Returns: a %GBytes of generated client-id. This function cannot fail.
  */
 GBytes *
-nm_utils_dhcp_client_id_systemd_node_specific_full (gboolean legacy_unstable_byteorder,
-                                                    const guint8 *interface_id,
-                                                    gsize interface_id_len,
+nm_utils_dhcp_client_id_systemd_node_specific_full (guint32 iaid,
                                                     const guint8 *machine_id,
                                                     gsize machine_id_len)
 {
-	const guint8 HASH_KEY[16] = { 0x80, 0x11, 0x8c, 0xc2, 0xfe, 0x4a, 0x03, 0xee, 0x3e, 0xd6, 0x0c, 0x6f, 0x36, 0x39, 0x14, 0x09 };
 	const guint16 DUID_TYPE_EN = 2;
 	const guint32 SYSTEMD_PEN = 43793;
 	struct _nm_packed {
@@ -3823,34 +3734,15 @@ nm_utils_dhcp_client_id_systemd_node_specific_full (gboolean legacy_unstable_byt
 		} duid;
 	} *client_id;
 	guint64 u64;
-	guint32 u32;
 
-	g_return_val_if_fail (interface_id, NULL);
-	g_return_val_if_fail (interface_id_len > 0, NULL);
 	g_return_val_if_fail (machine_id, NULL);
 	g_return_val_if_fail (machine_id_len > 0, NULL);
 
 	client_id = g_malloc (sizeof (*client_id));
 
 	client_id->type = 255;
-
-	u64 = c_siphash_hash (HASH_KEY, interface_id, interface_id_len);
-	u32 = (u64 & 0xffffffffu) ^ (u64 >> 32);
-	if (legacy_unstable_byteorder) {
-		/* original systemd code dhcp_identifier_set_iaid() generates the iaid
-		 * in native endianness. Do that too, to preserve compatibility
-		 * (https://github.com/systemd/systemd/pull/10614). */
-		u32 = bswap_32 (u32);
-	} else {
-		/* generate fixed byteorder, in a way that on little endian systems
-		 * the values agree. Meaning: legacy behavior is identical to this
-		 * on little endian. */
-		u32 = be32toh (u32);
-	}
-	unaligned_write_ne32 (&client_id->iaid, u32);
-
+	unaligned_write_be32 (&client_id->iaid, iaid);
 	unaligned_write_be16 (&client_id->duid.type, DUID_TYPE_EN);
-
 	unaligned_write_be32 (&client_id->duid.en.pen, SYSTEMD_PEN);
 
 	u64 = htole64 (c_siphash_hash (HASH_KEY, machine_id, machine_id_len));
@@ -3861,14 +3753,9 @@ nm_utils_dhcp_client_id_systemd_node_specific_full (gboolean legacy_unstable_byt
 }
 
 GBytes *
-nm_utils_dhcp_client_id_systemd_node_specific (gboolean legacy_unstable_byteorder,
-                                               const char *ifname)
+nm_utils_dhcp_client_id_systemd_node_specific (guint32 iaid)
 {
-	g_return_val_if_fail (ifname && ifname[0], NULL);
-
-	return nm_utils_dhcp_client_id_systemd_node_specific_full (legacy_unstable_byteorder,
-	                                                           (const guint8 *) ifname,
-	                                                           strlen (ifname),
+	return nm_utils_dhcp_client_id_systemd_node_specific_full (iaid,
 	                                                           (const guint8 *) nm_utils_machine_id_bin (),
 	                                                           sizeof (NMUuid));
 }
@@ -3919,76 +3806,25 @@ nm_utils_g_value_set_strv (GValue *value, GPtrArray *strings)
 
 /*****************************************************************************/
 
-static gboolean
-debug_key_matches (const char *key,
-                   const char *token,
-                   guint        length)
-{
-	/* may not call GLib functions: see note in g_parse_debug_string() */
-	for (; length; length--, key++, token++) {
-		char k = (*key   == '_') ? '-' : g_ascii_tolower (*key  );
-		char t = (*token == '_') ? '-' : g_ascii_tolower (*token);
-
-		if (k != t)
-			return FALSE;
-	}
-
-	return *key == '\0';
-}
-
-/**
- * nm_utils_parse_debug_string:
- * @string: the string to parse
- * @keys: the debug keys
- * @nkeys: number of entries in @keys
- *
- * Similar to g_parse_debug_string(), but does not special
- * case "help" or "all".
- *
- * Returns: the flags
- */
-guint
-nm_utils_parse_debug_string (const char *string,
-                             const GDebugKey *keys,
-                             guint nkeys)
-{
-	guint i;
-	guint result = 0;
-	const char *q;
-
-	if (string == NULL)
-		return 0;
-
-	while (*string) {
-		q = strpbrk (string, ":;, \t");
-		if (!q)
-			q = string + strlen (string);
-
-		for (i = 0; i < nkeys; i++) {
-			if (debug_key_matches (keys[i].key, string, q - string))
-				result |= keys[i].value;
-		}
-
-		string = q;
-		if (*string)
-			string++;
-	}
-
-	return result;
-}
-
-/*****************************************************************************/
-
 void
 nm_utils_ifname_cpy (char *dst, const char *name)
 {
+	int i;
+
 	g_return_if_fail (dst);
 	g_return_if_fail (name && name[0]);
 
-	nm_assert (nm_utils_is_valid_iface_name (name, NULL));
+	nm_assert (nm_utils_ifname_valid_kernel (name, NULL));
 
-	if (g_strlcpy (dst, name, IFNAMSIZ) >= IFNAMSIZ)
-		g_return_if_reached ();
+	/* ensures NUL padding of the entire IFNAMSIZ buffer. */
+
+	for (i = 0; i < (int) IFNAMSIZ && name[i] != '\0'; i++)
+		dst[i] = name[i];
+
+	nm_assert (name[i] == '\0');
+
+	for (; i < (int) IFNAMSIZ; i++)
+		dst[i] = '\0';
 }
 
 /*****************************************************************************/
@@ -4064,7 +3900,7 @@ nm_utils_lifetime_get (guint32 timestamp,
 	}
 
 	if (now <= 0)
-		now = nm_utils_get_monotonic_timestamp_s ();
+		now = nm_utils_get_monotonic_timestamp_sec ();
 
 	t_lifetime = nm_utils_lifetime_rebase_relative_time_on_now (timestamp, lifetime, now);
 	if (!t_lifetime) {
@@ -4191,7 +4027,7 @@ nm_utils_get_reverse_dns_domains_ip6 (const struct in6_addr *ip, guint8 plen, GP
 		return;
 
 	memcpy (&addr, ip, sizeof (struct in6_addr));
-	nm_utils_ip6_address_clear_host_address (&addr, &addr, plen);
+	nm_utils_ip6_address_clear_host_address (&addr, NULL, plen);
 
 	/* Number of nibbles to include in domains */
 	nibbles = (plen - 1) / 4 + 1;
@@ -4315,7 +4151,7 @@ nm_utils_read_plugin_paths (const char *dirname, const char *prefix)
 			errsv = errno;
 			nm_log_warn (LOGD_CORE,
 			             "plugin: skip invalid file %s (error during stat: %s)",
-			             data.path, strerror (errsv));
+			             data.path, nm_strerror_native (errsv));
 			goto skip;
 		}
 
@@ -4396,20 +4232,379 @@ GVariant *
 nm_utils_strdict_to_variant (GHashTable *options)
 {
 	GVariantBuilder builder;
-	gs_free const char **keys = NULL;
+	gs_free NMUtilsNamedValue *values = NULL;
 	guint i;
-	guint nkeys;
+	guint n;
 
-	keys = nm_utils_strdict_get_keys (options, TRUE, &nkeys);
+	values = nm_utils_named_values_from_str_dict (options, &n);
 
 	g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
-	for (i = 0; i < nkeys; i++) {
+	for (i = 0; i < n; i++) {
 		g_variant_builder_add (&builder,
 		                       "{sv}",
-		                       keys[i],
-		                       g_variant_new_string (g_hash_table_lookup (options, keys[i])));
+		                       values[i].name,
+		                       g_variant_new_string (values[i].value_str));
 	}
 	return g_variant_builder_end (&builder);
+}
+
+/*****************************************************************************/
+
+static guint32
+get_max_rate_ht_20 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 6500000;
+	case 1:
+	case 8:  return 13000000;
+	case 2:
+	case 16: return 19500000;
+	case 3:
+	case 9:
+	case 24: return 26000000;
+	case 4:
+	case 10:
+	case 17: return 39000000;
+	case 5:
+	case 11:
+	case 25: return 52000000;
+	case 6:
+	case 18: return 58500000;
+	case 7:  return 65000000;
+	case 12:
+	case 19:
+	case 26: return 78000000;
+	case 13:
+	case 27: return 104000000;
+	case 14:
+	case 20: return 117000000;
+	case 15: return 130000000;
+	case 21:
+	case 28: return 156000000;
+	case 22: return 175500000;
+	case 23: return 195000000;
+	case 29: return 208000000;
+	case 30: return 234000000;
+	case 31: return 260000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_ht_40 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 13500000;
+	case 1:
+	case 8:  return 27000000;
+	case 2:  return 40500000;
+	case 3:
+	case 9:
+	case 24: return 54000000;
+	case 4:
+	case 10:
+	case 17: return 81000000;
+	case 5:
+	case 11:
+	case 25: return 108000000;
+	case 6:
+	case 18: return 121500000;
+	case 7:  return 135000000;
+	case 12:
+	case 19:
+	case 26: return 162000000;
+	case 13:
+	case 27: return 216000000;
+	case 14:
+	case 20: return 243000000;
+	case 15: return 270000000;
+	case 16: return 40500000;
+	case 21:
+	case 28: return 324000000;
+	case 22: return 364500000;
+	case 23: return 405000000;
+	case 29: return 432000000;
+	case 30: return 486000000;
+	case 31: return 540000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_vht_80_ss1 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 29300000;
+	case 1:  return 58500000;
+	case 2:  return 87800000;
+	case 3:  return 117000000;
+	case 4:  return 175500000;
+	case 5:  return 234000000;
+	case 6:  return 263300000;
+	case 7:  return 292500000;
+	case 8:  return 351000000;
+	case 9:  return 390000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_vht_80_ss2 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 58500000;
+	case 1:  return 117000000;
+	case 2:  return 175500000;
+	case 3:  return 234000000;
+	case 4:  return 351000000;
+	case 5:  return 468000000;
+	case 6:  return 526500000;
+	case 7:  return 585000000;
+	case 8:  return 702000000;
+	case 9:  return 780000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_vht_80_ss3 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 87800000;
+	case 1:  return 175500000;
+	case 2:  return 263300000;
+	case 3:  return 351000000;
+	case 4:  return 526500000;
+	case 5:  return 702000000;
+	case 6:  return 0;
+	case 7:  return 877500000;
+	case 8:  return 105300000;
+	case 9:  return 117000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_vht_160_ss1 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 58500000;
+	case 1:  return 117000000;
+	case 2:  return 175500000;
+	case 3:  return 234000000;
+	case 4:  return 351000000;
+	case 5:  return 468000000;
+	case 6:  return 526500000;
+	case 7:  return 585000000;
+	case 8:  return 702000000;
+	case 9:  return 780000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_vht_160_ss2 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 117000000;
+	case 1:  return 234000000;
+	case 2:  return 351000000;
+	case 3:  return 468000000;
+	case 4:  return 702000000;
+	case 5:  return 936000000;
+	case 6:  return 1053000000;
+	case 7:  return 1170000000;
+	case 8:  return 1404000000;
+	case 9:  return 1560000000;
+	}
+	return 0;
+}
+
+static guint32
+get_max_rate_vht_160_ss3 (int mcs)
+{
+	switch (mcs) {
+	case 0:  return 175500000;
+	case 1:  return 351000000;
+	case 2:  return 526500000;
+	case 3:  return 702000000;
+	case 4:  return 1053000000;
+	case 5:  return 1404000000;
+	case 6:  return 1579500000;
+	case 7:  return 1755000000;
+	case 8:  return 2106000000;
+	case 9:  return 0;
+	}
+	return 0;
+}
+
+static gboolean
+get_max_rate_ht (const guint8 *bytes, guint len, guint32 *out_maxrate)
+{
+	guint32 i;
+	guint8 ht_cap_info;
+	const guint8 *supported_mcs_set;
+	guint32 rate;
+
+	/* http://standards.ieee.org/getieee802/download/802.11-2012.pdf
+	 * https://mrncciew.com/2014/10/19/cwap-ht-capabilities-ie/
+	 */
+
+	if (len != 26)
+		return FALSE;
+
+	ht_cap_info = bytes[0];
+	supported_mcs_set = &bytes[3];
+	*out_maxrate = 0;
+
+	/* Find the maximum supported mcs rate */
+	for (i = 0; i <= 76; i++) {
+		const unsigned mcs_octet = i / 8;
+		const unsigned MCS_RATE_BIT = 1 << i % 8;
+
+		if (supported_mcs_set[mcs_octet] & MCS_RATE_BIT) {
+			/* Check for 40Mhz wide channel support */
+			if (ht_cap_info & (1 << 1))
+				rate = get_max_rate_ht_40 (i);
+			else
+				rate = get_max_rate_ht_20 (i);
+
+			if (rate > *out_maxrate)
+				*out_maxrate = rate;
+		}
+	}
+
+	return TRUE;
+}
+
+static gboolean
+get_max_rate_vht (const guint8 *bytes, guint len, guint32 *out_maxrate)
+{
+	guint32 mcs, m;
+	guint8 vht_cap, tx_map;
+
+	/* https://tda802dot11.blogspot.it/2014/10/vht-capabilities-element-vht.html
+	 * http://chimera.labs.oreilly.com/books/1234000001739/ch03.html#management_frames */
+
+	if (len != 12)
+		return FALSE;
+
+	vht_cap = bytes[0];
+	tx_map = bytes[8];
+
+	/* Check for mcs rates 8 and 9 support */
+	if (tx_map & 0x2a)
+		mcs = 9;
+	else if (tx_map & 0x15)
+		mcs = 8;
+	else
+		mcs = 7;
+
+	/* Check for 160Mhz wide channel support and
+	 * spatial stream support */
+	if (vht_cap & (1 << 2)) {
+		if (tx_map & 0x30)
+			m = get_max_rate_vht_160_ss3 (mcs);
+		else if (tx_map & 0x0C)
+			m = get_max_rate_vht_160_ss2 (mcs);
+		else
+			m = get_max_rate_vht_160_ss1 (mcs);
+	} else {
+		if (tx_map & 0x30)
+			m = get_max_rate_vht_80_ss3 (mcs);
+		else if (tx_map & 0x0C)
+			m = get_max_rate_vht_80_ss2 (mcs);
+		else
+			m = get_max_rate_vht_80_ss1 (mcs);
+	}
+
+	*out_maxrate = m;
+	return TRUE;
+}
+
+/* Management Frame Information Element IDs, ieee80211_eid */
+#define WLAN_EID_HT_CAPABILITY       45
+#define WLAN_EID_VHT_CAPABILITY     191
+#define WLAN_EID_VENDOR_SPECIFIC    221
+
+void
+nm_wifi_utils_parse_ies (const guint8 *bytes,
+                         gsize len,
+                         guint32 *out_max_rate,
+                         gboolean *out_metered,
+                         gboolean *out_owe_transition_mode)
+{
+	guint8 id, elem_len;
+	guint32 m;
+
+	NM_SET_OUT (out_max_rate, 0);
+	NM_SET_OUT (out_metered, FALSE);
+	NM_SET_OUT (out_owe_transition_mode, FALSE);
+
+	while (len) {
+		if (len < 2)
+			break;
+
+		id = *bytes++;
+		elem_len = *bytes++;
+		len -= 2;
+
+		if (elem_len > len)
+			break;
+
+		switch (id) {
+		case WLAN_EID_HT_CAPABILITY:
+			if (out_max_rate) {
+				if (get_max_rate_ht (bytes, elem_len, &m))
+					*out_max_rate = NM_MAX (*out_max_rate, m);
+			}
+			break;
+		case WLAN_EID_VHT_CAPABILITY:
+			if (out_max_rate) {
+				if (get_max_rate_vht (bytes, elem_len, &m))
+					*out_max_rate = NM_MAX (*out_max_rate, m);
+			}
+			break;
+		case WLAN_EID_VENDOR_SPECIFIC:
+			if (   len == 8
+			    && bytes[0] == 0x00            /* OUI: Microsoft */
+			    && bytes[1] == 0x50
+			    && bytes[2] == 0xf2
+			    && bytes[3] == 0x11)           /* OUI type: Network cost */
+				NM_SET_OUT (out_metered, (bytes[7] > 1)); /* Cost level > 1 */
+			if (   elem_len >= 10
+			    && bytes[0] == 0x50            /* OUI: WiFi Alliance */
+			    && bytes[1] == 0x6f
+			    && bytes[2] == 0x9a
+			    && bytes[3] == 0x1c)           /* OUI type: OWE Transition Mode */
+				NM_SET_OUT (out_owe_transition_mode, TRUE);
+			break;
+		}
+
+		len -= elem_len;
+		bytes += elem_len;
+	}
+}
+
+/*****************************************************************************/
+
+guint8
+nm_wifi_utils_level_to_quality (int val)
+{
+	if (val < 0) {
+		/* Assume dBm already; rough conversion: best = -40, worst = -100 */
+		val = abs (CLAMP (val, -100, -40) + 40);  /* normalize to 0 */
+		val = 100 - (int) ((100.0 * (double) val) / 60.0);
+	} else if (val > 110 && val < 256) {
+		/* assume old-style WEXT 8-bit unsigned signal level */
+		val -= 256;  /* subtract 256 to convert to dBm */
+		val = abs (CLAMP (val, -100, -40) + 40);  /* normalize to 0 */
+		val = 100 - (int) ((100.0 * (double) val) / 60.0);
+	} else {
+		/* Assume signal is a "quality" percentage */
+	}
+
+	return CLAMP (val, 0, 100);
 }
 
 /*****************************************************************************/

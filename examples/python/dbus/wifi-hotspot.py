@@ -1,18 +1,5 @@
 #!/usr/bin/env python
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (C) 2010 - 2012 Red Hat, Inc.
 #
@@ -26,37 +13,41 @@
 
 import dbus, sys, time
 
-our_uuid = '2b0d0f1d-b79d-43af-bde1-71744625642e'
+our_uuid = "2b0d0f1d-b79d-43af-bde1-71744625642e"
 
-s_con = dbus.Dictionary({
-    'type': '802-11-wireless',
-    'uuid': our_uuid,
-    'id': 'Test Hotspot'})
+s_con = dbus.Dictionary(
+    {"type": "802-11-wireless", "uuid": our_uuid, "id": "Test Hotspot"}
+)
 
-s_wifi = dbus.Dictionary({
-    'ssid': dbus.ByteArray("My Hotspot".encode("utf-8")),
-    'mode': "ap",
-    'band': "bg",
-    'channel': dbus.UInt32(1)})
+s_wifi = dbus.Dictionary(
+    {
+        "ssid": dbus.ByteArray("My Hotspot".encode("utf-8")),
+        "mode": "ap",
+        "band": "bg",
+        "channel": dbus.UInt32(1),
+    }
+)
 
-s_wsec = dbus.Dictionary({
-    'key-mgmt': 'wpa-psk',
-    'psk': 'great password'})
+s_wsec = dbus.Dictionary({"key-mgmt": "wpa-psk", "psk": "great password"})
 
-s_ip4 = dbus.Dictionary({'method': 'shared'})
-s_ip6 = dbus.Dictionary({'method': 'ignore'})
+s_ip4 = dbus.Dictionary({"method": "shared"})
+s_ip6 = dbus.Dictionary({"method": "ignore"})
 
-con = dbus.Dictionary({
-    'connection': s_con,
-    '802-11-wireless': s_wifi,
-    '802-11-wireless-security': s_wsec,
-    'ipv4': s_ip4,
-    'ipv6': s_ip6
-     })
+con = dbus.Dictionary(
+    {
+        "connection": s_con,
+        "802-11-wireless": s_wifi,
+        "802-11-wireless-security": s_wsec,
+        "ipv4": s_ip4,
+        "ipv6": s_ip6,
+    }
+)
+
 
 def usage():
     print("Usage: %s <ifname> [up|down]" % sys.argv[0])
     sys.exit(0)
+
 
 bus = dbus.SystemBus()
 service_name = "org.freedesktop.NetworkManager"
@@ -75,9 +66,11 @@ devpath = nm.GetDeviceByIpIface(iface)
 connection_path = None
 for path in settings.ListConnections():
     proxy = bus.get_object(service_name, path)
-    settings_connection = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+    settings_connection = dbus.Interface(
+        proxy, "org.freedesktop.NetworkManager.Settings.Connection"
+    )
     config = settings_connection.GetSettings()
-    if config['connection']['uuid'] == our_uuid:
+    if config["connection"]["uuid"] == our_uuid:
         connection_path = path
         break
 
@@ -97,7 +90,9 @@ if operation == "up":
     # Wait for the hotspot to start up
     start = time.time()
     while time.time() < start + 10:
-        state = active_props.Get("org.freedesktop.NetworkManager.Connection.Active", "State")
+        state = active_props.Get(
+            "org.freedesktop.NetworkManager.Connection.Active", "State"
+        )
         if state == 2:  # NM_ACTIVE_CONNECTION_STATE_ACTIVATED
             print("Access point started")
             sys.exit(0)
@@ -109,4 +104,3 @@ else:
     usage()
 
 sys.exit(0)
-

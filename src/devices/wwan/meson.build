@@ -1,13 +1,17 @@
-sources = files(
+# SPDX-License-Identifier: LGPL-2.1+
+
+nm_service_providers_source = files('nm-service-providers.c')
+
+sources = nm_service_providers_source + files(
   'nm-modem-broadband.c',
   'nm-modem.c',
-  'nm-modem-manager.c'
+  'nm-modem-manager.c',
 )
 
 deps = [
+  daemon_nm_default_dep,
   libsystemd_dep,
   mm_glib_dep,
-  nm_dep
 ]
 
 if enable_ofono
@@ -20,17 +24,18 @@ libnm_wwan = shared_module(
   'nm-wwan',
   sources: sources,
   dependencies: deps,
-  link_args: [
-    '-Wl,--version-script,@0@'.format(linker_script),
-  ],
+  c_args: daemon_c_flags,
+  link_args: '-Wl,--version-script,@0@'.format(linker_script),
   link_depends: linker_script,
   install: true,
-  install_dir: nm_plugindir
+  install_dir: nm_plugindir,
 )
 
+wwan_inc = include_directories('.')
+
 libnm_wwan_dep = declare_dependency(
-  include_directories: include_directories('.'),
-  link_with: libnm_wwan
+  include_directories: wwan_inc,
+  link_with: libnm_wwan,
 )
 
 core_plugins += libnm_wwan
@@ -43,19 +48,20 @@ test(
 
 sources = files(
   'nm-device-modem.c',
-  'nm-wwan-factory.c'
+  'nm-wwan-factory.c',
 )
 
 libnm_device_plugin_wwan = shared_module(
   'nm-device-plugin-wwan',
   sources: sources,
   dependencies: deps,
+  c_args: daemon_c_flags,
   link_with: libnm_wwan,
   link_args: ldflags_linker_script_devices,
   link_depends: linker_script_devices,
   install: true,
   install_dir: nm_plugindir,
-  install_rpath: nm_plugindir
+  install_rpath: nm_plugindir,
 )
 
 core_plugins += libnm_device_plugin_wwan
@@ -63,14 +69,24 @@ core_plugins += libnm_device_plugin_wwan
 run_target(
   'check-local-devices-wwan',
   command: [check_exports, libnm_device_plugin_wwan.full_path(), linker_script_devices],
-  depends: libnm_device_plugin_wwan
+  depends: libnm_device_plugin_wwan,
 )
 
-# FIXME: check_so_symbols replacement
-'''
-check-local-devices-wwan: src/devices/wwan/libnm-device-plugin-wwan.la src/devices/wwan/libnm-wwan.la
-  $(srcdir)/tools/check-exports.sh $(builddir)/src/devices/wwan/.libs/libnm-device-plugin-wwan.so "$(srcdir)/linker-script-devices.ver"
-  $(call check_so_symbols,$(builddir)/src/devices/wwan/.libs/libnm-device-plugin-wwan.so)
-  $(srcdir)/tools/check-exports.sh $(builddir)/src/devices/wwan/.libs/libnm-wwan.so "$(srcdir)/src/devices/wwan/libnm-wwan.ver"
-  $(call check_so_symbols,$(builddir)/src/devices/wwan/.libs/libnm-wwan.so)
-'''
+if enable_tests
+  test_unit = 'test-service-providers'
+
+  exe = executable(
+    test_unit,
+    ['tests/' + test_unit + '.c'] + nm_service_providers_source,
+    include_directories: wwan_inc,
+    dependencies: libnetwork_manager_test_dep,
+    c_args: test_c_flags,
+  )
+
+  test(
+    'wwan/' + test_unit,
+    test_script,
+    timeout: default_test_timeout,
+    args: test_args + [exe.full_path()],
+  )
+endif

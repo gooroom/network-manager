@@ -1,28 +1,13 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2014 - 2016 Red Hat, Inc.
+ * Copyright (C) 2014 - 2016 Red Hat, Inc.
  */
 
 #ifndef __NM_TEST_UTILS_CORE_H__
 #define __NM_TEST_UTILS_CORE_H__
 
 #include "NetworkManagerUtils.h"
-#include "nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
 
 #define _NMTST_INSIDE_CORE 1
 
@@ -310,7 +295,7 @@ nmtst_platform_ip6_routes_equal_aptr (const NMPObject *const*a, const NMPlatform
 
 #ifdef __NETWORKMANAGER_IP4_CONFIG_H__
 
-#include "nm-utils/nm-dedup-multi.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 
 static inline NMIP4Config *
 nmtst_ip4_config_new (int ifindex)
@@ -324,7 +309,7 @@ nmtst_ip4_config_new (int ifindex)
 
 #ifdef __NETWORKMANAGER_IP6_CONFIG_H__
 
-#include "nm-utils/nm-dedup-multi.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 
 static inline NMIP6Config *
 nmtst_ip6_config_new (int ifindex)

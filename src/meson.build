@@ -1,29 +1,31 @@
+# SPDX-License-Identifier: LGPL-2.1+
+
 src_inc = include_directories('.')
+
+daemon_nm_default_dep = declare_dependency(
+  sources: libnm_core_enum_sources[1],
+  include_directories: src_inc,
+  dependencies: libnm_core_nm_default_dep,
+)
 
 install_data(
   'org.freedesktop.NetworkManager.conf',
-  install_dir: dbus_conf_dir
+  install_dir: dbus_conf_dir,
 )
 
 subdir('systemd')
 
 core_plugins = []
 
-nm_cflags = ['-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_DAEMON']
-
-nm_dep = declare_dependency(
-  include_directories: src_inc,
-  dependencies: nm_core_dep,
-  compile_args: nm_cflags
-)
-
-cflags = nm_cflags
+daemon_c_flags = ['-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_DAEMON']
 
 sources = files(
   'dhcp/nm-dhcp-client.c',
   'dhcp/nm-dhcp-manager.c',
+  'dhcp/nm-dhcp-nettools.c',
   'dhcp/nm-dhcp-systemd.c',
   'dhcp/nm-dhcp-utils.c',
+  'dhcp/nm-dhcp-options.c',
   'ndisc/nm-lndp-ndisc.c',
   'ndisc/nm-ndisc.c',
   'platform/nm-netlink.c',
@@ -35,6 +37,7 @@ sources = files(
   'platform/nm-platform-utils.c',
   'platform/nmp-netns.c',
   'platform/nmp-object.c',
+  'platform/nmp-rules-manager.c',
   'main-utils.c',
   'NetworkManagerUtils.c',
   'nm-core-utils.c',
@@ -42,13 +45,18 @@ sources = files(
   'nm-dbus-utils.c',
   'nm-ip4-config.c',
   'nm-ip6-config.c',
-  'nm-logging.c'
+  'nm-logging.c',
 )
 
 deps = [
+  daemon_nm_default_dep,
+  libn_dhcp4_dep,
+  libnm_keyfile_dep,
+  libnm_core_dep,
+  libnm_systemd_shared_dep,
+  libnm_udev_aux_dep,
   libsystemd_dep,
   libudev_dep,
-  nm_core_dep
 ]
 
 if enable_wext
@@ -59,8 +67,7 @@ libnetwork_manager_base = static_library(
   nm_name + 'Base',
   sources: sources,
   dependencies: deps,
-  c_args: cflags,
-  link_with: libnm_core
+  c_args: daemon_c_flags,
 )
 
 sources = files(
@@ -82,6 +89,7 @@ sources = files(
   'devices/nm-device-tun.c',
   'devices/nm-device-veth.c',
   'devices/nm-device-vlan.c',
+  'devices/nm-device-vrf.c',
   'devices/nm-device-vxlan.c',
   'devices/nm-device-wireguard.c',
   'devices/nm-device-wpan.c',
@@ -99,7 +107,7 @@ sources = files(
   'dnsmasq/nm-dnsmasq-manager.c',
   'dnsmasq/nm-dnsmasq-utils.c',
   'ppp/nm-ppp-manager-call.c',
-  'settings/plugins/keyfile/nms-keyfile-connection.c',
+  'settings/plugins/keyfile/nms-keyfile-storage.c',
   'settings/plugins/keyfile/nms-keyfile-plugin.c',
   'settings/plugins/keyfile/nms-keyfile-reader.c',
   'settings/plugins/keyfile/nms-keyfile-utils.c',
@@ -109,6 +117,8 @@ sources = files(
   'settings/nm-settings.c',
   'settings/nm-settings-connection.c',
   'settings/nm-settings-plugin.c',
+  'settings/nm-settings-storage.c',
+  'settings/nm-settings-utils.c',
   'supplicant/nm-supplicant-config.c',
   'supplicant/nm-supplicant-interface.c',
   'supplicant/nm-supplicant-manager.c',
@@ -119,7 +129,6 @@ sources = files(
   'nm-act-request.c',
   'nm-audit-manager.c',
   'nm-auth-manager.c',
-  'nm-auth-subject.c',
   'nm-auth-utils.c',
   'nm-dbus-manager.c',
   'nm-checkpoint.c',
@@ -128,11 +137,11 @@ sources = files(
   'nm-config-data.c',
   'nm-connectivity.c',
   'nm-dcb.c',
-  'nm-dhcp4-config.c',
-  'nm-dhcp6-config.c',
+  'nm-dhcp-config.c',
   'nm-dispatcher.c',
   'nm-firewall-manager.c',
   'nm-hostname-manager.c',
+  'nm-keep-alive.c',
   'nm-manager.c',
   'nm-netns.c',
   'nm-pacrunner-manager.c',
@@ -140,16 +149,22 @@ sources = files(
   'nm-proxy-config.c',
   'nm-rfkill-manager.c',
   'nm-session-monitor.c',
-  'nm-sleep-monitor.c'
+  'nm-sleep-monitor.c',
 )
 
 nm_deps = [
+  daemon_nm_default_dep,
   dl_dep,
+  libn_acd_dep,
   libndp_dep,
   libudev_dep,
-  nm_core_dep,
-  shared_n_acd_dep,
   logind_dep,
+]
+
+nm_links = [
+  libnetwork_manager_base,
+  libnm_systemd_core,
+  libnm_systemd_shared,
 ]
 
 if enable_concheck
@@ -172,15 +187,15 @@ libnetwork_manager = static_library(
   nm_name,
   sources: sources,
   dependencies: nm_deps,
-  c_args: cflags,
-  link_with: [libnetwork_manager_base, libsystemd_nm]
+  c_args: daemon_c_flags,
+  link_with: nm_links,
 )
 
 deps = [
+  daemon_nm_default_dep,
   dl_dep,
   libndp_dep,
   libudev_dep,
-  nm_core_dep
 ]
 
 name = 'nm-iface-helper'
@@ -189,53 +204,37 @@ executable(
   name,
   name + '.c',
   dependencies: deps,
-  c_args: cflags,
-  link_with: [libnetwork_manager_base, libsystemd_nm],
+  c_args: daemon_c_flags,
+  link_with: nm_links,
   link_args: ldflags_linker_script_binary,
   link_depends: linker_script_binary,
   install: true,
-  install_dir: nm_libexecdir
+  install_dir: nm_libexecdir,
 )
 
 if enable_tests
+  test_c_flags = daemon_c_flags + ['-DNETWORKMANAGER_COMPILATION_TEST']
+  if require_root_tests
+    test_c_flags += ['-DREQUIRE_ROOT_TESTS=1']
+  endif
+
   sources = files(
     'ndisc/nm-fake-ndisc.c',
     'platform/tests/test-common.c',
-    'platform/nm-fake-platform.c'
+    'platform/nm-fake-platform.c',
   )
-
-  deps = [
-    libudev_dep,
-    nm_core_dep
-  ]
-
-  test_cflags = ['-DNETWORKMANAGER_COMPILATION_TEST']
-  if require_root_tests
-    test_cflags += ['-DREQUIRE_ROOT_TESTS=1']
-  endif
 
   libnetwork_manager_test = static_library(
     nm_name + 'Test',
     sources: sources,
-    dependencies: deps,
-    c_args: cflags + test_cflags,
-    link_with: libnetwork_manager
+    dependencies: daemon_nm_default_dep,
+    c_args: test_c_flags,
+    link_with: libnetwork_manager,
   )
 
-  test_nm_dep = declare_dependency(
-    dependencies: nm_dep,
-    compile_args: test_cflags,
-    link_with: libnetwork_manager_test
-  )
-
-  test_nm_dep_fake = declare_dependency(
-    dependencies: test_nm_dep,
-    compile_args: ['-DSETUP=nm_fake_platform_setup']
-  )
-
-  test_nm_dep_linux = declare_dependency(
-    dependencies: test_nm_dep,
-    compile_args: ['-DSETUP=nm_linux_platform_setup']
+  libnetwork_manager_test_dep = declare_dependency(
+    dependencies: daemon_nm_default_dep,
+    link_with: libnetwork_manager_test,
   )
 
   subdir('dnsmasq/tests')
@@ -257,7 +256,7 @@ subdir('settings/plugins')
 
 # NetworkManager binary
 
-create_exports_networkmanager = join_paths(meson.source_root(), 'tools', 'create-exports-NetworkManager.sh')
+create_exports_networkmanager = join_paths(source_root, 'tools', 'create-exports-NetworkManager.sh')
 symbol_map_name = 'NetworkManager.ver'
 
 # libNetworkManager.a, as built by meson doesn't contain all symbols
@@ -268,41 +267,52 @@ symbol_map_name = 'NetworkManager.ver'
 network_manager_sym = executable(
   'nm-full-symbols',
   'main.c',
-  c_args: nm_cflags,
-  link_args: '-Wl,--no-gc-sections',
   dependencies: nm_deps,
+  c_args: daemon_c_flags,
+  link_args: '-Wl,--no-gc-sections',
   link_whole: [libnetwork_manager, libnetwork_manager_base, libnm_core],
-  install: false,
 )
 
 # this uses symbols from nm-full-symbols instead of libNetworkManager.a
 ver_script = custom_target(
   symbol_map_name,
-  input: meson.source_root(),
   output: symbol_map_name,
-  depends: [ network_manager_sym, core_plugins ],
-  command: [create_exports_networkmanager, '--called-from-build', '@INPUT@']
+  depends: [network_manager_sym, core_plugins],
+  command: [create_exports_networkmanager, '--called-from-build', source_root],
 )
 
-ldflags = ['-rdynamic', '-Wl,--version-script,@0@'.format(ver_script.full_path())]
+ldflags = [
+  '-rdynamic',
+  '-Wl,--version-script,@0@'.format(ver_script.full_path()),
+]
 
 network_manager = executable(
   nm_name,
   'main.c',
   dependencies: nm_deps,
-  c_args: nm_cflags,
+  c_args: daemon_c_flags,
   link_with: libnetwork_manager,
   link_args: ldflags,
   link_depends: ver_script,
   install: true,
-  install_dir: nm_sbindir
+  install_dir: nm_sbindir,
 )
 
 if enable_tests
-  foreach plugin : core_plugins
-    test ('sym/' + plugin.full_path().split('/')[-1],
-          network_manager,
-          args: '--version',
-          env: ['LD_BIND_NOW=1', 'LD_PRELOAD=' + plugin.full_path()])
+  foreach plugin: core_plugins
+    plugin_path = plugin.full_path()
+
+    test(
+      'sym/' + plugin_path.split('/')[-1],
+      network_manager,
+      args: '--version',
+      env: ['LD_BIND_NOW=1', 'LD_PRELOAD=' + plugin_path],
+    )
   endforeach
 endif
+
+test(
+  'check-config-options',
+  find_program(join_paths(source_root, 'tools', 'check-config-options.sh')),
+  args: source_root,
+)

@@ -1,23 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
- * Copyright 2007 - 2008 Novell, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2008 Novell, Inc.
  */
 
 #ifndef __NM_SETTING_WIRELESS_H__
@@ -49,7 +33,7 @@ G_BEGIN_DECLS
  * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_MAGIC: Wake on magic packet
  * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_GTK_REKEY_FAILURE: Wake on GTK rekey failure
  * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_EAP_IDENTITY_REQUEST: Wake on EAP identity request
- * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_4WAY_HANDSHAKE: Wake on 4way hanshake
+ * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_4WAY_HANDSHAKE: Wake on 4way handshake
  * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_RFKILL_RELEASE: Wake on rfkill release
  * @NM_SETTING_WIRELESS_WAKE_ON_WLAN_ALL: Wake on all events. This does not
  *   include the exclusive flags @NM_SETTING_WIRELESS_WAKE_ON_WLAN_DEFAULT or
@@ -66,21 +50,21 @@ G_BEGIN_DECLS
  */
 typedef enum { /*< flags >*/
 	NM_SETTING_WIRELESS_WAKE_ON_WLAN_NONE                 = 0, /*< skip >*/
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_ANY                  = (1 << 1),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_DISCONNECT           = (1 << 2),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_MAGIC                = (1 << 3),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_GTK_REKEY_FAILURE    = (1 << 4),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_EAP_IDENTITY_REQUEST = (1 << 5),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_4WAY_HANDSHAKE       = (1 << 6),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_RFKILL_RELEASE       = (1 << 7),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_TCP                  = (1 << 8),
-	_NM_SETTING_WIRELESS_WAKE_ON_WLAN_NUM, /*< skip >*/
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_LAST                 = _NM_SETTING_WIRELESS_WAKE_ON_WLAN_NUM - 1, /*< skip >*/
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_ALL                  = ((NM_SETTING_WIRELESS_WAKE_ON_WLAN_LAST << 1) - 1) - (1 << 0 /*DEFAULT*/), /*< skip >*/
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_ANY                  = 0x2,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_DISCONNECT           = 0x4,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_MAGIC                = 0x8,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_GTK_REKEY_FAILURE    = 0x10,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_EAP_IDENTITY_REQUEST = 0x20,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_4WAY_HANDSHAKE       = 0x40,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_RFKILL_RELEASE       = 0x80,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_TCP                  = 0x100,
 
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_DEFAULT              = (1 << 0),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_IGNORE               = (1 << 15),
-	NM_SETTING_WIRELESS_WAKE_ON_WLAN_EXCLUSIVE_FLAGS = NM_SETTING_WIRELESS_WAKE_ON_WLAN_DEFAULT | NM_SETTING_WIRELESS_WAKE_ON_WLAN_IGNORE, /*< skip >*/
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_ALL                  = 0x1FE,
+
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_DEFAULT              = 0x1,
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_IGNORE               = 0x8000,
+
+	NM_SETTING_WIRELESS_WAKE_ON_WLAN_EXCLUSIVE_FLAGS      = NM_SETTING_WIRELESS_WAKE_ON_WLAN_DEFAULT | NM_SETTING_WIRELESS_WAKE_ON_WLAN_IGNORE, /*< skip >*/
 } NMSettingWirelessWakeOnWLan;
 
 #define NM_SETTING_WIRELESS_SSID        "ssid"
@@ -123,6 +107,15 @@ typedef enum { /*< flags >*/
  * for this connection.
  */
 #define NM_SETTING_WIRELESS_MODE_INFRA  "infrastructure"
+
+/**
+ * NM_SETTING_WIRELESS_MODE_MESH:
+ *
+ * Indicates that the connection should create a mesh point.
+ *
+ * Since: 1.20
+ */
+#define NM_SETTING_WIRELESS_MODE_MESH   "mesh"
 
 /**
  * NMSettingWirelessPowersave:

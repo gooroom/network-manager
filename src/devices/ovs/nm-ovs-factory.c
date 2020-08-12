@@ -1,19 +1,5 @@
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2017 Red Hat, Inc.
  */
 
@@ -26,7 +12,9 @@
 #include "nm-device-ovs-bridge.h"
 #include "platform/nm-platform.h"
 #include "nm-core-internal.h"
+#include "settings/nm-settings.h"
 #include "devices/nm-device-factory.h"
+#include "devices/nm-device-private.h"
 
 /*****************************************************************************/
 
@@ -51,7 +39,13 @@ G_DEFINE_TYPE (NMOvsFactory, nm_ovs_factory, NM_TYPE_DEVICE_FACTORY)
 /*****************************************************************************/
 
 #define _NMLOG_DOMAIN      LOGD_DEVICE
-#define _NMLOG(level, ...) __NMLOG_DEFAULT (level, _NMLOG_DOMAIN, "ovs", __VA_ARGS__)
+#define _NMLOG(level, ifname, con_uuid, ...) \
+        G_STMT_START { \
+                nm_log ((level), _NMLOG_DOMAIN, (ifname), (con_uuid), \
+                        "ovs: " _NM_UTILS_MACRO_FIRST(__VA_ARGS__) \
+                        _NM_UTILS_MACRO_REST(__VA_ARGS__)); \
+        } G_STMT_END
+
 
 /*****************************************************************************/
 
@@ -65,6 +59,7 @@ NM_DEVICE_FACTORY_DECLARE_TYPES (
 G_MODULE_EXPORT NMDeviceFactory *
 nm_device_factory_create (GError **error)
 {
+	nm_manager_set_capability (NM_MANAGER_GET, NM_CAPABILITY_OVS);
 	return (NMDeviceFactory *) g_object_new (NM_TYPE_OVS_FACTORY, NULL);
 }
 
@@ -75,7 +70,7 @@ new_device_from_type (const char *name, NMDeviceType device_type)
 	const char *type_desc;
 	NMLinkType link_type = NM_LINK_TYPE_NONE;
 
-	if (nm_manager_get_device (nm_manager_get (), name, device_type))
+	if (nm_manager_get_device (NM_MANAGER_GET, name, device_type))
 		return NULL;
 
 	if (device_type == NM_DEVICE_TYPE_OVS_INTERFACE) {
@@ -122,7 +117,7 @@ ovsdb_device_removed (NMOvsdb *ovsdb, const char *name, NMDeviceType device_type
 	NMDevice *device;
 	NMDeviceState device_state;
 
-	device = nm_manager_get_device (nm_manager_get (), name, device_type);
+	device = nm_manager_get_device (NM_MANAGER_GET, name, device_type);
 	if (!device)
 		return;
 
@@ -132,10 +127,65 @@ ovsdb_device_removed (NMOvsdb *ovsdb, const char *name, NMDeviceType device_type
 	    && device_state < NM_DEVICE_STATE_DEACTIVATING) {
 		nm_device_state_changed (device,
 		                         NM_DEVICE_STATE_DEACTIVATING,
-		                         NM_DEVICE_STATE_REASON_REMOVED);
+		                         NM_DEVICE_STATE_REASON_DEPENDENCY_FAILED);
 	} else if (device_state == NM_DEVICE_STATE_UNMANAGED) {
 		nm_device_unrealize (device, TRUE, NULL);
 	}
+}
+
+static void
+ovsdb_interface_failed (NMOvsdb *ovsdb,
+                        const char *name,
+                        const char *connection_uuid,
+                        const char *error,
+                        NMDeviceFactory *self)
+{
+	NMDevice *device = NULL;
+	NMSettingsConnection *connection = NULL;
+	NMConnection *c;
+	const char *type;
+	NMSettingOvsInterface *s_ovs_int;
+	gboolean is_patch = FALSE;
+	gboolean ignore;
+
+	device = nm_manager_get_device (NM_MANAGER_GET, name, NM_DEVICE_TYPE_OVS_INTERFACE);
+	if (device && connection_uuid) {
+		connection = nm_settings_get_connection_by_uuid (nm_device_get_settings (device),
+		                                                 connection_uuid);
+	}
+
+	/* The patch interface which gets created first is expected to
+	 * fail because the second patch doesn't exist yet. Ignore all
+	 * failures of patch interfaces. */
+	if (   connection
+	    && (c = nm_settings_connection_get_connection (connection))
+	    && (type = nm_connection_get_connection_type (c))
+	    && nm_streq0 (type, NM_SETTING_OVS_INTERFACE_SETTING_NAME)
+	    && (s_ovs_int = nm_connection_get_setting_ovs_interface (c))
+	    && nm_streq0 (nm_setting_ovs_interface_get_interface_type (s_ovs_int), "patch"))
+		is_patch = TRUE;
+
+	ignore = !device || is_patch;
+
+	_NMLOG (ignore ? LOGL_DEBUG : LOGL_INFO,
+	        name, connection_uuid,
+	        "ovs interface \"%s\" (%s) failed%s: %s",
+	        name, connection_uuid,
+	        ignore ? " (ignored)" : "",
+	        error);
+
+	if (ignore)
+		return;
+
+	if (connection) {
+		nm_settings_connection_autoconnect_blocked_reason_set (connection,
+		                                                       NM_SETTINGS_AUTO_CONNECT_BLOCKED_REASON_FAILED,
+		                                                       TRUE);
+	}
+
+	nm_device_state_changed (device,
+	                         NM_DEVICE_STATE_FAILED,
+	                         NM_DEVICE_STATE_REASON_OVSDB_FAILED);
 }
 
 static void
@@ -147,6 +197,7 @@ start (NMDeviceFactory *self)
 
 	g_signal_connect_object (ovsdb, NM_OVSDB_DEVICE_ADDED, G_CALLBACK (ovsdb_device_added), self, (GConnectFlags) 0);
 	g_signal_connect_object (ovsdb, NM_OVSDB_DEVICE_REMOVED, G_CALLBACK (ovsdb_device_removed), self, (GConnectFlags) 0);
+	g_signal_connect_object (ovsdb, NM_OVSDB_INTERFACE_FAILED, G_CALLBACK (ovsdb_interface_failed), self, (GConnectFlags) 0);
 }
 
 static NMDevice *

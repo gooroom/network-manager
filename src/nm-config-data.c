@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2011 Red Hat, Inc.
  * Copyright (C) 2013 Thomas Bechtold <thomasbechtold@jpberlin.de>
  */
@@ -23,12 +8,11 @@
 
 #include "nm-config-data.h"
 
-#include <string.h>
-
 #include "nm-config.h"
 #include "devices/nm-device.h"
 #include "nm-core-internal.h"
-#include "nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-utils.h"
 
 /*****************************************************************************/
 
@@ -98,8 +82,12 @@ typedef struct {
 	int autoconnect_retries_default;
 
 	struct {
+
+		/* from /var/lib/NetworkManager/no-auto-default.state */
 		char **arr;
 		GSList *specs;
+
+		/* from main.no-auto-default setting in NetworkManager.conf. */
 		GSList *specs_config;
 	} no_auto_default;
 
@@ -110,6 +98,8 @@ typedef struct {
 	char *rc_manager;
 
 	NMGlobalDnsConfig *global_dns;
+
+	bool systemd_resolved:1;
 } NMConfigDataPrivate;
 
 struct _NMConfigData {
@@ -124,14 +114,6 @@ struct _NMConfigDataClass {
 G_DEFINE_TYPE (NMConfigData, nm_config_data, G_TYPE_OBJECT)
 
 #define NM_CONFIG_DATA_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMConfigData, NM_IS_CONFIG_DATA)
-
-/*****************************************************************************/
-
-#define _HAS_PREFIX(str, prefix) \
-	({ \
-		const char *_str = (str); \
-		g_str_has_prefix ( _str, ""prefix"") && _str[NM_STRLEN(prefix)] != '\0'; \
-	})
 
 /*****************************************************************************/
 
@@ -216,7 +198,6 @@ nm_config_data_get_value_int64 (const NMConfigData *self, const char *group, con
 	str = nm_config_keyfile_get_value (NM_CONFIG_DATA_GET_PRIVATE (self)->keyfile, group, key, NM_CONFIG_GET_VALUE_NONE);
 	val = _nm_utils_ascii_str_to_int64 (str, base, min, max, fallback);
 	if (str) {
-		/* preserve errno from the parsing. */
 		errsv = errno;
 		g_free (str);
 		errno = errsv;
@@ -227,6 +208,7 @@ nm_config_data_get_value_int64 (const NMConfigData *self, const char *group, con
 char **
 nm_config_data_get_plugins (const NMConfigData *self, gboolean allow_default)
 {
+	gs_free_error GError *error = NULL;
 	const NMConfigDataPrivate *priv;
 	char **list;
 
@@ -234,8 +216,9 @@ nm_config_data_get_plugins (const NMConfigData *self, gboolean allow_default)
 
 	priv = NM_CONFIG_DATA_GET_PRIVATE (self);
 
-	list = g_key_file_get_string_list (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "plugins", NULL, NULL);
-	if (!list && allow_default) {
+	list = g_key_file_get_string_list (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "plugins", NULL, &error);
+	if (   nm_keyfile_error_is_not_found (error)
+	    && allow_default) {
 		gs_unref_keyfile GKeyFile *kf = nm_config_create_keyfile ();
 
 		/* let keyfile split the default string according to its own escaping rules. */
@@ -323,6 +306,14 @@ nm_config_data_get_rc_manager (const NMConfigData *self)
 }
 
 gboolean
+nm_config_data_get_systemd_resolved (const NMConfigData *self)
+{
+	g_return_val_if_fail (self, FALSE);
+
+	return NM_CONFIG_DATA_GET_PRIVATE (self)->systemd_resolved;
+}
+
+gboolean
 nm_config_data_get_ignore_carrier (const NMConfigData *self, NMDevice *device)
 {
 	gs_free char *value = NULL;
@@ -386,6 +377,61 @@ GKeyFile *
 _nm_config_data_get_keyfile_user (const NMConfigData *self)
 {
 	return NM_CONFIG_DATA_GET_PRIVATE (self)->keyfile_user;
+}
+
+/*****************************************************************************/
+
+static NMAuthPolkitMode
+nm_auth_polkit_mode_from_string (const char *str)
+{
+	int as_bool;
+
+	if (!str)
+		return NM_AUTH_POLKIT_MODE_UNKNOWN;
+
+	if (nm_streq (str, "root-only"))
+		return NM_AUTH_POLKIT_MODE_ROOT_ONLY;
+
+	as_bool = _nm_utils_ascii_str_to_bool (str, -1);
+	if (as_bool != -1) {
+		return   as_bool
+		       ? NM_AUTH_POLKIT_MODE_USE_POLKIT
+		       : NM_AUTH_POLKIT_MODE_ALLOW_ALL;
+	}
+
+	return NM_AUTH_POLKIT_MODE_UNKNOWN;
+}
+
+static NMAuthPolkitMode
+_config_data_get_main_auth_polkit (const NMConfigData *self,
+                                   gboolean *out_invalid_config)
+{
+	NMAuthPolkitMode auth_polkit_mode;
+	const char *str;
+
+	str = nm_config_data_get_value (self,
+	                                NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                NM_CONFIG_KEYFILE_KEY_MAIN_AUTH_POLKIT,
+	                                  NM_CONFIG_GET_VALUE_STRIP
+	                                | NM_CONFIG_GET_VALUE_NO_EMPTY);
+	auth_polkit_mode = nm_auth_polkit_mode_from_string (str);
+	if (auth_polkit_mode == NM_AUTH_POLKIT_MODE_UNKNOWN) {
+		NM_SET_OUT (out_invalid_config, (str != NULL));
+		auth_polkit_mode = nm_auth_polkit_mode_from_string (NM_CONFIG_DEFAULT_MAIN_AUTH_POLKIT);
+		if (auth_polkit_mode == NM_AUTH_POLKIT_MODE_UNKNOWN) {
+			nm_assert_not_reached ();
+			auth_polkit_mode = NM_AUTH_POLKIT_MODE_ROOT_ONLY;
+		}
+	} else
+		NM_SET_OUT (out_invalid_config, FALSE);
+
+	return auth_polkit_mode;
+}
+
+NMAuthPolkitMode
+nm_config_data_get_main_auth_polkit (const NMConfigData *self)
+{
+	return _config_data_get_main_auth_polkit (self, NULL);
 }
 
 /*****************************************************************************/
@@ -499,14 +545,14 @@ _merge_keyfiles (GKeyFile *keyfile_user, GKeyFile *keyfile_intern)
 				continue;
 
 			if (   !is_intern && !is_atomic
-			    && _HAS_PREFIX (key, NM_CONFIG_KEYFILE_KEYPREFIX_WAS)) {
+			    && NM_STR_HAS_PREFIX_WITH_MORE (key, NM_CONFIG_KEYFILE_KEYPREFIX_WAS)) {
 				const char *key_base = &key[NM_STRLEN (NM_CONFIG_KEYFILE_KEYPREFIX_WAS)];
 
 				if (!g_key_file_has_key (keyfile_intern, group, key_base, NULL))
 					g_key_file_remove_key (keyfile, group, key_base, NULL);
 				continue;
 			}
-			if (!is_intern && !is_atomic && _HAS_PREFIX (key, NM_CONFIG_KEYFILE_KEYPREFIX_SET))
+			if (!is_intern && !is_atomic && NM_STR_HAS_PREFIX_WITH_MORE (key, NM_CONFIG_KEYFILE_KEYPREFIX_SET))
 				continue;
 
 			value = g_key_file_get_value (keyfile_intern, group, key, NULL);
@@ -608,6 +654,7 @@ void
 nm_config_data_log (const NMConfigData *self,
                     const char *prefix,
                     const char *key_prefix,
+                    const char *no_auto_default_file,
                     /* FILE* */ gpointer print_stream)
 {
 	const NMConfigDataPrivate *priv;
@@ -698,6 +745,16 @@ nm_config_data_log (const NMConfigData *self,
 			value = g_key_file_get_value (priv->keyfile, group, key, NULL);
 			_LOG (stream, prefix, "%s%s=%s", key_prefix, key, value);
 		}
+	}
+
+	_LOG (stream, prefix, "");
+	_LOG (stream, prefix, "# no-auto-default file \"%s\"", no_auto_default_file);
+	{
+		gs_free char *msg = NULL;
+
+		msg = nm_utils_g_slist_strlist_join (priv->no_auto_default.specs, ",");
+		if (msg)
+			_LOG (stream, prefix, "# no-auto-default specs \"%s\"", msg);
 	}
 
 #undef _LOG
@@ -913,7 +970,10 @@ load_global_dns (GKeyFile *keyfile, gboolean internal)
 	dns_config->domains = g_hash_table_new_full (nm_str_hash, g_str_equal,
 	                                             g_free, (GDestroyNotify) global_dns_domain_free);
 
-	strv = g_key_file_get_string_list (keyfile, group, "searches", NULL, NULL);
+	strv = g_key_file_get_string_list (keyfile,
+	                                   group,
+	                                   NM_CONFIG_KEYFILE_KEY_GLOBAL_DNS_SEARCHES,
+	                                   NULL, NULL);
 	if (strv) {
 		_nm_utils_strv_cleanup (strv, TRUE, TRUE, TRUE);
 		if (!strv[0])
@@ -922,7 +982,10 @@ load_global_dns (GKeyFile *keyfile, gboolean internal)
 			dns_config->searches = strv;
 	}
 
-	strv = g_key_file_get_string_list (keyfile, group, "options", NULL, NULL);
+	strv = g_key_file_get_string_list (keyfile,
+	                                   group,
+	                                   NM_CONFIG_KEYFILE_KEY_GLOBAL_DNS_OPTIONS,
+	                                   NULL, NULL);
 	if (strv) {
 		_nm_utils_strv_cleanup (strv, TRUE, TRUE, TRUE);
 		for (i = 0, j = 0; strv[i]; i++) {
@@ -949,12 +1012,15 @@ load_global_dns (GKeyFile *keyfile, gboolean internal)
 		    || !groups[g][domain_prefix_len])
 			continue;
 
-		strv = g_key_file_get_string_list (keyfile, groups[g], "servers", NULL, NULL);
+		strv = g_key_file_get_string_list (keyfile,
+		                                   groups[g],
+		                                   NM_CONFIG_KEYFILE_KEY_GLOBAL_DNS_DOMAIN_SERVERS,
+		                                   NULL, NULL);
 		if (strv) {
 			_nm_utils_strv_cleanup (strv, TRUE, TRUE, TRUE);
 			for (i = 0, j = 0; strv[i]; i++) {
-				if (   nm_utils_ipaddr_valid (AF_INET, strv[i])
-				    || nm_utils_ipaddr_valid (AF_INET6, strv[i]))
+				if (   nm_utils_ipaddr_is_valid (AF_INET, strv[i])
+				    || nm_utils_ipaddr_is_valid (AF_INET6, strv[i]))
 					strv[j++] = strv[i];
 				else
 					g_free (strv[i]);
@@ -970,7 +1036,10 @@ load_global_dns (GKeyFile *keyfile, gboolean internal)
 		if (!servers)
 			continue;
 
-		strv = g_key_file_get_string_list (keyfile, groups[g], "options", NULL, NULL);
+		strv = g_key_file_get_string_list (keyfile,
+		                                   groups[g],
+		                                   NM_CONFIG_KEYFILE_KEY_GLOBAL_DNS_DOMAIN_OPTIONS,
+		                                   NULL, NULL);
 		if (strv) {
 			options = _nm_utils_strv_cleanup (strv, TRUE, TRUE, TRUE);
 			if (!options[0])
@@ -1073,8 +1142,8 @@ global_dns_domain_from_dbus (char *name, GVariant *variant)
 			strv = g_variant_dup_strv (val, NULL);
 			_nm_utils_strv_cleanup (strv, TRUE, TRUE, TRUE);
 			for (i = 0, j = 0; strv && strv[i]; i++) {
-				if (   nm_utils_ipaddr_valid (AF_INET, strv[i])
-				    || nm_utils_ipaddr_valid (AF_INET6, strv[i]))
+				if (   nm_utils_ipaddr_is_valid (AF_INET, strv[i])
+				    || nm_utils_ipaddr_is_valid (AF_INET6, strv[i]))
 					strv[j++] = strv[i];
 				else
 					g_free (strv[i]);
@@ -1365,6 +1434,19 @@ nm_config_data_get_connection_default (const NMConfigData *self,
 
 	priv = NM_CONFIG_DATA_GET_PRIVATE (self);
 
+#if NM_MORE_ASSERTS > 10
+	{
+		const char **ptr;
+
+		for (ptr = __start_connection_defaults; ptr < __stop_connection_defaults; ptr++) {
+			if (nm_streq (property, *ptr))
+				break;
+		}
+
+		nm_assert (ptr < __stop_connection_defaults);
+	}
+#endif
+
 	_match_section_infos_lookup (&priv->connection_infos[0],
 	                             priv->keyfile,
 	                             property,
@@ -1397,9 +1479,12 @@ _get_connection_info_init (MatchSectionInfo *connection_info, GKeyFile *keyfile,
 
 	connection_info->match_device.spec = nm_config_get_match_spec (keyfile,
 	                                                               group,
-	                                                               "match-device",
+	                                                               NM_CONFIG_KEYFILE_KEY_MATCH_DEVICE,
 	                                                               &connection_info->match_device.has);
-	connection_info->stop_match = nm_config_keyfile_get_boolean (keyfile, group, "stop-match", FALSE);
+	connection_info->stop_match = nm_config_keyfile_get_boolean (keyfile,
+	                                                             group,
+	                                                             NM_CONFIG_KEYFILE_KEY_STOP_MATCH,
+	                                                             FALSE);
 }
 
 static void
@@ -1469,16 +1554,6 @@ _match_section_infos_construct (GKeyFile *keyfile, const char *prefix)
 
 /*****************************************************************************/
 
-static gboolean
-_slist_str_equals (GSList *a, GSList *b)
-{
-	while (a && b && g_strcmp0 (a->data, b->data) == 0) {
-		a = a->next;
-		b = b->next;
-	}
-	return !a && !b;
-}
-
 NMConfigChangeFlags
 nm_config_data_diff (NMConfigData *old_data, NMConfigData *new_data)
 {
@@ -1507,8 +1582,8 @@ nm_config_data_diff (NMConfigData *old_data, NMConfigData *new_data)
 	    || g_strcmp0 (nm_config_data_get_connectivity_response (old_data), nm_config_data_get_connectivity_response (new_data)))
 		changes |= NM_CONFIG_CHANGE_CONNECTIVITY;
 
-	if (   !_slist_str_equals (priv_old->no_auto_default.specs, priv_new->no_auto_default.specs)
-	    || !_slist_str_equals (priv_old->no_auto_default.specs_config, priv_new->no_auto_default.specs_config))
+	if (   nm_utils_g_slist_strlist_cmp (priv_old->no_auto_default.specs,        priv_new->no_auto_default.specs)        != 0
+	    || nm_utils_g_slist_strlist_cmp (priv_old->no_auto_default.specs_config, priv_new->no_auto_default.specs_config) != 0)
 		changes |= NM_CONFIG_CHANGE_NO_AUTO_DEFAULT;
 
 	if (g_strcmp0 (nm_config_data_get_dns_mode (old_data), nm_config_data_get_dns_mode (new_data)))
@@ -1523,6 +1598,26 @@ nm_config_data_diff (NMConfigData *old_data, NMConfigData *new_data)
 	nm_assert (!NM_FLAGS_ANY (changes, NM_CONFIG_CHANGE_CAUSES));
 
 	return changes;
+}
+
+/*****************************************************************************/
+
+void
+nm_config_data_get_warnings (const NMConfigData *self,
+                             GPtrArray *warnings)
+{
+	gboolean invalid;
+
+	nm_assert (NM_IS_CONFIG_DATA (self));
+	nm_assert (warnings);
+
+	_config_data_get_main_auth_polkit (self, &invalid);
+	if (invalid) {
+		g_ptr_array_add (warnings,
+		                 g_strdup_printf ("invalid setting for %s.%s (should be one of \"true\", \"false\", \"root-only\")",
+		                                  NM_CONFIG_KEYFILE_GROUP_MAIN,
+		                                  NM_CONFIG_KEYFILE_KEY_MAIN_AUTH_POLKIT));
+	}
 }
 
 /*****************************************************************************/
@@ -1599,22 +1694,47 @@ set_property (GObject *object,
 	case PROP_NO_AUTO_DEFAULT:
 		/* construct-only */
 		{
-			char **value_arr = g_value_get_boxed (value);
-			guint i, j = 0;
+			const char *const*value_arr_orig = g_value_get_boxed (value);
+			gs_free const char **value_arr = NULL;
+			GSList *specs = NULL;
+			gsize i, j;
+			gsize len;
 
-			priv->no_auto_default.arr = g_new (char *, g_strv_length (value_arr) + 1);
-			priv->no_auto_default.specs = NULL;
+			len = NM_PTRARRAY_LEN (value_arr_orig);
 
-			for (i = 0; value_arr && value_arr[i]; i++) {
-				if (   *value_arr[i]
-				    && nm_utils_hwaddr_valid (value_arr[i], -1)
-				    && nm_utils_strv_find_first (value_arr, i, value_arr[i]) < 0) {
-					priv->no_auto_default.arr[j++] = g_strdup (value_arr[i]);
-					priv->no_auto_default.specs = g_slist_prepend (priv->no_auto_default.specs, g_strdup_printf ("mac:%s", value_arr[i]));
+			/* sort entries, remove duplicates and empty words. */
+			value_arr =   len == 0
+			            ? NULL
+			            : nm_memdup (value_arr_orig, sizeof (const char *) * (len + 1));
+			nm_utils_strv_sort (value_arr, len);
+			_nm_utils_strv_cleanup ((char **) value_arr, FALSE, TRUE, TRUE);
+
+			len = NM_PTRARRAY_LEN (value_arr);
+			j = 0;
+			for (i = 0; i < len; i++) {
+				const char *s = value_arr[i];
+				gboolean is_mac;
+				char *spec;
+
+				if (NM_STR_HAS_PREFIX (s, NM_MATCH_SPEC_INTERFACE_NAME_TAG"="))
+					is_mac = FALSE;
+				else if (nm_utils_hwaddr_valid (s, -1))
+					is_mac = TRUE;
+				else {
+					/* we drop all lines that we don't understand. */
+					continue;
 				}
+
+				value_arr[j++] = s;
+
+				spec = is_mac
+				       ? g_strdup_printf (NM_MATCH_SPEC_MAC_TAG"%s", s)
+				       : g_strdup (s);
+				specs = g_slist_prepend (specs, spec);
 			}
-			priv->no_auto_default.arr[j++] = NULL;
-			priv->no_auto_default.specs = g_slist_reverse (priv->no_auto_default.specs);
+
+			priv->no_auto_default.arr = nm_utils_strv_dup (value_arr, j, TRUE);
+			priv->no_auto_default.specs = g_slist_reverse (specs);
 		}
 		break;
 	default:
@@ -1642,27 +1762,58 @@ constructed (GObject *object)
 	priv->connection_infos = _match_section_infos_construct (priv->keyfile, NM_CONFIG_KEYFILE_GROUPPREFIX_CONNECTION);
 	priv->device_infos = _match_section_infos_construct (priv->keyfile, NM_CONFIG_KEYFILE_GROUPPREFIX_DEVICE);
 
-	priv->connectivity.enabled = nm_config_keyfile_get_boolean (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY, "enabled", TRUE);
-	priv->connectivity.uri = nm_strstrip (g_key_file_get_string (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY, "uri", NULL));
-	priv->connectivity.response = g_key_file_get_string (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY, "response", NULL);
-
-	str = nm_config_keyfile_get_value (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, NM_CONFIG_KEYFILE_KEY_MAIN_AUTOCONNECT_RETRIES_DEFAULT, NM_CONFIG_GET_VALUE_NONE);
+	priv->connectivity.enabled = nm_config_keyfile_get_boolean (priv->keyfile,
+	                                                            NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY,
+	                                                            NM_CONFIG_KEYFILE_KEY_CONNECTIVITY_ENABLED,
+	                                                            TRUE);
+	priv->connectivity.uri = nm_strstrip (g_key_file_get_string (priv->keyfile,
+	                                                             NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY,
+	                                                             NM_CONFIG_KEYFILE_KEY_CONNECTIVITY_URI,
+	                                                             NULL));
+	priv->connectivity.response = g_key_file_get_string (priv->keyfile,
+	                                                     NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY,
+	                                                     NM_CONFIG_KEYFILE_KEY_CONNECTIVITY_RESPONSE,
+	                                                     NULL);
+	str = nm_config_keyfile_get_value (priv->keyfile,
+	                                   NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                   NM_CONFIG_KEYFILE_KEY_MAIN_AUTOCONNECT_RETRIES_DEFAULT,
+	                                   NM_CONFIG_GET_VALUE_NONE);
 	priv->autoconnect_retries_default = _nm_utils_ascii_str_to_int64 (str, 10, 0, G_MAXINT32, 4);
 	g_free (str);
 
 	/* On missing config value, fallback to 300. On invalid value, disable connectivity checking by setting
 	 * the interval to zero. */
-	str = g_key_file_get_string (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY, "interval", NULL);
+	str = g_key_file_get_string (priv->keyfile,
+	                             NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY,
+	                             NM_CONFIG_KEYFILE_KEY_CONNECTIVITY_INTERVAL,
+	                             NULL);
 	priv->connectivity.interval = _nm_utils_ascii_str_to_int64 (str, 10, 0, G_MAXUINT, NM_CONFIG_DEFAULT_CONNECTIVITY_INTERVAL);
 	g_free (str);
 
-	priv->dns_mode = nm_strstrip (g_key_file_get_string (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "dns", NULL));
-	priv->rc_manager = nm_strstrip (g_key_file_get_string (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "rc-manager", NULL));
-
-	priv->ignore_carrier = nm_config_get_match_spec (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "ignore-carrier", NULL);
-	priv->assume_ipv6ll_only = nm_config_get_match_spec (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "assume-ipv6ll-only", NULL);
-
-	priv->no_auto_default.specs_config = nm_config_get_match_spec (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "no-auto-default", NULL);
+	priv->dns_mode = nm_strstrip (g_key_file_get_string (priv->keyfile,
+	                                                     NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                                     NM_CONFIG_KEYFILE_KEY_MAIN_DNS,
+	                                                     NULL));
+	priv->rc_manager = nm_strstrip (g_key_file_get_string (priv->keyfile,
+	                                                       NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                                       NM_CONFIG_KEYFILE_KEY_MAIN_RC_MANAGER,
+	                                                       NULL));
+	priv->systemd_resolved = nm_config_keyfile_get_boolean (priv->keyfile,
+	                                                        NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                                        NM_CONFIG_KEYFILE_KEY_MAIN_SYSTEMD_RESOLVED,
+	                                                        TRUE);
+	priv->ignore_carrier = nm_config_get_match_spec (priv->keyfile,
+	                                                 NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                                 NM_CONFIG_KEYFILE_KEY_MAIN_IGNORE_CARRIER,
+	                                                 NULL);
+	priv->assume_ipv6ll_only = nm_config_get_match_spec (priv->keyfile,
+	                                                     NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                                     NM_CONFIG_KEYFILE_KEY_MAIN_ASSUME_IPV6LL_ONLY,
+	                                                     NULL);
+	priv->no_auto_default.specs_config = nm_config_get_match_spec (priv->keyfile,
+	                                                               NM_CONFIG_KEYFILE_GROUP_MAIN,
+	                                                               NM_CONFIG_KEYFILE_KEY_MAIN_NO_AUTO_DEFAULT,
+	                                                               NULL);
 
 	priv->global_dns = load_global_dns (priv->keyfile_user, FALSE);
 	if (!priv->global_dns)
@@ -1719,7 +1870,7 @@ nm_config_data_new_update_no_auto_default (const NMConfigData *base,
 static void
 finalize (GObject *gobject)
 {
-	NMConfigDataPrivate *priv = NM_CONFIG_DATA_GET_PRIVATE ((NMConfigData *) gobject);
+	NMConfigDataPrivate *priv = NM_CONFIG_DATA_GET_PRIVATE (gobject);
 
 	g_free (priv->config_main_file);
 	g_free (priv->config_description);

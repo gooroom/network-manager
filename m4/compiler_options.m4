@@ -31,7 +31,7 @@ AC_DEFUN([NM_COMPILER_FLAG], [
 
 dnl Check whether a particular warning is not emitted with code provided,
 dnl append an option to disable the warning to a specified variable if the check fails.
-dnl NM_COMPILER_WARNING([ENV-VAR], [C-SNIPPET], [WARNING]])
+dnl NM_COMPILER_WARNING([ENV-VAR], [WARNING], [C-SNIPPET])
 AC_DEFUN([NM_COMPILER_WARNING], [
         _NM_COMPILER_FLAG([-W$2], [$3], [eval "AS_TR_SH([$1])='$$1 -W$2'"], [eval "AS_TR_SH([$1])='$$1 -Wno-$2'"])
 ])
@@ -47,10 +47,10 @@ if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
 
 	dnl This is enabled in clang by default, makes little sense,
 	dnl and causes the build to abort with -Werror.
-	CFLAGS_SAVED="$$1"
-	eval "AS_TR_SH([$1])='$$1 -Qunused-arguments'"
-	AC_COMPILE_IFELSE([AC_LANG_SOURCE([])], [], eval "AS_TR_SH([$1])='$CFLAGS_SAVED'")
-	unset CFLAGS_SAVED
+	CFLAGS_SAVED="$CFLAGS"
+	CFLAGS="$CFLAGS -Qunused-arguments"
+	AC_COMPILE_IFELSE([AC_LANG_SOURCE([])], eval "AS_TR_SH([$1])='$$1 -Qunused-arguments'", [])
+	CFLAGS="$CFLAGS_SAVED"
 
 	dnl clang only warns about unknown warnings, unless
 	dnl called with "-Werror=unknown-warning-option"
@@ -70,7 +70,6 @@ if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
 		      -Wfloat-equal \
 		      -Wformat-nonliteral \
 		      -Wformat-security \
-		      -Wimplicit-fallthrough \
 		      -Wimplicit-function-declaration \
 		      -Winit-self \
 		      -Wlogical-op \
@@ -89,6 +88,8 @@ if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
 		      -Wno-missing-field-initializers \
 		      -Wno-pragmas \
 		      -Wno-sign-compare \
+		      -Wno-tautological-constant-out-of-range-compare \
+		      -Wno-unknown-pragmas \
 		      -Wno-unused-parameter \
 		      ; do
 		dnl GCC 4.4 does not warn when checking for -Wno-* flags (https://gcc.gnu.org/wiki/FAQ#wnowarning)
@@ -124,12 +125,6 @@ if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
 		[int f () { int i = yolo; yolo; return i; }]
 	)
 
-	dnl clang 3.9 would like to see "{ { 0 } }" here, but that does not
-	dnl look too wise.
-	NM_COMPILER_WARNING([$1], [missing-braces],
-		[union { int a[1]; int b[2]; } c = { 0 }]
-	)
-
 	dnl a new warning in gcc 8, glib 2.55 doesn't play nice yet
 	dnl https://bugzilla.gnome.org/show_bug.cgi?id=793272
 	NM_COMPILER_WARNING([$1], [cast-function-type],
@@ -141,6 +136,26 @@ if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
 		[G_DEFINE_TYPE (NMObject, nm_object, G_TYPE_OBJECT)]
 	)
 
+	dnl clang started supporting -Wimplicit-fallthrough, but it does not
+	dnl honor the code comments to suppress the warning. Disable the
+	dnl warning with clang.
+	dnl
+	NM_COMPILER_WARNING([$1], [implicit-fallthrough],
+		[int foo(int a);
+	     int foo(int a) {
+		    int r = 0;
+		    switch (a) {
+		    case 1:
+		       r++;
+		       /* fall-through */
+		    case 2:
+		       r++;
+		       break;
+		    }
+		    return r;
+		 }]
+	)
+
 	eval "AS_TR_SH([$1])='$CFLAGS_MORE_WARNINGS $$1'"
 else
 	AC_MSG_RESULT(no)
@@ -148,11 +163,11 @@ fi
 ])
 
 AC_DEFUN([NM_LTO],
-[AC_ARG_ENABLE(lto, AS_HELP_STRING([--enable-lto], [Enable Link Time Optimization for smaller size (default: no)]))
+[AC_ARG_ENABLE(lto, AS_HELP_STRING([--enable-lto], [Enable Link Time Optimization for smaller size [default=no]]))
 if (test "${enable_lto}" = "yes"); then
-	CC_CHECK_FLAG_APPEND([lto_flags], [CFLAGS], [-flto])
+	CC_CHECK_FLAG_APPEND([lto_flags], [CFLAGS], [-flto -flto-partition=none])
 	if (test -n "${lto_flags}"); then
-		CFLAGS="-flto $CFLAGS"
+		CFLAGS="-flto -flto-partition=none $CFLAGS"
 	else
 		AC_MSG_ERROR([Link Time Optimization -flto is not supported.])
 	fi
@@ -162,7 +177,7 @@ fi
 ])
 
 AC_DEFUN([NM_LD_GC],
-[AC_ARG_ENABLE(ld-gc, AS_HELP_STRING([--enable-ld-gc], [Enable garbage collection of unused symbols on linking (default: auto)]))
+[AC_ARG_ENABLE(ld-gc, AS_HELP_STRING([--enable-ld-gc], [Enable garbage collection of unused symbols on linking [default=auto]]))
 if (test "${enable_ld_gc}" != "no"); then
 	CC_CHECK_FLAG_APPEND([ld_gc_flags], [CFLAGS], [-fdata-sections -ffunction-sections -Wl,--gc-sections])
 	if (test -n "${ld_gc_flags}"); then

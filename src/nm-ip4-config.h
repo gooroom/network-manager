@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright (C) 2008–2013 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2008 - 2013 Red Hat, Inc.
  */
 
 #ifndef __NETWORKMANAGER_IP4_CONFIG_H__
@@ -25,10 +10,18 @@
 
 #include "nm-setting-ip4-config.h"
 
-#include "nm-utils/nm-dedup-multi.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 #include "platform/nmp-object.h"
 
 /*****************************************************************************/
+
+typedef enum _NMIPConfigFlags {
+	NM_IP_CONFIG_FLAG_NONE                            = 0,
+
+	/* if set, then the merge flag NM_IP_CONFIG_MERGE_NO_DEFAULT_ROUTES gets
+	 * ignored during merge. */
+	NM_IP_CONFIG_FLAGS_IGNORE_MERGE_NO_DEFAULT_ROUTES = (1ull << 0),
+} NMIPConfigFlags;
 
 typedef struct {
 	NMDedupMultiIdxType parent;
@@ -189,10 +182,12 @@ void nm_ip4_config_subtract (NMIP4Config *dst,
                              guint32 default_route_metric_penalty);
 void nm_ip4_config_intersect (NMIP4Config *dst,
                               const NMIP4Config *src,
+                              gboolean intersect_addresses,
                               gboolean intersect_routes,
                               guint32 default_route_metric_penalty);
 NMIP4Config *nm_ip4_config_intersect_alloc (const NMIP4Config *a,
                                             const NMIP4Config *b,
+                                            gboolean intersect_addresses,
                                             gboolean intersect_routes,
                                             guint32 default_route_metric_penalty);
 gboolean nm_ip4_config_replace (NMIP4Config *dst, const NMIP4Config *src, gboolean *relevant_changes);
@@ -208,6 +203,9 @@ void                    nm_ip4_config_mdns_set (NMIP4Config *self,
 NMSettingConnectionLlmnr nm_ip4_config_llmnr_get (const NMIP4Config *self);
 void                     nm_ip4_config_llmnr_set (NMIP4Config *self,
                                                   NMSettingConnectionLlmnr llmnr);
+
+void nm_ip4_config_set_config_flags (NMIP4Config *self, NMIPConfigFlags flags, NMIPConfigFlags mask);
+NMIPConfigFlags nm_ip4_config_get_config_flags (const NMIP4Config *self);
 
 const NMDedupMultiHeadEntry *nm_ip4_config_lookup_addresses (const NMIP4Config *self);
 void nm_ip4_config_reset_addresses (NMIP4Config *self);
@@ -526,6 +524,18 @@ nm_ip_config_best_default_route_get (const NMIPConfig *self)
 	_NM_IP_CONFIG_DISPATCH (self, nm_ip4_config_best_default_route_get, nm_ip6_config_best_default_route_get);
 }
 
+static inline NMIPConfigFlags
+nm_ip_config_get_config_flags (const NMIPConfig *self)
+{
+	_NM_IP_CONFIG_DISPATCH (self, nm_ip4_config_get_config_flags, nm_ip6_config_get_config_flags);
+}
+
+static inline void
+nm_ip_config_set_config_flags (NMIPConfig *self, NMIPConfigFlags flags, NMIPConfigFlags mask)
+{
+	_NM_IP_CONFIG_DISPATCH_VOID (self, nm_ip4_config_set_config_flags, nm_ip6_config_set_config_flags, flags, mask);
+}
+
 #define _NM_IP_CONFIG_DISPATCH_SET_OP(_return, dst, src, v4_func, v6_func, ...) \
 	G_STMT_START { \
 		gpointer _dst = (dst); \
@@ -543,12 +553,14 @@ nm_ip_config_best_default_route_get (const NMIPConfig *self)
 static inline void
 nm_ip_config_intersect (NMIPConfig *dst,
                         const NMIPConfig *src,
+                        gboolean intersect_addresses,
                         gboolean intersect_routes,
                         guint32 default_route_metric_penalty)
 {
 	_NM_IP_CONFIG_DISPATCH_SET_OP (, dst, src,
 	                               nm_ip4_config_intersect,
 	                               nm_ip6_config_intersect,
+	                               intersect_addresses,
 	                               intersect_routes,
 	                               default_route_metric_penalty);
 }
@@ -591,6 +603,7 @@ nm_ip_config_replace (NMIPConfig *dst,
 static inline NMIPConfig *
 nm_ip_config_intersect_alloc (const NMIPConfig *a,
                               const NMIPConfig *b,
+                              gboolean intersect_addresses,
                               gboolean intersect_routes,
                               guint32 default_route_metric_penalty)
 {
@@ -598,6 +611,7 @@ nm_ip_config_intersect_alloc (const NMIPConfig *a,
 		nm_assert (NM_IS_IP4_CONFIG (b));
 		return (NMIPConfig *) nm_ip4_config_intersect_alloc ((const NMIP4Config *) a,
 		                                                     (const NMIP4Config *) b,
+		                                                     intersect_addresses,
 		                                                     intersect_routes,
 		                                                     default_route_metric_penalty);
 	} else {
@@ -605,6 +619,7 @@ nm_ip_config_intersect_alloc (const NMIPConfig *a,
 		nm_assert (NM_IS_IP6_CONFIG (b));
 		return (NMIPConfig *) nm_ip6_config_intersect_alloc ((const NMIP6Config *) a,
 		                                                     (const NMIP6Config *) b,
+		                                                     intersect_addresses,
 		                                                     intersect_routes,
 		                                                     default_route_metric_penalty);
 	}

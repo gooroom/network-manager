@@ -1,23 +1,8 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2008 Novell, Inc.
- * Copyright 2008 - 2010 Red Hat, Inc.
- * Copyright 2015 Red Hat, Inc.
+ * Copyright (C) 2008 Novell, Inc.
+ * Copyright (C) 2008 - 2010 Red Hat, Inc.
+ * Copyright (C) 2015 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -29,6 +14,8 @@
 
 #include "nm-core-internal.h"
 
+/*****************************************************************************/
+
 static void nm_vpn_editor_plugin_default_init (NMVpnEditorPluginInterface *iface);
 
 G_DEFINE_INTERFACE (NMVpnEditorPlugin, nm_vpn_editor_plugin, G_TYPE_OBJECT)
@@ -36,18 +23,16 @@ G_DEFINE_INTERFACE (NMVpnEditorPlugin, nm_vpn_editor_plugin, G_TYPE_OBJECT)
 static void
 nm_vpn_editor_plugin_default_init (NMVpnEditorPluginInterface *iface)
 {
-	/* Properties */
-
 	/**
 	 * NMVpnEditorPlugin:name:
 	 *
 	 * Short display name of the VPN plugin.
 	 */
 	g_object_interface_install_property (iface,
-		 g_param_spec_string (NM_VPN_EDITOR_PLUGIN_NAME, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	    g_param_spec_string (NM_VPN_EDITOR_PLUGIN_NAME, "", "",
+	                         NULL,
+	                         G_PARAM_READABLE |
+	                         G_PARAM_STATIC_STRINGS));
 
 	/**
 	 * NMVpnEditorPlugin:description:
@@ -55,10 +40,10 @@ nm_vpn_editor_plugin_default_init (NMVpnEditorPluginInterface *iface)
 	 * Longer description of the VPN plugin.
 	 */
 	g_object_interface_install_property (iface,
-		 g_param_spec_string (NM_VPN_EDITOR_PLUGIN_DESCRIPTION, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	    g_param_spec_string (NM_VPN_EDITOR_PLUGIN_DESCRIPTION, "", "",
+	                         NULL,
+	                         G_PARAM_READABLE |
+	                         G_PARAM_STATIC_STRINGS));
 
 	/**
 	 * NMVpnEditorPlugin:service:
@@ -66,10 +51,10 @@ nm_vpn_editor_plugin_default_init (NMVpnEditorPluginInterface *iface)
 	 * D-Bus service name of the plugin's VPN service.
 	 */
 	g_object_interface_install_property (iface,
-		 g_param_spec_string (NM_VPN_EDITOR_PLUGIN_SERVICE, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	    g_param_spec_string (NM_VPN_EDITOR_PLUGIN_SERVICE, "", "",
+	                         NULL,
+	                         G_PARAM_READABLE |
+	                         G_PARAM_STATIC_STRINGS));
 }
 
 /*****************************************************************************/
@@ -379,8 +364,8 @@ _nm_vpn_editor_plugin_load (const char *plugin_name,
  * @user_data: user data for @check_file
  * @error: on failure the error reason.
  *
- * Load the shared libary @plugin_name and create a new
- * #NMVpnEditorPlugin instace via the #NMVpnEditorPluginFactory
+ * Load the shared library @plugin_name and create a new
+ * #NMVpnEditorPlugin instance via the #NMVpnEditorPluginFactory
  * function.
  *
  * If @plugin_name is not an absolute path name, it assumes the file
@@ -419,8 +404,8 @@ nm_vpn_editor_plugin_load_from_file  (const char *plugin_name,
  *  the given service.
  * @error: on failure the error reason.
  *
- * Load the shared libary @plugin_name and create a new
- * #NMVpnEditorPlugin instace via the #NMVpnEditorPluginFactory
+ * Load the shared library @plugin_name and create a new
+ * #NMVpnEditorPlugin instance via the #NMVpnEditorPluginFactory
  * function.
  *
  * This is similar to nm_vpn_editor_plugin_load_from_file(), but

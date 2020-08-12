@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager system settings service - keyfile plugin
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2008 Novell, Inc.
  * Copyright (C) 2008 - 2015 Red Hat, Inc.
  */
@@ -26,15 +11,13 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <errno.h>
-#include <string.h>
 
-#include "nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
 
 #include "nms-keyfile-utils.h"
 #include "nms-keyfile-reader.h"
 
-#include "nm-utils/nm-io-utils.h"
+#include "nm-glib-aux/nm-io-utils.h"
 
 /*****************************************************************************/
 
@@ -45,21 +28,22 @@ typedef struct {
 static void
 cert_writer (NMConnection *connection,
              GKeyFile *file,
-             NMKeyfileWriteTypeDataCert *cert_data,
+             NMSetting8021x *setting,
+             const NMSetting8021xSchemeVtable *vtable,
              WriteInfo *info,
              GError **error)
 {
-	const char *setting_name = nm_setting_get_name (NM_SETTING (cert_data->setting));
+	const char *setting_name = nm_setting_get_name (NM_SETTING (setting));
 	NMSetting8021xCKScheme scheme;
 	NMSetting8021xCKFormat format;
 	const char *path = NULL, *ext = "pem";
 
-	scheme = cert_data->vtable->scheme_func (cert_data->setting);
+	scheme = vtable->scheme_func (setting);
 	if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH) {
 		char *tmp = NULL;
 		const char *accepted_path = NULL;
 
-		path = cert_data->vtable->path_func (cert_data->setting);
+		path = vtable->path_func (setting);
 		g_assert (path);
 
 		if (g_str_has_prefix (path, info->keyfile_dir)) {
@@ -77,7 +61,7 @@ cert_writer (NMConnection *connection,
 					 * that would be interpreted as legacy binary format by reader. */
 					tmp = nm_keyfile_detect_unqualified_path_scheme (info->keyfile_dir, p, -1, FALSE, NULL);
 					if (tmp) {
-						g_clear_pointer (&tmp, g_free);
+						nm_clear_g_free (&tmp);
 						accepted_path = p;
 					}
 				}
@@ -88,18 +72,18 @@ cert_writer (NMConnection *connection,
 			 * Otherwise, add a file:// prefix */
 			tmp = nm_keyfile_detect_unqualified_path_scheme (info->keyfile_dir, path, -1, FALSE, NULL);
 			if (tmp) {
-				g_clear_pointer (&tmp, g_free);
+				nm_clear_g_free (&tmp);
 				accepted_path = path;
 			}
 		}
 
 		if (!accepted_path)
 			accepted_path = tmp = g_strconcat (NM_KEYFILE_CERT_SCHEME_PREFIX_PATH, path, NULL);
-		nm_keyfile_plugin_kf_set_string (file, setting_name, cert_data->vtable->setting_key, accepted_path);
+		nm_keyfile_plugin_kf_set_string (file, setting_name, vtable->setting_key, accepted_path);
 		g_free (tmp);
 	} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11) {
-		nm_keyfile_plugin_kf_set_string (file, setting_name, cert_data->vtable->setting_key,
-		                                 cert_data->vtable->uri_func (cert_data->setting));
+		nm_keyfile_plugin_kf_set_string (file, setting_name, vtable->setting_key,
+		                                 vtable->uri_func (setting));
 	} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB) {
 		GBytes *blob;
 		const guint8 *blob_data;
@@ -108,13 +92,13 @@ cert_writer (NMConnection *connection,
 		GError *local = NULL;
 		char *new_path;
 
-		blob = cert_data->vtable->blob_func (cert_data->setting);
+		blob = vtable->blob_func (setting);
 		g_assert (blob);
 		blob_data = g_bytes_get_data (blob, &blob_len);
 
-		if (cert_data->vtable->format_func) {
+		if (vtable->format_func) {
 			/* Get the extension for a private key */
-			format = cert_data->vtable->format_func (cert_data->setting);
+			format = vtable->format_func (setting);
 			if (format == NM_SETTING_802_1X_CK_FORMAT_PKCS12)
 				ext = "p12";
 		} else {
@@ -127,17 +111,25 @@ cert_writer (NMConnection *connection,
 		 * from now on instead of pushing around the certificate data.
 		 */
 		new_path = g_strdup_printf ("%s/%s-%s.%s", info->keyfile_dir, nm_connection_get_uuid (connection),
-		                            cert_data->vtable->file_suffix, ext);
+		                            vtable->file_suffix, ext);
 
-		success = nm_utils_file_set_contents (new_path, (const char *) blob_data,
-		                                      blob_len, 0600, &local);
+		/* FIXME(keyfile-parse-in-memory): writer must not access/write to the file system before
+		 * being sure that the entire profile can be written and all circumstances are good to
+		 * proceed. That means, while writing we must only collect the blogs in-memory, and write
+		 * them all in the end together (or not at all). */
+		success = nm_utils_file_set_contents (new_path,
+		                                      (const char *) blob_data,
+		                                      blob_len,
+		                                      0600,
+		                                      NULL,
+		                                      &local);
 		if (success) {
 			/* Write the path value to the keyfile.
 			 * We know, that basename(new_path) starts with a UUID, hence no conflict with "data:;base64,"  */
-			nm_keyfile_plugin_kf_set_string (file, setting_name, cert_data->vtable->setting_key, strrchr (new_path, '/') + 1);
+			nm_keyfile_plugin_kf_set_string (file, setting_name, vtable->setting_key, strrchr (new_path, '/') + 1);
 		} else {
 			nm_log_warn (LOGD_SETTINGS, "keyfile: %s.%s: failed to write certificate to file %s: %s",
-			             setting_name, cert_data->vtable->setting_key, new_path, local->message);
+			             setting_name, vtable->setting_key, new_path, local->message);
 			g_error_free (local);
 		}
 		g_free (new_path);
@@ -155,15 +147,17 @@ cert_writer (NMConnection *connection,
 static gboolean
 _handler_write (NMConnection *connection,
                 GKeyFile *keyfile,
-                NMKeyfileWriteType type,
-                void *type_data,
-                void *user_data,
-                GError **error)
+                NMKeyfileHandlerType type,
+                NMKeyfileHandlerData *type_data,
+                void *user_data)
 {
-	if (type == NM_KEYFILE_WRITE_TYPE_CERT) {
-		cert_writer (connection, keyfile,
-		             (NMKeyfileWriteTypeDataCert *) type_data,
-		             (WriteInfo *) user_data, error);
+	if (type == NM_KEYFILE_HANDLER_TYPE_WRITE_CERT) {
+		cert_writer (connection,
+		             keyfile,
+		             NM_SETTING_802_1X (type_data->cur_setting),
+		             type_data->write_cert.vtable,
+		             user_data,
+		             type_data->p_error);
 		return TRUE;
 	}
 	return FALSE;
@@ -171,156 +165,174 @@ _handler_write (NMConnection *connection,
 
 static gboolean
 _internal_write_connection (NMConnection *connection,
+                            gboolean is_nm_generated,
+                            gboolean is_volatile,
+                            gboolean is_external,
+                            const char *shadowed_storage,
+                            gboolean shadowed_owned,
                             const char *keyfile_dir,
                             const char *profile_dir,
                             gboolean with_extension,
                             uid_t owner_uid,
                             pid_t owner_grp,
                             const char *existing_path,
+                            gboolean existing_path_read_only,
                             gboolean force_rename,
+                            NMSKeyfileWriterAllowFilenameCb allow_filename_cb,
+                            gpointer allow_filename_user_data,
                             char **out_path,
                             NMConnection **out_reread,
                             gboolean *out_reread_same,
                             GError **error)
 {
-	gs_unref_keyfile GKeyFile *key_file = NULL;
-	gs_free char *data = NULL;
-	gsize len;
+	gs_unref_keyfile GKeyFile *kf_file = NULL;
+	gs_free char *kf_content_buf = NULL;
+	gsize kf_content_len;
 	gs_free char *path = NULL;
 	const char *id;
 	WriteInfo info = { 0 };
-	GError *local_err = NULL;
+	gs_free_error GError *local_err = NULL;
 	int errsv;
-	gboolean rename = force_rename;
+	gboolean rename;
+	int i_path;
+	gs_unref_object NMConnection *reread = NULL;
+	gboolean reread_same = FALSE;
 
 	g_return_val_if_fail (!out_path || !*out_path, FALSE);
 	g_return_val_if_fail (keyfile_dir && keyfile_dir[0] == '/', FALSE);
 
-	if (existing_path && !g_str_has_prefix (existing_path, keyfile_dir))
-		rename = TRUE;
+	nm_assert (_nm_connection_verify (connection, NULL) == NM_SETTING_VERIFY_SUCCESS);
 
-	switch (_nm_connection_verify (connection, error)) {
-	case NM_SETTING_VERIFY_NORMALIZABLE:
-		nm_assert_not_reached ();
-		/* fall-through */
-	case NM_SETTING_VERIFY_SUCCESS:
-		break;
-	default:
-		g_return_val_if_reached (FALSE);
-	}
+	nm_assert (!shadowed_owned || shadowed_storage);
+
+	rename =    force_rename
+	         || existing_path_read_only
+	         || (   existing_path
+	             && !nm_utils_file_is_in_path (existing_path, keyfile_dir));
 
 	id = nm_connection_get_id (connection);
-	g_assert (id && *id);
+	nm_assert (id && *id);
 
 	info.keyfile_dir = keyfile_dir;
 
-	key_file = nm_keyfile_write (connection, _handler_write, &info, error);
-	if (!key_file)
+	kf_file = nm_keyfile_write (connection, NM_KEYFILE_HANDLER_FLAGS_NONE, _handler_write, &info, error);
+	if (!kf_file)
 		return FALSE;
-	data = g_key_file_to_data (key_file, &len, error);
-	if (!data)
+
+	if (is_nm_generated) {
+		g_key_file_set_boolean (kf_file,
+		                        NM_KEYFILE_GROUP_NMMETA,
+		                        NM_KEYFILE_KEY_NMMETA_NM_GENERATED,
+		                        TRUE);
+	}
+
+	if (is_volatile) {
+		g_key_file_set_boolean (kf_file,
+		                        NM_KEYFILE_GROUP_NMMETA,
+		                        NM_KEYFILE_KEY_NMMETA_VOLATILE,
+		                        TRUE);
+	}
+
+	if (is_external) {
+		g_key_file_set_boolean (kf_file,
+		                        NM_KEYFILE_GROUP_NMMETA,
+		                        NM_KEYFILE_KEY_NMMETA_EXTERNAL,
+		                        TRUE);
+	}
+
+	if (shadowed_storage) {
+		g_key_file_set_string (kf_file,
+		                       NM_KEYFILE_GROUP_NMMETA,
+		                       NM_KEYFILE_KEY_NMMETA_SHADOWED_STORAGE,
+		                       shadowed_storage);
+	}
+
+	if (shadowed_owned) {
+		g_key_file_set_boolean (kf_file,
+		                        NM_KEYFILE_GROUP_NMMETA,
+		                        NM_KEYFILE_KEY_NMMETA_SHADOWED_OWNED,
+		                        TRUE);
+	}
+
+	kf_content_buf = g_key_file_to_data (kf_file, &kf_content_len, error);
+	if (!kf_content_buf)
 		return FALSE;
 
 	if (!g_file_test (keyfile_dir, G_FILE_TEST_IS_DIR))
 		(void) g_mkdir_with_parents (keyfile_dir, 0755);
 
-	/* If we have existing file path, use it. Else generate one from
-	 * connection's ID.
-	 */
-	if (existing_path != NULL && !rename) {
-		path = g_strdup (existing_path);
-	} else {
-		char *filename_escaped = nms_keyfile_utils_escape_filename (id, with_extension);
+	for (i_path = -2; i_path < 10000; i_path++) {
+		gs_free char *path_candidate = NULL;
+		gboolean is_existing_path;
 
-		path = g_build_filename (keyfile_dir, filename_escaped, NULL);
-		g_free (filename_escaped);
-	}
+		if (i_path == -2) {
+			if (   !existing_path
+			    || rename)
+				continue;
+			path_candidate = g_strdup (existing_path);
+		} else if (i_path == -1) {
+			gs_free char *filename_escaped = NULL;
 
-	/* If a file with this path already exists (but isn't the existing path
-	 * of the connection) then we need another name.  Multiple connections
-	 * can have the same ID (ie if two connections with the same ID are visible
-	 * to different users) but of course can't have the same path.  Yeah,
-	 * there's a race here, but there's not a lot we can do about it, and
-	 * we shouldn't get more than one connection with the same UUID either.
-	 */
-	if (g_strcmp0 (path, existing_path) != 0 && g_file_test (path, G_FILE_TEST_EXISTS)) {
-		guint i;
-		gboolean name_found = FALSE;
+			filename_escaped = nm_keyfile_utils_create_filename (id, with_extension);
+			path_candidate = g_build_filename (keyfile_dir, filename_escaped, NULL);
+		} else {
+			gs_free char *filename_escaped = NULL;
+			gs_free char *filename = NULL;
 
-		/* A keyfile with this connection's ID already exists. Pick another name. */
-		for (i = 0; i < 100; i++) {
-			char *filename, *filename_escaped;
-
-			if (i == 0)
+			if (i_path == 0)
 				filename = g_strdup_printf ("%s-%s", id, nm_connection_get_uuid (connection));
 			else
-				filename = g_strdup_printf ("%s-%s-%u", id, nm_connection_get_uuid (connection), i);
+				filename = g_strdup_printf ("%s-%s-%d", id, nm_connection_get_uuid (connection), i_path);
 
-			filename_escaped = nms_keyfile_utils_escape_filename (filename, with_extension);
+			filename_escaped = nm_keyfile_utils_create_filename (filename, with_extension);
 
-			g_free (path);
-			path = g_strdup_printf ("%s/%s", keyfile_dir, filename_escaped);
-			g_free (filename);
-			g_free (filename_escaped);
-			if (g_strcmp0 (path, existing_path) == 0 || !g_file_test (path, G_FILE_TEST_EXISTS)) {
-				name_found = TRUE;
-				break;
-			}
+			path_candidate = g_strdup_printf ("%s/%s", keyfile_dir, filename_escaped);
 		}
-		if (!name_found) {
-			if (existing_path == NULL) {
-				/* this really should not happen, we tried hard to find an unused name... bail out. */
-				g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
-				                    "could not find suitable keyfile file name (%s already used)", path);
-				return FALSE;
-			}
-			/* Both our preferred path based on connection id and id-uuid are taken.
-			 * Fallback to @existing_path */
-			g_free (path);
-			path = g_strdup (existing_path);
+
+		is_existing_path =    existing_path
+		                   && nm_streq (existing_path, path_candidate);
+
+		if (   is_existing_path
+		    && rename)
+			continue;
+
+		if (   allow_filename_cb
+		    && !allow_filename_cb (path_candidate, allow_filename_user_data))
+			continue;
+
+		if (!is_existing_path) {
+			if (g_file_test (path_candidate, G_FILE_TEST_EXISTS))
+				continue;
 		}
+
+		path = g_steal_pointer (&path_candidate);
+		break;
 	}
 
-	/* In case of updating the connection and changing the file path,
-	 * we need to remove the old one, not to end up with two connections.
-	 */
-	if (existing_path != NULL && strcmp (path, existing_path) != 0)
-		unlink (existing_path);
-
-	nm_utils_file_set_contents (path, data, len, 0600, &local_err);
-	if (local_err) {
+	if (!path) {
+		/* this really should not happen, we tried hard to find an unused name... bail out. */
 		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
-		             "error writing to file '%s': %s",
-		             path, local_err->message);
-		g_error_free (local_err);
+		                    "could not find suitable keyfile file name (%s already used)", path);
 		return FALSE;
 	}
 
-	if (chown (path, owner_uid, owner_grp) < 0) {
-		errsv = errno;
-		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
-		             "error chowning '%s': %s (%d)",
-		             path, g_strerror (errsv), errsv);
-		unlink (path);
-		return FALSE;
-	}
+	if (   out_reread
+	    || out_reread_same) {
+		gs_free_error GError *reread_error = NULL;
 
-	if (out_reread || out_reread_same)
-	{
-		gs_unref_object NMConnection *reread = NULL;
-		gboolean reread_same = FALSE;
+		reread = nms_keyfile_reader_from_keyfile (kf_file, path, NULL, profile_dir, FALSE, &reread_error);
 
-		reread = nms_keyfile_reader_from_keyfile (key_file, path, NULL, profile_dir, FALSE, NULL);
-
-		nm_assert (NM_IS_CONNECTION (reread));
-
-		if (   reread
-		    && !nm_connection_normalize (reread, NULL, NULL, NULL)) {
+		if (   !reread
+		    || !nm_connection_normalize (reread, NULL, NULL, &reread_error)) {
+			nm_log_err (LOGD_SETTINGS, "BUG: the profile cannot be stored in keyfile format without becoming unusable: %s", reread_error->message);
+			g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
+			             "keyfile writer produces an invalid connection: %s",
+			             reread_error->message);
 			nm_assert_not_reached ();
-			g_clear_object (&reread);
+			return FALSE;
 		}
 
-		if (reread && out_reread_same) {
+		if (out_reread_same) {
 			reread_same = !!nm_connection_compare (reread, connection, NM_SETTING_COMPARE_FLAG_EXACT);
 
 			nm_assert (reread_same == nm_connection_compare (connection, reread, NM_SETTING_COMPARE_FLAG_EXACT));
@@ -331,11 +343,40 @@ _internal_write_connection (NMConnection *connection,
 			                                 && !_settings);
 			                           }));
 		}
-
-		NM_SET_OUT (out_reread, g_steal_pointer (&reread));
-		NM_SET_OUT (out_reread_same, reread_same);
 	}
 
+	nm_utils_file_set_contents (path,
+	                            kf_content_buf,
+	                            kf_content_len,
+	                            0600,
+	                            NULL,
+	                            &local_err);
+	if (local_err) {
+		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
+		             "error writing to file '%s': %s",
+		             path, local_err->message);
+		return FALSE;
+	}
+
+	if (chown (path, owner_uid, owner_grp) < 0) {
+		errsv = errno;
+		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
+		             "error chowning '%s': %s (%d)",
+		             path, nm_strerror_native (errsv), errsv);
+		unlink (path);
+		return FALSE;
+	}
+
+	/* In case of updating the connection and changing the file path,
+	 * we need to remove the old one, not to end up with two connections.
+	 */
+	if (   existing_path
+	    && !existing_path_read_only
+	    && !nm_streq (path, existing_path))
+		unlink (existing_path);
+
+	NM_SET_OUT (out_reread, g_steal_pointer (&reread));
+	NM_SET_OUT (out_reread_same, reread_same);
 	NM_SET_OUT (out_path, g_steal_pointer (&path));
 
 	return TRUE;
@@ -343,29 +384,39 @@ _internal_write_connection (NMConnection *connection,
 
 gboolean
 nms_keyfile_writer_connection (NMConnection *connection,
-                               gboolean save_to_disk,
+                               gboolean is_nm_generated,
+                               gboolean is_volatile,
+                               gboolean is_external,
+                               const char *shadowed_storage,
+                               gboolean shadowed_owned,
+                               const char *keyfile_dir,
+                               const char *profile_dir,
                                const char *existing_path,
+                               gboolean existing_path_read_only,
                                gboolean force_rename,
+                               NMSKeyfileWriterAllowFilenameCb allow_filename_cb,
+                               gpointer allow_filename_user_data,
                                char **out_path,
                                NMConnection **out_reread,
                                gboolean *out_reread_same,
                                GError **error)
 {
-	const char *keyfile_dir;
-
-	if (save_to_disk)
-		keyfile_dir = nms_keyfile_utils_get_path ();
-	else
-		keyfile_dir = NM_CONFIG_KEYFILE_PATH_IN_MEMORY;
-
 	return _internal_write_connection (connection,
+	                                   is_nm_generated,
+	                                   is_volatile,
+	                                   is_external,
+	                                   shadowed_storage,
+	                                   shadowed_owned,
 	                                   keyfile_dir,
-	                                   nms_keyfile_utils_get_path (),
+	                                   profile_dir,
 	                                   TRUE,
 	                                   0,
 	                                   0,
 	                                   existing_path,
+	                                   existing_path_read_only,
 	                                   force_rename,
+	                                   allow_filename_cb,
+	                                   allow_filename_user_data,
 	                                   out_path,
 	                                   out_reread,
 	                                   out_reread_same,
@@ -383,6 +434,11 @@ nms_keyfile_writer_test_connection (NMConnection *connection,
                                     GError **error)
 {
 	return _internal_write_connection (connection,
+	                                   FALSE,
+	                                   FALSE,
+	                                   FALSE,
+	                                   NULL,
+	                                   FALSE,
 	                                   keyfile_dir,
 	                                   keyfile_dir,
 	                                   FALSE,
@@ -390,9 +446,11 @@ nms_keyfile_writer_test_connection (NMConnection *connection,
 	                                   owner_grp,
 	                                   NULL,
 	                                   FALSE,
+	                                   FALSE,
+	                                   NULL,
+	                                   NULL,
 	                                   out_path,
 	                                   out_reread,
 	                                   out_reread_same,
 	                                   error);
 }
-

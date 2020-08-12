@@ -1,20 +1,6 @@
-/* NetworkManager initrd configuration generator
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2014 - 2018 Red Hat, Inc.
+// SPDX-License-Identifier: LGPL-2.1+
+/*
+ * Copyright (C) 2014 - 2018 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -22,7 +8,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <string.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -80,6 +65,7 @@ test_read_ibft_dhcp (void)
 	g_assert (s_con);
 	g_assert_cmpstr (nm_setting_connection_get_connection_type (s_con), ==, NM_SETTING_WIRED_SETTING_NAME);
 	g_assert_cmpstr (nm_setting_connection_get_id (s_con), ==, "iBFT Connection 1");
+	g_assert_cmpstr (nm_setting_connection_get_interface_name (s_con), ==, NULL);
 	g_assert_cmpint (nm_setting_connection_get_timestamp (s_con), ==, 0);
 	g_assert (nm_setting_connection_get_autoconnect (s_con));
 
@@ -96,7 +82,7 @@ test_read_ibft_dhcp (void)
 
 	s_ip6 = nm_connection_get_setting_ip6_config (connection);
 	g_assert (s_ip6);
-	g_assert_cmpstr (nm_setting_ip_config_get_method (s_ip6), ==, NM_SETTING_IP6_CONFIG_METHOD_IGNORE);
+	g_assert_cmpstr (nm_setting_ip_config_get_method (s_ip6), ==, NM_SETTING_IP6_CONFIG_METHOD_DISABLED);
 
 	g_object_unref (connection);
 }
@@ -124,6 +110,7 @@ test_read_ibft_static (void)
 	g_assert (s_con);
 	g_assert_cmpstr (nm_setting_connection_get_connection_type (s_con), ==, NM_SETTING_WIRED_SETTING_NAME);
 	g_assert_cmpstr (nm_setting_connection_get_id (s_con), ==, "iBFT Connection 0");
+	g_assert_cmpstr (nm_setting_connection_get_interface_name (s_con), ==, NULL);
 	g_assert_cmpint (nm_setting_connection_get_timestamp (s_con), ==, 0);
 	g_assert (nm_setting_connection_get_autoconnect (s_con));
 
@@ -152,7 +139,7 @@ test_read_ibft_static (void)
 
 	s_ip6 = nm_connection_get_setting_ip6_config (connection);
 	g_assert (s_ip6);
-	g_assert_cmpstr (nm_setting_ip_config_get_method (s_ip6), ==, NM_SETTING_IP6_CONFIG_METHOD_IGNORE);
+	g_assert_cmpstr (nm_setting_ip_config_get_method (s_ip6), ==, NM_SETTING_IP6_CONFIG_METHOD_DISABLED);
 
 	g_object_unref (connection);
 }
@@ -193,6 +180,7 @@ test_read_ibft_vlan (void)
 	s_con = nm_connection_get_setting_connection (connection);
 	g_assert (s_con);
 	g_assert_cmpstr (nm_setting_connection_get_connection_type (s_con), ==, NM_SETTING_VLAN_SETTING_NAME);
+	g_assert_cmpstr (nm_setting_connection_get_interface_name (s_con), ==, NULL);
 
 	/* ===== WIRED SETTING ===== */
 	s_wired = nm_connection_get_setting_wired (connection);
@@ -263,7 +251,7 @@ test_read_ibft (void)
 
 	s_ip6 = nm_connection_get_setting_ip6_config (connection);
 	g_assert (nm_setting_ip_config_get_num_addresses (s_ip6) == 0);
-	g_assert_cmpstr (nm_setting_ip_config_get_method (s_ip6), ==, NM_SETTING_IP6_CONFIG_METHOD_IGNORE);
+	g_assert_cmpstr (nm_setting_ip_config_get_method (s_ip6), ==, NM_SETTING_IP6_CONFIG_METHOD_DISABLED);
 	g_object_unref (connection);
 }
 

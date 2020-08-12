@@ -5,11 +5,9 @@
   Copyright © 2013 Intel Corporation. All rights reserved.
 ***/
 
-#include <stdint.h>
-#include <linux/if_packet.h>
-
 #include "sd-dhcp-client.h"
 
+#include "dhcp-internal.h"
 #include "dhcp-protocol.h"
 #include "list.h"
 #include "util.h"
@@ -41,7 +39,6 @@ struct sd_dhcp_lease {
         /* each 0 if unset */
         be32_t address;
         be32_t server_address;
-        be32_t router;
         be32_t next_server;
 
         bool have_subnet_mask;
@@ -50,11 +47,10 @@ struct sd_dhcp_lease {
         bool have_broadcast;
         be32_t broadcast;
 
-        struct in_addr *dns;
-        size_t dns_size;
+        struct in_addr *router;
+        size_t router_size;
 
-        struct in_addr *ntp;
-        size_t ntp_size;
+        DHCPServerData servers[_SD_DHCP_LEASE_SERVER_TYPE_MAX];
 
         struct sd_dhcp_route *static_route;
         size_t static_route_size, static_route_allocated;

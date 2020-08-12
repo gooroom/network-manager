@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2018 Red Hat, Inc.
+ * Copyright (C) 2018 Red Hat, Inc.
  */
 
 #ifndef __NM_SETTING_ETHTOOL_H__
@@ -84,8 +69,42 @@ G_BEGIN_DECLS
 #define NM_ETHTOOL_OPTNAME_FEATURE_TX_UDP_TNL_SEGMENTATION      "feature-tx-udp_tnl-segmentation"
 #define NM_ETHTOOL_OPTNAME_FEATURE_TX_VLAN_STAG_HW_INSERT       "feature-tx-vlan-stag-hw-insert"
 
-NM_AVAILABLE_IN_1_14
+#define NM_ETHTOOL_OPTNAME_COALESCE_ADAPTIVE_RX                 "coalesce-adaptive-rx"
+#define NM_ETHTOOL_OPTNAME_COALESCE_ADAPTIVE_TX                 "coalesce-adaptive-tx"
+#define NM_ETHTOOL_OPTNAME_COALESCE_PKT_RATE_HIGH               "coalesce-pkt-rate-high"
+#define NM_ETHTOOL_OPTNAME_COALESCE_PKT_RATE_LOW                "coalesce-pkt-rate-low"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES                   "coalesce-rx-frames"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES_HIGH              "coalesce-rx-frames-high"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES_IRQ               "coalesce-rx-frames-irq"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_FRAMES_LOW               "coalesce-rx-frames-low"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_USECS                    "coalesce-rx-usecs"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_USECS_HIGH               "coalesce-rx-usecs-high"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_USECS_IRQ                "coalesce-rx-usecs-irq"
+#define NM_ETHTOOL_OPTNAME_COALESCE_RX_USECS_LOW                "coalesce-rx-usecs-low"
+#define NM_ETHTOOL_OPTNAME_COALESCE_SAMPLE_INTERVAL             "coalesce-sample-interval"
+#define NM_ETHTOOL_OPTNAME_COALESCE_STATS_BLOCK_USECS           "coalesce-stats-block-usecs"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES                   "coalesce-tx-frames"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES_HIGH              "coalesce-tx-frames-high"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES_IRQ               "coalesce-tx-frames-irq"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_FRAMES_LOW               "coalesce-tx-frames-low"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_USECS                    "coalesce-tx-usecs"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_USECS_HIGH               "coalesce-tx-usecs-high"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_USECS_IRQ                "coalesce-tx-usecs-irq"
+#define NM_ETHTOOL_OPTNAME_COALESCE_TX_USECS_LOW                "coalesce-tx-usecs-low"
+
+#define NM_ETHTOOL_OPTNAME_RING_RX                              "ring-rx"
+#define NM_ETHTOOL_OPTNAME_RING_RX_JUMBO                        "ring-rx-jumbo"
+#define NM_ETHTOOL_OPTNAME_RING_RX_MINI                         "ring-rx-mini"
+#define NM_ETHTOOL_OPTNAME_RING_TX                              "ring-tx"
+
+NM_AVAILABLE_IN_1_20
 gboolean nm_ethtool_optname_is_feature (const char *optname);
+
+NM_AVAILABLE_IN_1_26
+gboolean nm_ethtool_optname_is_coalesce (const char *optname);
+
+NM_AVAILABLE_IN_1_26
+gboolean nm_ethtool_optname_is_ring (const char *optname);
 
 /*****************************************************************************/
 
@@ -110,14 +129,22 @@ NMSetting        *nm_setting_ethtool_new (void);
 
 /*****************************************************************************/
 
+NM_AVAILABLE_IN_1_20
+NM_DEPRECATED_IN_1_26
+const char **     nm_setting_ethtool_get_optnames (NMSettingEthtool *setting,
+                                                   guint *out_length);
+
 NM_AVAILABLE_IN_1_14
+NM_DEPRECATED_IN_1_26
 NMTernary         nm_setting_ethtool_get_feature (NMSettingEthtool *setting,
                                                   const char *optname);
 NM_AVAILABLE_IN_1_14
+NM_DEPRECATED_IN_1_26
 void              nm_setting_ethtool_set_feature (NMSettingEthtool *setting,
                                                   const char *optname,
                                                   NMTernary value);
 NM_AVAILABLE_IN_1_14
+NM_DEPRECATED_IN_1_26
 void              nm_setting_ethtool_clear_features (NMSettingEthtool *setting);
 
 G_END_DECLS

@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2007 - 2013 Red Hat, Inc.
  */
 
@@ -22,7 +7,6 @@
 
 #include <unistd.h>
 #include <stdlib.h>
-#include <string.h>
 #include <signal.h>
 
 #include "nm-utils/nm-vpn-plugin-macros.h"
@@ -62,32 +46,45 @@
 
 /*****************************************************************************/
 
-static const char * ignore[] = {"PATH", "SHLVL", "_", "PWD", "dhc_dbus", NULL};
-
 static GVariant *
 build_signal_parameters (void)
 {
-	char **item;
+	const char *const*environ_iter;
 	GVariantBuilder builder;
 
 	g_variant_builder_init (&builder, G_VARIANT_TYPE_VARDICT);
 
 	/* List environment and format for dbus dict */
-	for (item = environ; *item; item++) {
-		char *name, *val, **p;
+	for (environ_iter = (const char *const*) environ; *environ_iter; environ_iter++) {
+		static const char *const ignore_with_prefix_list[] = {
+			"PATH",
+			"SHLVL",
+			"_",
+			"PWD",
+			"dhc_dbus",
+			NULL
+		};
+		const char *item = *environ_iter;
+		gs_free char *name = NULL;
+		const char *val;
+		const char *const*p;
 
-		/* Split on the = */
-		name = g_strdup (*item);
-		val = strchr (name, '=');
-		if (!val || val == name)
-			goto next;
-		*val++ = '\0';
+		val = strchr (item, '=');
+		if (   !val
+		    || item == val)
+			continue;
 
-		/* Ignore non-DCHP-related environment variables */
-		for (p = (char **) ignore; *p; p++) {
+		name = g_strndup (item, val - item);
+		val += 1;
+
+		/* Ignore non-DHCP-related environment variables */
+		for (p = ignore_with_prefix_list; *p; p++) {
 			if (strncmp (name, *p, strlen (*p)) == 0)
 				goto next;
 		}
+
+		if (!g_utf8_validate (name, -1, NULL))
+			continue;
 
 		/* Value passed as a byte array rather than a string, because there are
 		 * no character encoding guarantees with DHCP, and D-Bus requires
@@ -101,8 +98,8 @@ build_signal_parameters (void)
 		                       g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE,
 		                                                  val, strlen (val), 1));
 
-	next:
-		g_free (name);
+next:
+		;
 	}
 
 	return g_variant_ref_sink (g_variant_new ("(a{sv})", &builder));
@@ -131,19 +128,42 @@ main (int argc, char *argv[])
 	gs_unref_variant GVariant *parameters = NULL;
 	gs_unref_variant GVariant *result = NULL;
 	gboolean success = FALSE;
-	guint try_count = 0;
+	guint try_count;
+	gint64 time_start;
 	gint64 time_end;
 
-	/* FIXME: g_dbus_connection_new_for_address_sync() tries to connect to the socket in
-	 * non-blocking mode, which can easily fail with EAGAIN, causing the creation of the
-	 * socket to fail with "Could not connect: Resource temporarily unavailable".
-	 *
-	 * We should instead create the GIOStream ourself and block on connecting to
-	 * the socket. */
+	/* Connecting to the unix socket can fail with EAGAIN if there are too
+	 * many pending connections and the server can't accept them in time
+	 * before reaching backlog capacity. Ideally the server should increase
+	 * the backlog length, but GLib doesn't provide a way to change it for a
+	 * GDBus server. Retry for up to 5 seconds in case of failure. */
+	time_start = g_get_monotonic_time ();
+	time_end = time_start + (5000 * 1000L);
+	try_count = 0;
+
+do_connect:
+	try_count++;
 	connection = g_dbus_connection_new_for_address_sync ("unix:path=" NMRUNDIR "/private-dhcp",
 	                                                     G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
 	                                                     NULL, NULL, &error);
 	if (!connection) {
+		if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK)) {
+			gint64 time_remaining = time_end - g_get_monotonic_time ();
+			gint64 interval;
+
+			if (time_remaining > 0) {
+				_LOGi ("failure to connect: %s (retry %u, waited %lld ms)",
+				       error->message, try_count,
+				       (long long) (time_end - time_remaining - time_start) / 1000);
+				interval = NM_CLAMP ((gint64) (100L * (1L << NM_MIN (try_count, 31))),
+				                     5000,
+				                     100000);
+				g_usleep (NM_MIN (interval, time_remaining));
+				g_clear_error (&error);
+				goto do_connect;
+			}
+		}
+
 		g_dbus_error_strip_remote_error (error);
 		_LOGE ("could not connect to NetworkManager D-Bus socket: %s",
 		       error->message);
@@ -151,8 +171,8 @@ main (int argc, char *argv[])
 	}
 
 	parameters = build_signal_parameters ();
-
 	time_end = g_get_monotonic_time () + (200 * 1000L); /* retry for at most 200 milliseconds */
+	try_count = 0;
 
 do_notify:
 	try_count++;
@@ -174,6 +194,7 @@ do_notify:
 		s_err = g_dbus_error_get_remote_error (error);
 		if (NM_IN_STRSET (s_err, "org.freedesktop.DBus.Error.UnknownMethod")) {
 			gint64 remaining_time = time_end - g_get_monotonic_time ();
+			gint64 interval;
 
 			/* I am not sure that a race can actually happen, as we register the object
 			 * on the server side during GDBusServer:new-connection signal.
@@ -182,7 +203,10 @@ do_notify:
 			 * do some retry. */
 			if (remaining_time > 0) {
 				_LOGi ("failure to call notify: %s (retry %u)", error->message, try_count);
-				g_usleep (NM_MIN (NM_CLAMP ((gint64) (100L * (1L << try_count)), 5000, 25000), remaining_time));
+				interval = NM_CLAMP ((gint64) (100L * (1L << NM_MIN (try_count, 31))),
+				                     5000,
+				                     25000);
+				g_usleep (NM_MIN (interval, remaining_time));
 				g_clear_error (&error);
 				goto do_notify;
 			}
@@ -190,7 +214,7 @@ do_notify:
 		_LOGW ("failure to call notify: %s (try signal via Event)", error->message);
 		g_clear_error (&error);
 
-		/* for backward compatibilty, try to emit the signal. There is no stable
+		/* for backward compatibility, try to emit the signal. There is no stable
 		 * API between the dhcp-helper and NetworkManager. However, while upgrading
 		 * the NetworkManager package, a newer helper might want to notify an
 		 * older server, which still uses the "Event". */

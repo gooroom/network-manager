@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2014 Red Hat, Inc.
+ * Copyright (C) 2014 Red Hat, Inc.
  */
 
 #ifndef __NM_TEST_UTILS_H__
@@ -29,6 +14,9 @@
  * HOWTO run tests.
  *
  * Our tests (make check) include this header-only file nm-test-utils.h.
+ *
+ * You should always include this header *as last*. Reason is, that depending on
+ * previous includes, functionality will be enabled.
  *
  * Logging:
  *   In tests, nm-logging redirects to glib logging. By default, glib suppresses all debug
@@ -110,7 +98,9 @@
 #include <string.h>
 #include <errno.h>
 
+#ifndef NM_TEST_UTILS_NO_LIBNM
 #include "nm-utils.h"
+#endif
 
 /*****************************************************************************/
 
@@ -188,6 +178,25 @@
 		g_assert (error); \
 		g_assert (!(success)); \
 	} G_STMT_END
+
+/*****************************************************************************/
+
+/* Our nm-error error numbers use negative values to signal failure.
+ * A non-negative value signals success. Hence, the correct way for checking
+ * is always (r < 0) vs. (r >= 0). Never (r == 0).
+ *
+ * For assertions in tests, we also want to assert that no positive values
+ * are returned. For a lot of functions, positive return values are unexpected
+ * and a bug. This macro evaluates @r to success or failure, while asserting
+ * that @r is not positive. */
+#define NMTST_NM_ERR_SUCCESS(r) \
+	({ \
+		const int _r = (r); \
+		\
+		if (_r >= 0) \
+			g_assert_cmpint (_r, ==, 0); \
+		(_r >= 0); \
+	})
 
 /*****************************************************************************/
 
@@ -613,7 +622,7 @@ __nmtst_init (int *argc, char ***argv, gboolean assert_logging, const char *log_
 
 #ifdef __NETWORKMANAGER_UTILS_H__
 	/* ensure that monotonic timestamp is called (because it initially logs a line) */
-	nm_utils_get_monotonic_timestamp_s ();
+	nm_utils_get_monotonic_timestamp_sec ();
 #endif
 
 #ifdef NM_UTILS_H
@@ -686,17 +695,10 @@ nmtst_test_quick (void)
 
 #define NMTST_EXPECT(domain, level, msg)        g_test_expect_message (domain, level, msg)
 
-#if (NETWORKMANAGER_COMPILATION) & NM_NETWORKMANAGER_COMPILATION_WITH_LIBNM_UTIL
-#define NMTST_EXPECT_LIBNM_U(level, msg)        NMTST_EXPECT ("libnm-util", level, msg)
-#define NMTST_EXPECT_LIBNM_G(level, msg)        NMTST_EXPECT ("libnm-glib", level, msg)
-
-#define NMTST_EXPECT_LIBNM_U_CRITICAL(msg)      NMTST_EXPECT_LIBNM_U (G_LOG_LEVEL_CRITICAL, msg)
-#define NMTST_EXPECT_LIBNM_G_CRITICAL(msg)      NMTST_EXPECT_LIBNM_G (G_LOG_LEVEL_CRITICAL, msg)
-#else
 #define NMTST_EXPECT_LIBNM(level, msg)          NMTST_EXPECT ("libnm", level, msg)
 
+#define NMTST_EXPECT_LIBNM_WARNING(msg)         NMTST_EXPECT_LIBNM (G_LOG_LEVEL_WARNING, msg)
 #define NMTST_EXPECT_LIBNM_CRITICAL(msg)        NMTST_EXPECT_LIBNM (G_LOG_LEVEL_CRITICAL, msg)
-#endif
 
 /*****************************************************************************/
 
@@ -841,15 +843,41 @@ nmtst_get_rand (void)
 }
 
 static inline guint32
-nmtst_get_rand_int (void)
+nmtst_get_rand_uint32 (void)
 {
 	return g_rand_int (nmtst_get_rand ());
+}
+
+static inline guint64
+nmtst_get_rand_uint64 (void)
+{
+	GRand *rand = nmtst_get_rand ();
+
+	return   (((guint64) g_rand_int (rand))      )
+	       | (((guint64) g_rand_int (rand)) << 32);
+}
+
+static inline guint
+nmtst_get_rand_uint (void)
+{
+	G_STATIC_ASSERT_EXPR (sizeof (guint32) == sizeof (guint));
+	return nmtst_get_rand_uint32 ();
+}
+
+static inline gsize
+nmtst_get_rand_size (void)
+{
+	G_STATIC_ASSERT_EXPR (   sizeof (gsize) == sizeof (guint32)
+	                      || sizeof (gsize) == sizeof (guint64));
+	if (sizeof (gsize) == sizeof (guint32))
+		return nmtst_get_rand_uint32 ();
+	return nmtst_get_rand_uint64 ();
 }
 
 static inline gboolean
 nmtst_get_rand_bool (void)
 {
-	return nmtst_get_rand_int () % 2;
+	return nmtst_get_rand_uint32 () % 2;
 }
 
 static inline gpointer
@@ -879,6 +907,16 @@ nmtst_rand_buf (GRand *rand, gpointer buffer, gsize buffer_length)
 	}
 	return buffer;
 }
+
+#define _nmtst_rand_select(uniq, v0, ...) \
+	({ \
+		typeof (v0) NM_UNIQ_T (UNIQ, uniq)[1 + NM_NARG (__VA_ARGS__)] = { (v0), __VA_ARGS__ }; \
+		\
+		NM_UNIQ_T (UNIQ, uniq)[nmtst_get_rand_uint32 () % G_N_ELEMENTS (NM_UNIQ_T (UNIQ, uniq))]; \
+	})
+
+#define nmtst_rand_select(...) \
+	_nmtst_rand_select (NM_UNIQ, __VA_ARGS__)
 
 static inline void *
 nmtst_rand_perm (GRand *rand, void *dst, const void *src, gsize elmt_size, gsize n_elmt)
@@ -948,6 +986,89 @@ nmtst_rand_perm_gslist (GRand *rand, GSList *list)
 
 /*****************************************************************************/
 
+/**
+ * nmtst_get_rand_word_length:
+ * @rand: (allow-none): #GRand instance or %NULL to use the singleton.
+ *
+ * Returns: a random integer >= 0, that most frequently is somewhere between
+ * 0 and 16, but (with decreasing) probability, it can be larger. This can
+ * be used when we generate random input for unit tests.
+ */
+static inline guint
+nmtst_get_rand_word_length (GRand *rand)
+{
+	guint n;
+
+	if (!rand)
+		rand = nmtst_get_rand ();
+
+	n = 0;
+	while (TRUE) {
+		guint32 rnd = g_rand_int (rand);
+		guint probability;
+
+		/* The following python code implements a random sample with this
+		 * distribution:
+		 *
+		 *    def random_histogram(n_tries, scale = None):
+		 *        def probability(n_tok):
+		 *            import math
+		 *            return max(2, math.floor(100 / (2*(n_tok+1))))
+		 *        def n_tokens():
+		 *            import random
+		 *            n_tok = 0
+		 *            while True:
+		 *                if random.randint(0, 0xFFFFFFFF) % probability(n_tok) == 0:
+		 *                   return n_tok
+		 *                n_tok += 1
+		 *        hist = []
+		 *        i = 0;
+		 *        while i < n_tries:
+		 *            n_tok = n_tokens()
+		 *            while n_tok >= len(hist):
+		 *                hist.append(0)
+		 *            hist[n_tok] = hist[n_tok] + 1
+		 *            i += 1
+		 *        if scale is not None:
+		 *            hist = list([round(x / n_tries * scale) for x in hist])
+		 *        return hist
+		 *
+		 * For example, random_histogram(n_tries = 1000000, scale = 1000) may give
+		 *
+		 *   IDX:  [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+		 *   SEEN: [20, 39, 59, 73, 80, 91, 92, 90, 91, 73, 73, 54, 55, 36, 24, 16, 16,  8,  4,  2,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0]
+		 *
+		 * which give a sense of the probability with this individual results are returned.
+		 */
+		probability = NM_MAX (2u, (100u / (2u * (n + 1u))));
+		if ((rnd % probability) == 0)
+			return n;
+		n++;
+	}
+}
+
+/*****************************************************************************/
+
+static inline gboolean
+nmtst_g_source_assert_not_called (gpointer user_data)
+{
+	g_assert_not_reached ();
+	return G_SOURCE_CONTINUE;
+}
+
+static inline gboolean
+nmtst_g_source_set_boolean_true (gpointer user_data)
+{
+	gboolean *ptr = user_data;
+
+	g_assert (ptr);
+	g_assert (!*ptr);
+	*ptr = TRUE;
+	return G_SOURCE_CONTINUE;
+}
+
+/*****************************************************************************/
+
 static inline gboolean
 _nmtst_main_loop_run_timeout (gpointer user_data)
 {
@@ -959,13 +1080,13 @@ _nmtst_main_loop_run_timeout (gpointer user_data)
 }
 
 static inline gboolean
-nmtst_main_loop_run (GMainLoop *loop, guint timeout_ms)
+nmtst_main_loop_run (GMainLoop *loop, guint timeout_msec)
 {
 	nm_auto_unref_gsource GSource *source = NULL;
 	GMainLoop *loopx = loop;
 
-	if (timeout_ms > 0) {
-		source = g_timeout_source_new (timeout_ms);
+	if (timeout_msec > 0) {
+		source = g_timeout_source_new (timeout_msec);
 		g_source_set_callback (source, _nmtst_main_loop_run_timeout, &loopx, NULL);
 		g_source_attach (source, g_main_loop_get_context (loop));
 	}
@@ -990,6 +1111,121 @@ _nmtst_main_loop_quit_on_notify (GObject *object, GParamSpec *pspec, gpointer us
 	g_main_loop_quit (loop);
 }
 #define nmtst_main_loop_quit_on_notify ((GCallback) _nmtst_main_loop_quit_on_notify)
+
+#define nmtst_main_context_iterate_until(context, timeout_msec, condition) \
+	({ \
+		nm_auto_destroy_and_unref_gsource GSource *_source = NULL; \
+		GMainContext *_context = (context); \
+		gboolean _had_timeout = FALSE; \
+		\
+		_source = g_timeout_source_new (timeout_msec); \
+		g_source_set_callback (_source, nmtst_g_source_set_boolean_true, &_had_timeout, NULL); \
+		g_source_attach (_source, _context); \
+		\
+		while (TRUE) { \
+			if (condition) \
+				break; \
+			g_main_context_iteration (_context, TRUE); \
+			if (_had_timeout) \
+				break; \
+		} \
+		\
+		!_had_timeout; \
+	})
+
+#define nmtst_main_context_iterate_until_assert(context, timeout_msec, condition) \
+	G_STMT_START { \
+		if (!nmtst_main_context_iterate_until (context, timeout_msec, condition)) \
+			g_assert (FALSE && #condition); \
+	} G_STMT_END
+
+/*****************************************************************************/
+
+static inline void
+nmtst_main_context_assert_no_dispatch (GMainContext *context,
+                                       guint timeout_msec)
+{
+	nm_auto_destroy_and_unref_gsource GSource *source = NULL;
+	gboolean timeout_hit = FALSE;
+
+	source = g_timeout_source_new (timeout_msec);
+	g_source_set_callback (source, nmtst_g_source_set_boolean_true, &timeout_hit, NULL);
+	g_source_attach (source, context);
+
+	while (g_main_context_iteration (context, TRUE)) {
+		if (timeout_hit)
+			return;
+		g_assert_not_reached ();
+	}
+}
+
+/*****************************************************************************/
+
+typedef struct {
+	GMainLoop *_main_loop;
+	union {
+		GSList *_list;
+		const void *const is_waiting;
+	};
+} NMTstContextBusyWatcherData;
+
+static inline void
+_nmtst_context_busy_watcher_add_cb (gpointer data,
+                                    GObject *where_the_object_was)
+{
+	NMTstContextBusyWatcherData *watcher_data = data;
+	GSList *l;
+
+	g_assert (watcher_data);
+
+	l = g_slist_find (watcher_data->_list, where_the_object_was);
+	g_assert (l);
+
+	watcher_data->_list = g_slist_delete_link (watcher_data->_list, l);
+	if (!watcher_data->_list)
+		g_main_loop_quit (watcher_data->_main_loop);
+}
+
+static inline void
+nmtst_context_busy_watcher_add (NMTstContextBusyWatcherData *watcher_data,
+                                GObject *object)
+{
+	g_assert (watcher_data);
+	g_assert (G_IS_OBJECT (object));
+
+	if (!watcher_data->_main_loop) {
+		watcher_data->_main_loop = g_main_loop_new (g_main_context_get_thread_default (),
+		                                            FALSE);
+		g_assert (!watcher_data->_list);
+	} else {
+		g_assert (   g_main_loop_get_context (watcher_data->_main_loop)
+		          == (g_main_context_get_thread_default () ?: g_main_context_default ()));
+	}
+
+	g_object_weak_ref (object,
+	                   _nmtst_context_busy_watcher_add_cb,
+	                   watcher_data);
+	watcher_data->_list = g_slist_prepend (watcher_data->_list, object);
+}
+
+static inline void
+nmtst_context_busy_watcher_wait (NMTstContextBusyWatcherData *watcher_data)
+{
+	g_assert (watcher_data);
+
+	if (!watcher_data->_main_loop) {
+		g_assert (!watcher_data->_list);
+		return;
+	}
+
+	if (watcher_data->_list) {
+		if (!nmtst_main_loop_run (watcher_data->_main_loop, 5000))
+			g_error ("timeout running mainloop waiting for GObject to destruct");
+	}
+
+	g_assert (!watcher_data->_list);
+	nm_clear_pointer (&watcher_data->_main_loop, g_main_loop_unref);
+}
 
 /*****************************************************************************/
 
@@ -1025,7 +1261,7 @@ nmtst_reexec_sudo (void)
 	execvp (__nmtst_internal.sudo_cmd, argv);
 
 	errsv = errno;
-	g_error (">> exec %s failed: %d - %s", __nmtst_internal.sudo_cmd, errsv, strerror (errsv));
+	g_error (">> exec %s failed: %d - %s", __nmtst_internal.sudo_cmd, errsv, nm_strerror_native (errsv));
 }
 
 /*****************************************************************************/
@@ -1089,6 +1325,8 @@ __define_nmtst_static(02, 1024)
 __define_nmtst_static(03, 1024)
 #undef __define_nmtst_static
 
+#if defined (__NM_UTILS_H__) || defined (NM_UTILS_H)
+
 #define NMTST_UUID_INIT(uuid) \
 	gs_free char *_nmtst_hidden_##uuid = nm_utils_uuid_generate (); \
 	const char *const uuid = _nmtst_hidden_##uuid
@@ -1105,13 +1343,7 @@ nmtst_uuid_generate (void)
 	return u;
 }
 
-#define NMTST_SWAP(x,y) \
-	G_STMT_START { \
-		char __nmtst_swap_temp[sizeof(x) == sizeof(y) ? (signed) sizeof(x) : -1]; \
-		memcpy(__nmtst_swap_temp, &y, sizeof(x)); \
-		memcpy(&y,                &x, sizeof(x)); \
-		memcpy(&x, __nmtst_swap_temp, sizeof(x)); \
-	} G_STMT_END
+#endif
 
 #define nmtst_assert_str_has_substr(str, substr) \
 	G_STMT_START { \
@@ -1154,6 +1386,48 @@ nmtst_inet6_from_string (const char *str)
 	}
 
 	return &addr;
+}
+
+static inline gconstpointer
+nmtst_inet_from_string (int addr_family, const char *str)
+{
+	if (addr_family == AF_INET) {
+		static in_addr_t a;
+
+		a = nmtst_inet4_from_string (str);
+		return &a;
+	}
+	if (addr_family == AF_INET6)
+		return nmtst_inet6_from_string (str);
+
+	g_assert_not_reached ();
+	return NULL;
+}
+
+static inline const char *
+nmtst_inet_to_string (int addr_family, gconstpointer addr)
+{
+	static char buf[NM_CONST_MAX (INET6_ADDRSTRLEN, INET_ADDRSTRLEN)];
+
+	g_assert (NM_IN_SET (addr_family, AF_INET, AF_INET6));
+	g_assert (addr);
+
+	if (inet_ntop (addr_family, addr, buf, sizeof (buf)) != buf)
+		g_assert_not_reached ();
+
+	return buf;
+}
+
+static inline const char *
+nmtst_inet4_to_string (in_addr_t addr)
+{
+	return nmtst_inet_to_string (AF_INET, &addr);
+}
+
+static inline const char *
+nmtst_inet6_to_string (const struct in6_addr *addr)
+{
+	return nmtst_inet_to_string (AF_INET6, addr);
 }
 
 static inline void
@@ -1268,14 +1542,26 @@ nmtst_file_get_contents (const char *filename)
 	return contents;
 }
 
-#define nmtst_file_set_contents(filename, content) \
+#define nmtst_file_set_contents_size(filename, content, size) \
 	G_STMT_START { \
 		GError *_error = NULL; \
 		gboolean _success; \
+		const char *_content = (content); \
+		gssize _size = (size); \
 		\
-		_success = g_file_set_contents ((filename), (content), -1, &_error); \
+		g_assert (_content); \
+		\
+		if (_size < 0) { \
+			g_assert (_size == -1); \
+			_size = strlen (_content); \
+		} \
+		\
+		_success = g_file_set_contents ((filename), _content, _size, &_error); \
 		nmtst_assert_success (_success, _error); \
 	} G_STMT_END
+
+#define nmtst_file_set_contents(filename, content) \
+	nmtst_file_set_contents_size (filename, content, -1)
 
 /*****************************************************************************/
 
@@ -1289,7 +1575,7 @@ nmtst_file_unlink_if_exists (const char *name)
 	if (unlink (name) != 0) {
 		errsv = errno;
 		if (errsv != ENOENT)
-			g_error ("nmtst_file_unlink_if_exists(%s): failed with %s", name, strerror (errsv));
+			g_error ("nmtst_file_unlink_if_exists(%s): failed with %s", name, nm_strerror_native (errsv));
 	}
 }
 
@@ -1302,7 +1588,7 @@ nmtst_file_unlink (const char *name)
 
 	if (unlink (name) != 0) {
 		errsv = errno;
-		g_error ("nmtst_file_unlink(%s): failed with %s", name, strerror (errsv));
+		g_error ("nmtst_file_unlink(%s): failed with %s", name, nm_strerror_native (errsv));
 	}
 }
 
@@ -1384,9 +1670,9 @@ nmtst_setting_ip_config_add_address (NMSettingIPConfig *s_ip,
 
 	g_assert (s_ip);
 
-	if (nm_utils_ipaddr_valid (AF_INET, address))
+	if (nm_utils_ipaddr_is_valid (AF_INET, address))
 		family = AF_INET;
-	else if (nm_utils_ipaddr_valid (AF_INET6, address))
+	else if (nm_utils_ipaddr_is_valid (AF_INET6, address))
 		family = AF_INET6;
 	else
 		g_assert_not_reached ();
@@ -1409,9 +1695,9 @@ nmtst_setting_ip_config_add_route (NMSettingIPConfig *s_ip,
 
 	g_assert (s_ip);
 
-	if (nm_utils_ipaddr_valid (AF_INET, dest))
+	if (nm_utils_ipaddr_is_valid (AF_INET, dest))
 		family = AF_INET;
-	else if (nm_utils_ipaddr_valid (AF_INET6, dest))
+	else if (nm_utils_ipaddr_is_valid (AF_INET6, dest))
 		family = AF_INET6;
 	else
 		g_assert_not_reached ();
@@ -1517,7 +1803,11 @@ nmtst_create_minimal_connection (const char *id, const char *uuid, const char *t
 	con = nm_connection_new ();
 #endif
 
+	g_assert (con);
+
 	s_con = NM_SETTING_CONNECTION (nm_setting_connection_new ());
+
+	g_assert (s_con);
 
 	g_object_set (s_con,
 	              NM_SETTING_CONNECTION_ID, id,
@@ -1634,8 +1924,8 @@ nmtst_assert_connection_equals (NMConnection *a, gboolean normalize_a, NMConnect
 			gs_unref_keyfile GKeyFile *kf_a = NULL, *kf_b = NULL;
 			gs_free char *str_a = NULL, *str_b = NULL;
 
-			kf_a = nm_keyfile_write (a, NULL, NULL, NULL);
-			kf_b = nm_keyfile_write (b, NULL, NULL, NULL);
+			kf_a = nm_keyfile_write (a, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, NULL);
+			kf_b = nm_keyfile_write (b, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, NULL);
 
 			if (kf_a)
 				str_a = g_key_file_to_data (kf_a, NULL, NULL);
@@ -1853,6 +2143,69 @@ nmtst_assert_setting_verify_fails (NMSetting *setting,
 	g_clear_error (&error);
 }
 
+static inline void
+nmtst_assert_setting_is_equal (gconstpointer /* const NMSetting * */ a,
+                               gconstpointer /* const NMSetting * */ b,
+                               NMSettingCompareFlags flags)
+{
+	gs_unref_hashtable GHashTable *hash = NULL;
+	guint32 r = nmtst_get_rand_uint32 ();
+
+	g_assert (NM_IS_SETTING (a));
+	g_assert (NM_IS_SETTING (b));
+
+	if (NM_FLAGS_HAS (r, 0x4))
+		NM_SWAP (a, b);
+
+	g_assert (nm_setting_compare ((NMSetting *) a,
+	                              (NMSetting *) b,
+	                              flags));
+
+	if (NM_FLAGS_HAS (r, 0x8))
+		NM_SWAP (a, b);
+
+	g_assert (nm_setting_diff ((NMSetting *) a,
+	                           (NMSetting *) b,
+	                           flags,
+	                           NM_FLAGS_HAS (r, 0x1),
+	                           &hash));
+	g_assert (!hash);
+}
+#endif
+
+#ifdef __NM_SETTING_PRIVATE_H__
+static inline NMSetting *
+nmtst_assert_setting_dbus_new (GType gtype, GVariant *variant)
+{
+	NMSetting *setting;
+	gs_free_error GError *error = NULL;
+
+	g_assert (g_type_is_a (gtype, NM_TYPE_SETTING));
+	g_assert (gtype != NM_TYPE_SETTING);
+	g_assert (variant);
+	g_assert (g_variant_is_of_type (variant, NM_VARIANT_TYPE_SETTING));
+
+	setting = _nm_setting_new_from_dbus (gtype,
+	                                     variant,
+	                                     NULL,
+	                                     NM_SETTING_PARSE_FLAGS_STRICT,
+	                                     &error);
+	nmtst_assert_success (setting, error);
+	return setting;
+}
+
+static inline void
+nmtst_assert_setting_dbus_roundtrip (gconstpointer /* const NMSetting * */ setting)
+{
+	gs_unref_object NMSetting *setting2 = NULL;
+	gs_unref_variant GVariant *variant = NULL;
+
+	g_assert (NM_IS_SETTING (setting));
+
+	variant = _nm_setting_to_dbus ((NMSetting *) setting, NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
+	setting2 = nmtst_assert_setting_dbus_new (G_OBJECT_TYPE (setting), variant);
+	nmtst_assert_setting_is_equal (setting, setting2, NM_SETTING_COMPARE_FLAG_EXACT);
+}
 #endif
 
 #ifdef __NM_UTILS_H__
@@ -1895,8 +2248,8 @@ nmtst_assert_hwaddr_equals (gconstpointer hwaddr1, gssize hwaddr1_len, const cha
 static inline NMConnection *
 nmtst_create_connection_from_keyfile (const char *keyfile_str, const char *full_filename)
 {
-	GKeyFile *keyfile;
-	GError *error = NULL;
+	gs_unref_keyfile GKeyFile *keyfile = NULL;
+	gs_free_error GError *error = NULL;
 	gboolean success;
 	NMConnection *con;
 	gs_free char *filename = g_path_get_basename (full_filename);
@@ -1907,14 +2260,10 @@ nmtst_create_connection_from_keyfile (const char *keyfile_str, const char *full_
 
 	keyfile =  g_key_file_new ();
 	success = g_key_file_load_from_data (keyfile, keyfile_str, strlen (keyfile_str), G_KEY_FILE_NONE, &error);
-	g_assert_no_error (error);
-	g_assert (success);
+	nmtst_assert_success (success, error);
 
-	con = nm_keyfile_read (keyfile, base_dir, NULL, NULL, &error);
-	g_assert_no_error (error);
-	g_assert (NM_IS_CONNECTION (con));
-
-	g_key_file_unref (keyfile);
+	con = nm_keyfile_read (keyfile, base_dir, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+	nmtst_assert_success (NM_IS_CONNECTION (con), error);
 
 	nm_keyfile_read_ensure_id (con, filename);
 	nm_keyfile_read_ensure_uuid (con, full_filename);
@@ -1975,6 +2324,43 @@ _nmtst_variant_new_vardict (int dummy, ...)
 		g_assert (_str); \
 		g_assert_cmpstr (g_variant_get_string (_variant, &_l), ==, _str); \
 		g_assert_cmpint (_l, ==, strlen (_str)); \
+	} G_STMT_END
+
+#ifdef __NM_SHARED_UTILS_H__
+#define _nmtst_assert_variant_bytestring_cmp_str(_ptr, _ptr2, _len) \
+	G_STMT_START { \
+		if (memcmp (_ptr2, _ptr, _len) != 0) { \
+			gs_free char *_x1 = NULL; \
+			gs_free char *_x2 = NULL; \
+			const char *_xx1; \
+			const char *_xx2; \
+			\
+			_xx1 = nm_utils_buf_utf8safe_escape (_ptr, _len, NM_UTILS_STR_UTF8_SAFE_FLAG_ESCAPE_CTRL, &_x1); \
+			_xx2 = nm_utils_buf_utf8safe_escape (_ptr2, _len, NM_UTILS_STR_UTF8_SAFE_FLAG_ESCAPE_CTRL, &_x2); \
+			g_assert_cmpstr (_xx1, ==, _xx2); \
+			g_assert_not_reached (); \
+		} \
+	} G_STMT_END
+#else
+#define _nmtst_assert_variant_bytestring_cmp_str(_ptr, _ptr2, _len) G_STMT_START { } G_STMT_END
+#endif
+
+#define nmtst_assert_variant_bytestring(variant, ptr, len) \
+	G_STMT_START { \
+		GVariant *_variant = (variant); \
+		gconstpointer _ptr = (ptr); \
+		gconstpointer _ptr2; \
+		gsize _len = (len); \
+		gsize _len2; \
+		\
+		nmtst_assert_variant_is_of_type (_variant, G_VARIANT_TYPE_BYTESTRING); \
+		_ptr2 = g_variant_get_fixed_array (_variant, &_len2, 1); \
+		g_assert_cmpint (_len2, ==, _len); \
+		if (   _len != 0 \
+		    && _ptr) { \
+			_nmtst_assert_variant_bytestring_cmp_str(_ptr, _ptr2, _len); \
+			g_assert_cmpmem (_ptr2, _len2, _ptr, _len); \
+		} \
 	} G_STMT_END
 
 typedef enum {
@@ -2069,5 +2455,93 @@ typedef enum {
 	} G_STMT_END
 
 #endif /* __NM_CONNECTION_H__ */
+
+static inline GVariant *
+nmtst_variant_from_string (const GVariantType *variant_type,
+                           const char *variant_str)
+{
+	GVariant *variant;
+	GError *error = NULL;
+
+	g_assert (variant_type);
+	g_assert (variant_str);
+
+	variant = g_variant_parse (variant_type,
+	                           variant_str,
+	                           NULL,
+	                           NULL,
+	                           &error);
+	nmtst_assert_success (variant, error);
+	return variant;
+}
+
+/*****************************************************************************/
+
+static inline void
+nmtst_keyfile_assert_data (GKeyFile *kf, const char *data, gssize data_len)
+{
+	gs_unref_keyfile GKeyFile *kf2 = NULL;
+	gs_free_error GError *error = NULL;
+	gs_free char *d1 = NULL;
+	gs_free char *d2 = NULL;
+	gboolean success;
+	gsize d1_len;
+	gsize d2_len;
+
+	g_assert (kf);
+	g_assert (data || data_len == 0);
+	g_assert (data_len >= -1);
+
+	d1 = g_key_file_to_data (kf, &d1_len, &error);
+	nmtst_assert_success (d1, error);
+
+	if (data_len == -1) {
+		g_assert_cmpint (strlen (d1), ==, d1_len);
+		data_len = strlen (data);
+		g_assert_cmpstr (d1, ==, data);
+	}
+
+	g_assert_cmpmem (d1, d1_len, data, (gsize) data_len);
+
+	/* also check that we can re-generate the same keyfile from the data. */
+
+	kf2 = g_key_file_new ();
+	success = g_key_file_load_from_data (kf2,
+	                                     d1,
+	                                     d1_len,
+	                                     G_KEY_FILE_NONE,
+	                                     &error);
+	nmtst_assert_success (success, error);
+
+	d2 = g_key_file_to_data (kf2, &d2_len, &error);
+	nmtst_assert_success (d2, error);
+
+	g_assert_cmpmem (d2, d2_len, d1, d1_len);
+}
+
+static inline gssize
+nmtst_keyfile_get_num_keys (GKeyFile *keyfile,
+                            const char *group_name)
+{
+	gs_strfreev char **keys = NULL;
+	gs_free_error GError *error = NULL;
+	gsize l;
+
+	g_assert (keyfile);
+	g_assert (group_name);
+
+	if (!g_key_file_has_group (keyfile, group_name))
+		return -1;
+
+	keys = g_key_file_get_keys (keyfile, group_name, &l, &error);
+
+	nmtst_assert_success (keys, error);
+
+	g_assert_cmpint (NM_PTRARRAY_LEN (keys), ==, l);
+
+	return l;
+}
+
+/*****************************************************************************/
 
 #endif /* __NM_TEST_UTILS_H__ */

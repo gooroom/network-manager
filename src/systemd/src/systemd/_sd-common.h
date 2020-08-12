@@ -23,24 +23,38 @@
 #  error "Do not include _sd-common.h directly; it is a private header."
 #endif
 
+typedef void (*_sd_destroy_t)(void *userdata);
+
 #ifndef _sd_printf_
 #  if __GNUC__ >= 4
-#    define _sd_printf_(a,b) __attribute__ ((format (printf, a, b)))
+#    define _sd_printf_(a,b) __attribute__((__format__(printf, a, b)))
 #  else
 #    define _sd_printf_(a,b)
 #  endif
 #endif
 
 #ifndef _sd_sentinel_
-#  define _sd_sentinel_ __attribute__((sentinel))
+#  define _sd_sentinel_ __attribute__((__sentinel__))
 #endif
 
 #ifndef _sd_packed_
-#  define _sd_packed_ __attribute__((packed))
+#  define _sd_packed_ __attribute__((__packed__))
 #endif
 
 #ifndef _sd_pure_
-#  define _sd_pure_ __attribute__((pure))
+#  define _sd_pure_ __attribute__((__pure__))
+#endif
+
+/* Note that strictly speaking __deprecated__ has been available before GCC 6. However, starting with GCC 6
+ * it also works on enum values, which we are interested in. Since this is a developer-facing feature anyway
+ * (as opposed to build engineer-facing), let's hence conditionalize this to gcc 6, given that the developers
+ * are probably going to use something newer anyway. */
+#ifndef _sd_deprecated_
+#  if __GNUC__ >= 6
+#    define _sd_deprecated_ __attribute__((__deprecated__))
+#  else
+#    define _sd_deprecated_
+#  endif
 #endif
 
 #ifndef _SD_STRINGIFY
@@ -67,6 +81,14 @@
 #  else
 #    define _SD_END_DECLARATIONS                                \
         struct _sd_useless_struct_to_allow_trailing_semicolon_
+#  endif
+#endif
+
+#ifndef _SD_ARRAY_STATIC
+#  if __STDC_VERSION__ >= 199901L
+#    define _SD_ARRAY_STATIC static
+#  else
+#    define _SD_ARRAY_STATIC
 #  endif
 #endif
 

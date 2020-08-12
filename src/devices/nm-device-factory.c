@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2014 - 2018 Red Hat, Inc.
  */
 
@@ -24,8 +9,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <errno.h>
-#include <string.h>
 #include <gmodule.h>
 
 #include "platform/nm-platform.h"
@@ -39,7 +22,6 @@
 
 enum {
 	DEVICE_ADDED,
-	COMPONENT_ADDED,
 	LAST_SIGNAL
 };
 
@@ -48,17 +30,6 @@ static guint signals[LAST_SIGNAL] = { 0 };
 G_DEFINE_ABSTRACT_TYPE (NMDeviceFactory, nm_device_factory, G_TYPE_OBJECT)
 
 /*****************************************************************************/
-
-gboolean
-nm_device_factory_emit_component_added (NMDeviceFactory *factory, GObject *component)
-{
-	gboolean consumed = FALSE;
-
-	g_return_val_if_fail (NM_IS_DEVICE_FACTORY (factory), FALSE);
-
-	g_signal_emit (factory, signals[COMPONENT_ADDED], 0, component, &consumed);
-	return consumed;
-}
 
 static void
 nm_device_factory_get_supported_types (NMDeviceFactory *factory,
@@ -172,14 +143,6 @@ nm_device_factory_get_connection_iface (NMDeviceFactory *factory,
 		return NULL;
 	}
 
-	if (!nm_utils_is_valid_iface_name (ifname, error)) {
-		g_prefix_error (error,
-		                "failed to determine interface name: name \"%s\" is invalid",
-		                ifname);
-		g_free (ifname);
-		return NULL;
-	}
-
 	return ifname;
 }
 
@@ -198,16 +161,8 @@ nm_device_factory_class_init (NMDeviceFactoryClass *klass)
 	signals[DEVICE_ADDED] = g_signal_new (NM_DEVICE_FACTORY_DEVICE_ADDED,
 	                                      G_OBJECT_CLASS_TYPE (object_class),
 	                                      G_SIGNAL_RUN_FIRST,
-	                                      G_STRUCT_OFFSET (NMDeviceFactoryClass, device_added),
-	                                      NULL, NULL, NULL,
+	                                      0, NULL, NULL, NULL,
 	                                      G_TYPE_NONE, 1, NM_TYPE_DEVICE);
-
-	signals[COMPONENT_ADDED] = g_signal_new (NM_DEVICE_FACTORY_COMPONENT_ADDED,
-	                                         G_OBJECT_CLASS_TYPE (object_class),
-	                                         G_SIGNAL_RUN_LAST,
-	                                         G_STRUCT_OFFSET (NMDeviceFactoryClass, component_added),
-	                                         g_signal_accumulator_true_handled, NULL, NULL,
-	                                         G_TYPE_BOOLEAN, 1, G_TYPE_OBJECT);
 }
 
 /*****************************************************************************/
@@ -218,8 +173,8 @@ static GHashTable *factories_by_setting = NULL;
 static void __attribute__((destructor))
 _cleanup (void)
 {
-	g_clear_pointer (&factories_by_link, g_hash_table_unref);
-	g_clear_pointer (&factories_by_setting, g_hash_table_unref);
+	nm_clear_pointer (&factories_by_link, g_hash_table_unref);
+	nm_clear_pointer (&factories_by_setting, g_hash_table_unref);
 }
 
 NMDeviceFactory *
@@ -430,6 +385,7 @@ nm_device_factory_manager_load_factories (NMDeviceFactoryManagerFactoryFunc call
 	_ADD_INTERNAL (nm_tun_device_factory_get_type);
 	_ADD_INTERNAL (nm_veth_device_factory_get_type);
 	_ADD_INTERNAL (nm_vlan_device_factory_get_type);
+	_ADD_INTERNAL (nm_vrf_device_factory_get_type);
 	_ADD_INTERNAL (nm_vxlan_device_factory_get_type);
 	_ADD_INTERNAL (nm_wireguard_device_factory_get_type);
 	_ADD_INTERNAL (nm_wpan_device_factory_get_type);

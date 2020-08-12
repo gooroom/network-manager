@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2013 - 2015 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2013 - 2015 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -23,7 +8,6 @@
 #include "nm-device-tun.h"
 
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 #include <linux/if_tun.h>
 
@@ -64,7 +48,7 @@ struct _NMDeviceTunClass {
 
 G_DEFINE_TYPE (NMDeviceTun, nm_device_tun, NM_TYPE_DEVICE)
 
-#define NM_DEVICE_TUN_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDeviceTun, NM_IS_DEVICE_TUN)
+#define NM_DEVICE_TUN_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDeviceTun, NM_IS_DEVICE_TUN, NMDevice)
 
 /*****************************************************************************/
 
@@ -157,6 +141,7 @@ complete_connection (NMDevice *device,
 	                           NULL,
 	                           _("TUN connection"),
 	                           NULL,
+	                           NULL,
 	                           TRUE);
 
 	s_tun = nm_connection_get_setting_tun (connection);
@@ -231,9 +216,10 @@ create_and_realize (NMDevice *device,
 {
 	const char *iface = nm_device_get_iface (device);
 	NMPlatformLnkTun props = { };
-	NMPlatformError plerr;
 	NMSettingTun *s_tun;
-	gint64 owner, group;
+	gint64 owner;
+	gint64 group;
+	int r;
 
 	s_tun = nm_connection_get_setting_tun (connection);
 	g_return_val_if_fail (s_tun, FALSE);
@@ -261,17 +247,17 @@ create_and_realize (NMDevice *device,
 	props.multi_queue = nm_setting_tun_get_multi_queue (s_tun);
 	props.persist = TRUE;
 
-	plerr = nm_platform_link_tun_add (nm_device_get_platform (device),
-	                                  iface,
-	                                  &props,
-	                                  out_plink,
-	                                  NULL);
-	if (plerr != NM_PLATFORM_ERROR_SUCCESS) {
+	r = nm_platform_link_tun_add (nm_device_get_platform (device),
+	                              iface,
+	                              &props,
+	                              out_plink,
+	                              NULL);
+	if (r < 0) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
 		             "Failed to create TUN/TAP interface '%s' for '%s': %s",
 		             iface,
 		             nm_connection_get_id (connection),
-		             nm_platform_error_to_string_a (plerr));
+		             nm_strerror (r));
 		return FALSE;
 	}
 
@@ -351,18 +337,17 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 {
 	NMDeviceTun *self = NM_DEVICE_TUN (device);
 	NMDeviceTunPrivate *priv = NM_DEVICE_TUN_GET_PRIVATE (self);
-	NMActStageReturn ret;
 
-	ret = NM_DEVICE_CLASS (nm_device_tun_parent_class)->act_stage1_prepare (device, out_failure_reason);
-	if (ret != NM_ACT_STAGE_RETURN_SUCCESS)
-		return ret;
-
-	/* Nothing to do for TUN devices */
-	if (priv->props.type == IFF_TUN)
-		return NM_ACT_STAGE_RETURN_SUCCESS;
-
-	if (!nm_device_hw_addr_set_cloned (device, nm_device_get_applied_connection (device), FALSE))
-		return NM_ACT_STAGE_RETURN_FAILURE;
+	if (priv->props.type == IFF_TUN) {
+		/* Nothing to do for TUN devices */
+	} else {
+		if (!nm_device_hw_addr_set_cloned (device,
+		                                   nm_device_get_applied_connection (device),
+		                                   FALSE)) {
+			*out_failure_reason = NM_DEVICE_STATE_REASON_CONFIG_FAILED;
+			return NM_ACT_STAGE_RETURN_FAILURE;
+		}
+	}
 
 	return NM_ACT_STAGE_RETURN_SUCCESS;
 }

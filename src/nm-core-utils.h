@@ -1,22 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2004 - 2016 Red Hat, Inc.
- * Copyright 2005 - 2008 Novell, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2004 - 2016 Red Hat, Inc.
+ * Copyright (C) 2005 - 2008 Novell, Inc.
  */
 
 #ifndef __NM_CORE_UTILS_H__
@@ -26,6 +11,8 @@
 #include <arpa/inet.h>
 
 #include "nm-connection.h"
+
+#include "nm-glib-aux/nm-time-utils.h"
 
 /*****************************************************************************/
 
@@ -40,7 +27,9 @@ static void \
 _singleton_instance_weak_ref_cb (gpointer data, \
                                  GObject *where_the_object_was) \
 { \
-	nm_log_dbg (LOGD_CORE, "disposing %s singleton (%p)", G_STRINGIFY (TYPE), singleton_instance); \
+	nm_log_dbg (LOGD_CORE, "disposing %s singleton ("NM_HASH_OBFUSCATE_PTR_FMT")", \
+	            G_STRINGIFY (TYPE), \
+	            NM_HASH_OBFUSCATE_PTR (singleton_instance)); \
 	singleton_instance = NULL; \
 } \
 static inline void \
@@ -71,7 +60,9 @@ GETTER (void) \
 		singleton_instance = (g_object_new (GTYPE, ##__VA_ARGS__, NULL)); \
 		g_assert (singleton_instance); \
 		nm_singleton_instance_register (); \
-		nm_log_dbg (LOGD_CORE, "create %s singleton (%p)", G_STRINGIFY (TYPE), singleton_instance); \
+		nm_log_dbg (LOGD_CORE, "create %s singleton ("NM_HASH_OBFUSCATE_PTR_FMT")", \
+		            G_STRINGIFY (TYPE), \
+		            NM_HASH_OBFUSCATE_PTR (singleton_instance)); \
 	} \
 	return singleton_instance; \
 } \
@@ -165,8 +156,13 @@ double nm_utils_exp10 (gint16 e);
  * nm_utils_ip6_route_metric_normalize:
  * @metric: the route metric
  *
- * For IPv6 route, kernel treats the value 0 as IP6_RT_PRIO_USER (1024).
- * Thus, when comparing metric (values), we want to treat zero as NM_PLATFORM_ROUTE_METRIC_DEFAULT_IP6.
+ * For IPv6 route, when adding a route via netlink, kernel treats the value 0 as IP6_RT_PRIO_USER (1024).
+ * So, user space cannot add routes with such a metric, and 0 gets "normalized"
+ * to NM_PLATFORM_ROUTE_METRIC_DEFAULT_IP6.
+ *
+ * Note that kernel itself can add IPv6 routes with metric zero. Also, you can delete
+ * them, but mostly because with `ip -6 route delete ... metric 0` the 0 acts as a wildcard
+ * and kills the first matching route.
  *
  * Returns: @metric, if @metric is not zero, otherwise 1024.
  */
@@ -183,9 +179,8 @@ nm_utils_ip_route_metric_normalize (int addr_family, guint32 metric)
 }
 
 static inline guint32
-nm_utils_ip_route_metric_penalize (int addr_family, guint32 metric, guint32 penalty)
+nm_utils_ip_route_metric_penalize (guint32 metric, guint32 penalty)
 {
-	metric = nm_utils_ip_route_metric_normalize (addr_family, metric);
 	if (metric < G_MAXUINT32 - penalty)
 		return metric + penalty;
 	return G_MAXUINT32;
@@ -211,6 +206,10 @@ const char *nm_utils_find_helper (const char *progname,
 
 char *nm_utils_read_link_absolute (const char *link_file, GError **error);
 
+#define NM_MATCH_SPEC_MAC_TAG                    "mac:"
+#define NM_MATCH_SPEC_S390_SUBCHANNELS_TAG       "s390-subchannels:"
+#define NM_MATCH_SPEC_INTERFACE_NAME_TAG         "interface-name:"
+
 typedef enum {
 	NM_MATCH_SPEC_NO_MATCH  = 0,
 	NM_MATCH_SPEC_MATCH     = 1,
@@ -235,10 +234,12 @@ gboolean nm_wildcard_match_check (const char *str,
                                   const char *const *patterns,
                                   guint num_patterns);
 
-/*****************************************************************************/
+gboolean nm_utils_kernel_cmdline_match_check (const char *const*proc_cmdline,
+                                              const char *const*patterns,
+                                              guint num_patterns,
+                                              GError **error);
 
-const char *nm_utils_get_ip_config_method (NMConnection *connection,
-                                           GType         ip_setting_type);
+/*****************************************************************************/
 
 gboolean nm_utils_connection_has_default_route (NMConnection *connection,
                                                 int addr_family,
@@ -255,19 +256,6 @@ void nm_utils_log_connection_diff (NMConnection *connection,
                                    const char *name,
                                    const char *prefix,
                                    const char *dbus_path);
-
-gint64 nm_utils_get_monotonic_timestamp_ns (void);
-gint64 nm_utils_get_monotonic_timestamp_us (void);
-gint64 nm_utils_get_monotonic_timestamp_ms (void);
-gint32 nm_utils_get_monotonic_timestamp_s (void);
-gint64 nm_utils_monotonic_timestamp_as_boottime (gint64 timestamp, gint64 timestamp_ticks_per_ns);
-
-static inline gint64
-nm_utils_get_monotonic_timestamp_ns_cached (gint64 *cache_now)
-{
-	return    (*cache_now)
-	       ?: (*cache_now = nm_utils_get_monotonic_timestamp_ns ());
-}
 
 gboolean    nm_utils_is_valid_path_component (const char *name);
 const char *NM_ASSERT_VALID_PATH_COMPONENT (const char *name);
@@ -288,6 +276,8 @@ gboolean nm_utils_machine_id_is_fake (void);
 
 const char *nm_utils_boot_id_str (void);
 const struct _NMUuid *nm_utils_boot_id_bin (void);
+const char *nm_utils_proc_cmdline (void);
+const char *const*nm_utils_proc_cmdline_split (void);
 
 gboolean nm_utils_host_id_get (const guint8 **out_host_id,
                                gsize *out_host_id_len);
@@ -337,7 +327,7 @@ gboolean nm_utils_ipv6_interface_identifier_get_from_token (NMUtilsIPv6IfaceId *
                                                            const char *token);
 
 const char *nm_utils_inet6_interface_identifier_to_token (NMUtilsIPv6IfaceId iid,
-                                                         char *buf);
+                                                          char buf[static INET6_ADDRSTRLEN]);
 
 gboolean nm_utils_get_ipv6_interface_identifier (NMLinkType link_type,
                                                  const guint8 *hwaddr,
@@ -405,14 +395,15 @@ GBytes *nm_utils_dhcp_client_id_mac (int arp_type,
                                      const guint8 *hwaddr,
                                      gsize hwaddr_len);
 
-GBytes *nm_utils_dhcp_client_id_systemd_node_specific_full (gboolean legacy_unstable_byteorder,
-                                                            const guint8 *interface_id,
-                                                            gsize interface_id_len,
+guint32 nm_utils_create_dhcp_iaid (gboolean legacy_unstable_byteorder,
+                                   const guint8 *interface_id,
+                                   gsize interface_id_len);
+
+GBytes *nm_utils_dhcp_client_id_systemd_node_specific_full (guint32 iaid,
                                                             const guint8 *machine_id,
                                                             gsize machine_id_len);
 
-GBytes *nm_utils_dhcp_client_id_systemd_node_specific (gboolean legacy_unstable_byteorder,
-                                                       const char *ifname);
+GBytes *nm_utils_dhcp_client_id_systemd_node_specific (guint32 iaid);
 
 /*****************************************************************************/
 
@@ -441,10 +432,6 @@ NMUtilsTestFlags nm_utils_get_testing (void);
 void _nm_utils_set_testing (NMUtilsTestFlags flags);
 
 void nm_utils_g_value_set_strv (GValue *value, GPtrArray *strings);
-
-guint nm_utils_parse_debug_string (const char *string,
-                                   const GDebugKey *keys,
-                                   guint nkeys);
 
 void nm_utils_ifname_cpy (char *dst, const char *name);
 
@@ -494,5 +481,23 @@ const char *nm_activation_type_to_string (NMActivationType activation_type);
 /*****************************************************************************/
 
 const char *nm_utils_parse_dns_domain (const char *domain, gboolean *is_routing);
+
+/*****************************************************************************/
+
+void nm_wifi_utils_parse_ies (const guint8 *bytes,
+                              gsize len,
+                              guint32 *out_max_rate,
+                              gboolean *out_metered,
+                              gboolean *out_owe_transition_mode);
+
+guint8 nm_wifi_utils_level_to_quality (int val);
+
+/*****************************************************************************/
+
+#define NM_VPN_ROUTE_METRIC_DEFAULT     50
+
+#define NM_UTILS_ERROR_MSG_REQ_AUTH_FAILED   "Unable to authenticate the request"
+#define NM_UTILS_ERROR_MSG_REQ_UID_UKNOWN    "Unable to determine UID of the request"
+#define NM_UTILS_ERROR_MSG_INSUFF_PRIV       "Insufficient privileges"
 
 #endif /* __NM_CORE_UTILS_H__ */

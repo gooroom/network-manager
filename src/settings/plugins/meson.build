@@ -1,6 +1,4 @@
-if enable_ibft
-  subdir('ibft')
-endif
+# SPDX-License-Identifier: LGPL-2.1+
 
 if enable_ifcfg_rh
   subdir('ifcfg-rh')

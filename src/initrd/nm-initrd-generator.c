@@ -1,29 +1,14 @@
-/* NetworkManager initrd configuration generator
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: LGPL-2.1+
+/*
  * Copyright (C) 2018 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 #include "nm-core-utils.h"
 #include "nm-core-internal.h"
-#include "nm-keyfile-internal.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
 #include "nm-initrd-generator.h"
-#include "nm-utils/nm-io-utils.h"
+#include "nm-glib-aux/nm-io-utils.h"
 
 /*****************************************************************************/
 
@@ -40,67 +25,71 @@ output_conn (gpointer key, gpointer value, gpointer user_data)
 	const char *basename = key;
 	NMConnection *connection = value;
 	char *connections_dir = user_data;
-	GKeyFile *file;
+	gs_unref_keyfile GKeyFile *file = NULL;
 	gs_free char *data = NULL;
-	GError *error = NULL;
+	gs_free_error GError *error = NULL;
 	gsize len;
 
-	if (!nm_connection_normalize (connection, NULL, NULL, &error)) {
-		g_print ("%s\n", error->message);
-		g_error_free (error);
-		return;
-	}
+	if (!nm_connection_normalize (connection, NULL, NULL, &error))
+		goto err_out;
 
-	file = nm_keyfile_write (connection, NULL, NULL, &error);
-	if (file == NULL) {
-		g_print ("%s\n", error->message);
-		g_error_free (error);
-		return;
-	}
+	file = nm_keyfile_write (connection, NM_KEYFILE_HANDLER_FLAGS_NONE, NULL, NULL, &error);
+	if (file == NULL)
+		goto err_out;
 
 	data = g_key_file_to_data (file, &len, &error);
-	if (!data) {
-		g_print ("%s\n", error->message);
-		g_error_free (error);
-	} else if (connections_dir) {
-		gs_free char *basename_w_ext = g_strconcat (basename, ".nmconnection", NULL);
-		char *filename = g_build_filename (connections_dir, basename_w_ext, NULL);
+	if (!data)
+		goto err_out;
 
-		if (!nm_utils_file_set_contents (filename, data, len, 0600, &error)) {
-			g_print ("%s\n", error->message);
-			g_error_free (error);
-		}
-		g_free (filename);
-	} else {
-		g_print ("\n*** Connection '%s' ***\n\n%s\n", basename, data);
-	}
+	if (connections_dir) {
+		gs_free char *filename = NULL;
+		gs_free char *full_filename = NULL;
 
-	g_key_file_free (file);
+		filename = nm_keyfile_utils_create_filename (basename, TRUE);
+		full_filename = g_build_filename (connections_dir, filename, NULL);
+
+		if (!nm_utils_file_set_contents (full_filename,
+		                                 data,
+		                                 len,
+		                                 0600,
+		                                 NULL,
+		                                 &error))
+			goto err_out;
+	} else
+		g_print ("\n*** Connection '%s' ***\n\n%s", basename, data);
+
+	return;
+err_out:
+	g_print ("%s\n", error->message);
 }
 
-#define DEFAULT_CONNECTIONS_DIR  NMRUNDIR "/system-connections"
 #define DEFAULT_SYSFS_DIR        "/sys"
+#define DEFAULT_INITRD_DATA_DIR  NMRUNDIR "/initrd"
 
 int
 main (int argc, char *argv[])
 {
 	GHashTable *connections;
 	gs_free char *connections_dir = NULL;
+	gs_free char *initrd_dir = NULL;
 	gs_free char *sysfs_dir = NULL;
 	gboolean dump_to_stdout = FALSE;
 	gs_strfreev char **remaining = NULL;
 	GOptionEntry option_entries[] = {
-		{ "connections-dir", 'c', 0, G_OPTION_ARG_FILENAME, &connections_dir, "Output connection directory", DEFAULT_CONNECTIONS_DIR },
-		{ "sysfs-dir", 'd', 0, G_OPTION_ARG_FILENAME, &sysfs_dir, "The sysfs mount point", DEFAULT_SYSFS_DIR },
-		{ "stdout", 's', 0, G_OPTION_ARG_NONE, &dump_to_stdout, "Dump connections to standard output", NULL },
-		{ G_OPTION_REMAINING, '\0', 0, G_OPTION_ARG_STRING_ARRAY, &remaining, NULL, NULL },
+		{ "connections-dir",  'c',  0, G_OPTION_ARG_FILENAME,     &connections_dir, "Output connection directory",         NM_KEYFILE_PATH_NAME_RUN },
+		{ "initrd-data-dir",  'i',  0, G_OPTION_ARG_FILENAME,     &initrd_dir,      "Output initrd data directory",        DEFAULT_INITRD_DATA_DIR },
+		{ "sysfs-dir",        'd',  0, G_OPTION_ARG_FILENAME,     &sysfs_dir,       "The sysfs mount point",               DEFAULT_SYSFS_DIR },
+		{ "stdout",           's',  0, G_OPTION_ARG_NONE,         &dump_to_stdout,  "Dump connections to standard output", NULL },
+		{ G_OPTION_REMAINING, '\0', 0, G_OPTION_ARG_STRING_ARRAY, &remaining,       NULL,                                  NULL },
 		{ NULL }
 	};
 	GOptionContext *option_context;
-	GError *error = NULL;
+	gs_free_error GError *error = NULL;
+	gs_free char *hostname = NULL;
+	int errsv;
 
 	option_context = g_option_context_new ("-- [ip=...] [rd.route=...] [bridge=...] [bond=...] [team=...] [vlan=...] "
-	                                       "[bootdev=...] [nameserver=...] [rd.peerdns=...] [rd.bootif=...] [BOOTIF=...] ... ");
+	                                       "[bootdev=...] [nameserver=...] [rd.peerdns=...] [rd.bootif=...] [BOOTIF=...] [rd.znet=...] ... ");
 
 	g_option_context_set_summary (option_context, "Generate early NetworkManager configuration.");
 	g_option_context_set_description (option_context,
@@ -110,7 +99,7 @@ main (int argc, char *argv[])
 	g_option_context_add_main_entries (option_context, option_entries, GETTEXT_PACKAGE);
 
 	if (!g_option_context_parse (option_context, &argc, &argv, &error)) {
-		_LOGW (LOGD_CORE, "%s\n", error->message);
+		_LOGW (LOGD_CORE, "%s", error->message);
 		return 1;
 	}
 
@@ -120,20 +109,50 @@ main (int argc, char *argv[])
 	}
 
 	if (!connections_dir)
-		connections_dir = g_strdup (DEFAULT_CONNECTIONS_DIR);
+		connections_dir = g_strdup (NM_KEYFILE_PATH_NAME_RUN);
 	if (!sysfs_dir)
 		sysfs_dir = g_strdup (DEFAULT_SYSFS_DIR);
+	if (!initrd_dir)
+		initrd_dir = g_strdup (DEFAULT_INITRD_DATA_DIR);
 	if (dump_to_stdout)
-		g_clear_pointer (&connections_dir, g_free);
+		nm_clear_g_free (&connections_dir);
 
 	if (connections_dir && g_mkdir_with_parents (connections_dir, 0755) != 0) {
-		_LOGW (LOGD_CORE, "%s: %s\n", connections_dir, strerror (errno));
+		errsv = errno;
+		_LOGW (LOGD_CORE, "%s: %s", connections_dir, nm_strerror_native (errsv));
 		return 1;
 	}
 
-	connections = nmi_cmdline_reader_parse (sysfs_dir, remaining);
+	connections = nmi_cmdline_reader_parse (sysfs_dir,
+	                                        (const char *const*) remaining,
+	                                        &hostname);
+
 	g_hash_table_foreach (connections, output_conn, connections_dir);
 	g_hash_table_destroy (connections);
+
+	if (dump_to_stdout) {
+		if (hostname)
+			g_print ("\n*** Hostname '%s' ***\n", hostname);
+	} else {
+		if (g_mkdir_with_parents (initrd_dir, 0755) != 0) {
+			errsv = errno;
+			_LOGW (LOGD_CORE, "%s: %s", initrd_dir, nm_strerror_native (errsv));
+			return 1;
+		}
+
+		if (hostname) {
+			gs_free char *hostname_file = NULL;
+			gs_free char *data = NULL;
+
+			hostname_file = g_strdup_printf ("%s/hostname", initrd_dir);
+			data = g_strdup_printf ("%s\n", hostname);
+
+			if (!g_file_set_contents (hostname_file, data, strlen (data), &error)) {
+				_LOGW (LOGD_CORE, "%s: %s", hostname_file, error->message);
+				return 1;
+			}
+		}
+	}
 
 	return 0;
 }

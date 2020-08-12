@@ -1,26 +1,12 @@
-/* nmcli - command-line tool to control NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2018 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2010 - 2018 Red Hat, Inc.
  */
 
 #ifndef NMC_NMCLI_H
 #define NMC_NMCLI_H
 
-#include "nm-secret-agent-old.h"
+#include "nm-secret-agent-simple.h"
 #include "nm-meta-setting-desc.h"
 
 struct _NMPolkitListener;
@@ -115,6 +101,10 @@ typedef struct _NmcConfig {
 	const char *palette[_NM_META_COLOR_NUM];          /* Color palette */
 } NmcConfig;
 
+typedef struct {
+	pid_t pid;
+} NmcPagerData;
+
 typedef struct _NmcOutputData {
 	GPtrArray *output_data;                           /* GPtrArray of arrays of NmcOutputField structs - accumulates data for output */
 } NmcOutputData;
@@ -125,11 +115,12 @@ typedef struct _NmCli {
 
 	NMCResultCode return_value;                       /* Return code of nmcli */
 	GString *return_text;                             /* Reason text */
-	pid_t pager_pid;                                  /* PID of a pager, if one was spawned */
+
+	NmcPagerData pager_data;
 
 	int timeout;                                      /* Operation timeout */
 
-	NMSecretAgentOld *secret_agent;                   /* Secret agent */
+	NMSecretAgentSimple *secret_agent;                /* Secret agent */
 	GHashTable *pwds_hash;                            /* Hash table with passwords in passwd-file */
 	struct _NMPolkitListener *pk_listener;            /* polkit agent listener */
 
@@ -149,12 +140,7 @@ typedef struct _NmCli {
 	char *palette_buffer;                             /* Buffer with sequences for terminal-colors.d(5)-based coloring. */
 } NmCli;
 
-#define NMC_RETURN(nmc, rvalue) \
-	G_STMT_START { \
-		return ((nmc)->return_value = (rvalue)); \
-	} G_STMT_END
-
-extern NmCli nm_cli;
+extern const NmCli *const nm_cli_global_readline;
 
 /* Error quark for GError domain */
 #define NMCLI_ERROR (nmcli_error_quark ())
@@ -167,6 +153,9 @@ void     nmc_clear_sigint (void);
 void     nmc_set_sigquit_internal (void);
 void     nmc_exit (void);
 
+void nm_cli_spawn_pager (const NmcConfig *nmc_config,
+                         NmcPagerData *pager_data);
+
 void nmc_empty_output_fields (NmcOutputData *output_data);
 
 #define NMC_OUTPUT_DATA_DEFINE_SCOPED(out) \
@@ -174,5 +163,28 @@ void nmc_empty_output_fields (NmcOutputData *output_data);
 	nm_auto (nmc_empty_output_fields) NmcOutputData out = { \
 		.output_data = g_ptr_array_new_full (20, g_free), \
 	}
+
+/*****************************************************************************/
+
+struct _NMCCommand;
+
+typedef struct _NMCCommand {
+	const char *cmd;
+	void (*func) (const struct _NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+	void (*usage) (void);
+	bool needs_client;
+	bool needs_nm_running;
+} NMCCommand;
+
+void nmc_command_func_agent      (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_general    (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_networking (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_radio      (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_monitor    (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_overview   (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_connection (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+void nmc_command_func_device     (const NMCCommand *cmd, NmCli *nmc, int argc, const char *const*argv);
+
+/*****************************************************************************/
 
 #endif /* NMC_NMCLI_H */

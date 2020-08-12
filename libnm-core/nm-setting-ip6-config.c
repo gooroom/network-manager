@@ -1,29 +1,12 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2007 - 2014 Red Hat, Inc.
+ * Copyright (C) 2007 - 2014 Red Hat, Inc.
  */
 
 #include "nm-default.h"
 
 #include "nm-setting-ip6-config.h"
 
-#include <string.h>
 #include <arpa/inet.h>
 
 #include "nm-setting-private.h"
@@ -40,7 +23,7 @@
  * #NMSettingIP6Config has few properties or methods of its own; it inherits
  * almost everything from #NMSettingIPConfig.
  *
- * NetworkManager supports 6 values for the #NMSettingIPConfig:method property
+ * NetworkManager supports 7 values for the #NMSettingIPConfig:method property
  * for IPv6.  If "auto" is specified then the appropriate automatic method (PPP,
  * router advertisement, etc) is used for the device and most other properties
  * can be left unset.  To force the use of DHCP only, specify "dhcp"; this
@@ -49,42 +32,33 @@
  * If "manual" is specified, static IP addressing is used and at least one IP
  * address must be given in the "addresses" property.  If "ignore" is specified,
  * IPv6 configuration is not done. Note: the "shared" method is not yet
- * supported.
+ * supported. If "disabled" is specified, IPv6 is disabled completely for the
+ * interface.
  **/
+
+/*****************************************************************************/
+
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
+	PROP_IP6_PRIVACY,
+	PROP_ADDR_GEN_MODE,
+	PROP_TOKEN,
+	PROP_DHCP_DUID,
+	PROP_RA_TIMEOUT,
+);
+
+typedef struct {
+	char *token;
+	char *dhcp_duid;
+	NMSettingIP6ConfigPrivacy ip6_privacy;
+	NMSettingIP6ConfigAddrGenMode addr_gen_mode;
+	gint32 ra_timeout;
+} NMSettingIP6ConfigPrivate;
 
 G_DEFINE_TYPE (NMSettingIP6Config, nm_setting_ip6_config, NM_TYPE_SETTING_IP_CONFIG)
 
 #define NM_SETTING_IP6_CONFIG_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_SETTING_IP6_CONFIG, NMSettingIP6ConfigPrivate))
 
-typedef struct {
-	NMSettingIP6ConfigPrivacy ip6_privacy;
-	NMSettingIP6ConfigAddrGenMode addr_gen_mode;
-	char *token;
-	char *dhcp_duid;
-} NMSettingIP6ConfigPrivate;
-
-enum {
-	PROP_0,
-	PROP_IP6_PRIVACY,
-	PROP_ADDR_GEN_MODE,
-	PROP_TOKEN,
-	PROP_DHCP_DUID,
-
-	LAST_PROP
-};
-
-/**
- * nm_setting_ip6_config_new:
- *
- * Creates a new #NMSettingIP6Config object with default values.
- *
- * Returns: (transfer full): the new empty #NMSettingIP6Config object
- **/
-NMSetting *
-nm_setting_ip6_config_new (void)
-{
-	return (NMSetting *) g_object_new (NM_TYPE_SETTING_IP6_CONFIG, NULL);
-}
+/*****************************************************************************/
 
 /**
  * nm_setting_ip6_config_get_ip6_privacy:
@@ -162,6 +136,23 @@ nm_setting_ip6_config_get_dhcp_duid (NMSettingIP6Config *setting)
 	return NM_SETTING_IP6_CONFIG_GET_PRIVATE (setting)->dhcp_duid;
 }
 
+/**
+ * nm_setting_ip6_config_get_ra_timeout:
+ * @setting: the #NMSettingIP6Config
+ *
+ * Returns: The configured %NM_SETTING_IP6_CONFIG_RA_TIMEOUT value with the
+ * timeout for router advertisements in seconds.
+ *
+ * Since: 1.24
+ **/
+gint32
+nm_setting_ip6_config_get_ra_timeout (NMSettingIP6Config *setting)
+{
+	g_return_val_if_fail (NM_IS_SETTING_IP6_CONFIG (setting), 0);
+
+	return NM_SETTING_IP6_CONFIG_GET_PRIVATE (setting)->ra_timeout;
+}
+
 static gboolean
 verify (NMSetting *setting, NMConnection *connection, GError **error)
 {
@@ -179,7 +170,7 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 	/* Base class already checked that it exists */
 	g_assert (method);
 
-	if (!strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_MANUAL)) {
+	if (nm_streq (method, NM_SETTING_IP6_CONFIG_METHOD_MANUAL)) {
 		if (nm_setting_ip_config_get_num_addresses (s_ip) == 0) {
 			g_set_error (error,
 			             NM_CONNECTION_ERROR,
@@ -189,12 +180,12 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 			g_prefix_error (error, "%s.%s: ", NM_SETTING_IP6_CONFIG_SETTING_NAME, NM_SETTING_IP_CONFIG_ADDRESSES);
 			return FALSE;
 		}
-	} else if (   !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE)
-	           || !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_LINK_LOCAL)
-	           || !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_SHARED)) {
-
-		/* Shared allows IP addresses and DNS; link-local and disabled do not */
-		if (strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_SHARED) != 0) {
+	} else if (NM_IN_STRSET (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE,
+	                                 NM_SETTING_IP6_CONFIG_METHOD_LINK_LOCAL,
+	                                 NM_SETTING_IP6_CONFIG_METHOD_SHARED,
+	                                 NM_SETTING_IP6_CONFIG_METHOD_DISABLED)) {
+		/* Shared allows IP addresses and DNS; other methods do not */
+		if (!nm_streq (method, NM_SETTING_IP6_CONFIG_METHOD_SHARED)) {
 			if (nm_setting_ip_config_get_num_dns (s_ip) > 0) {
 				g_set_error (error,
 				             NM_CONNECTION_ERROR,
@@ -225,8 +216,8 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 				return FALSE;
 			}
 		}
-	} else if (   !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_AUTO)
-	           || !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_DHCP)) {
+	} else if (NM_IN_STRSET (method, NM_SETTING_IP6_CONFIG_METHOD_AUTO,
+	                                 NM_SETTING_IP6_CONFIG_METHOD_DHCP)) {
 		/* nothing to do */
 	} else {
 		g_set_error_literal (error,
@@ -263,7 +254,7 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 				return FALSE;
 			}
 
-			if (g_strcmp0 (priv->token, nm_utils_inet6_ntop (&i6_token, s_token)))
+			if (g_strcmp0 (priv->token, _nm_utils_inet6_ntop (&i6_token, s_token)))
 				token_needs_normalization = TRUE;
 		} else {
 			g_set_error_literal (error,
@@ -299,22 +290,18 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 
 	/* Failures from here on are NORMALIZABLE... */
 
-	if (   !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE)
+	if (   NM_IN_STRSET (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE,
+	                             NM_SETTING_IP6_CONFIG_METHOD_DISABLED)
 	    && !nm_setting_ip_config_get_may_fail (s_ip)) {
 		g_set_error_literal (error,
 		                     NM_CONNECTION_ERROR,
 		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		                     _("property should be TRUE when method is set to ignore"));
+		                     _("property should be TRUE when method is set to ignore or disabled"));
 		g_prefix_error (error, "%s.%s: ", NM_SETTING_IP6_CONFIG_SETTING_NAME, NM_SETTING_IP_CONFIG_MAY_FAIL);
 		return NM_SETTING_VERIFY_NORMALIZABLE;
 	}
 
 	return TRUE;
-}
-
-static void
-nm_setting_ip6_config_init (NMSettingIP6Config *setting)
-{
 }
 
 static GVariant *
@@ -331,19 +318,19 @@ ip6_dns_from_dbus (GVariant *dbus_value,
 }
 
 static GVariant *
-ip6_addresses_get (NMSetting  *setting,
-                   const char *property)
+ip6_addresses_get (const NMSettInfoSetting *sett_info,
+                   guint property_idx,
+                   NMConnection *connection,
+                   NMSetting *setting,
+                   NMConnectionSerializationFlags flags,
+                   const NMConnectionSerializationOptions *options)
 {
-	GPtrArray *addrs;
+	gs_unref_ptrarray GPtrArray *addrs = NULL;
 	const char *gateway;
-	GVariant *ret;
 
-	g_object_get (setting, property, &addrs, NULL);
+	g_object_get (setting, NM_SETTING_IP_CONFIG_ADDRESSES, &addrs, NULL);
 	gateway = nm_setting_ip_config_get_gateway (NM_SETTING_IP_CONFIG (setting));
-	ret = nm_utils_ip6_addresses_to_variant (addrs, gateway);
-	g_ptr_array_unref (addrs);
-
-	return ret;
+	return nm_utils_ip6_addresses_to_variant (addrs, gateway);
 }
 
 static gboolean
@@ -374,18 +361,20 @@ ip6_addresses_set (NMSetting  *setting,
 }
 
 static GVariant *
-ip6_address_data_get (NMSetting    *setting,
+ip6_address_data_get (const NMSettInfoSetting *sett_info,
+                      guint property_idx,
                       NMConnection *connection,
-                      const char   *property)
+                      NMSetting *setting,
+                      NMConnectionSerializationFlags flags,
+                      const NMConnectionSerializationOptions *options)
 {
-	GPtrArray *addrs;
-	GVariant *ret;
+	gs_unref_ptrarray GPtrArray *addrs = NULL;
+
+	if (flags & NM_CONNECTION_SERIALIZE_ONLY_SECRETS)
+		return NULL;
 
 	g_object_get (setting, NM_SETTING_IP_CONFIG_ADDRESSES, &addrs, NULL);
-	ret = nm_utils_ip_addresses_to_variant (addrs);
-	g_ptr_array_unref (addrs);
-
-	return ret;
+	return nm_utils_ip_addresses_to_variant (addrs);
 }
 
 static gboolean
@@ -411,17 +400,17 @@ ip6_address_data_set (NMSetting  *setting,
 }
 
 static GVariant *
-ip6_routes_get (NMSetting  *setting,
-                const char *property)
+ip6_routes_get (const NMSettInfoSetting *sett_info,
+                guint property_idx,
+                NMConnection *connection,
+                NMSetting *setting,
+                NMConnectionSerializationFlags flags,
+                const NMConnectionSerializationOptions *options)
 {
-	GPtrArray *routes;
-	GVariant *ret;
+	gs_unref_ptrarray GPtrArray *routes = NULL;
 
-	g_object_get (setting, property, &routes, NULL);
-	ret = nm_utils_ip6_routes_to_variant (routes);
-	g_ptr_array_unref (routes);
-
-	return ret;
+	g_object_get (setting, NM_SETTING_IP_CONFIG_ROUTES, &routes, NULL);
+	return nm_utils_ip6_routes_to_variant (routes);
 }
 
 static gboolean
@@ -446,18 +435,20 @@ ip6_routes_set (NMSetting  *setting,
 }
 
 static GVariant *
-ip6_route_data_get (NMSetting    *setting,
+ip6_route_data_get (const NMSettInfoSetting *sett_info,
+                    guint property_idx,
                     NMConnection *connection,
-                    const char   *property)
+                    NMSetting *setting,
+                    NMConnectionSerializationFlags flags,
+                    const NMConnectionSerializationOptions *options)
 {
-	GPtrArray *routes;
-	GVariant *ret;
+	gs_unref_ptrarray GPtrArray *routes = NULL;
+
+	if (flags & NM_CONNECTION_SERIALIZE_ONLY_SECRETS)
+		return NULL;
 
 	g_object_get (setting, NM_SETTING_IP_CONFIG_ROUTES, &routes, NULL);
-	ret = nm_utils_ip_routes_to_variant (routes);
-	g_ptr_array_unref (routes);
-
-	return ret;
+	return nm_utils_ip_routes_to_variant (routes);
 }
 
 static gboolean
@@ -482,6 +473,36 @@ ip6_route_data_set (NMSetting  *setting,
 	return TRUE;
 }
 
+/*****************************************************************************/
+
+static void
+get_property (GObject *object, guint prop_id,
+              GValue *value, GParamSpec *pspec)
+{
+	NMSettingIP6ConfigPrivate *priv = NM_SETTING_IP6_CONFIG_GET_PRIVATE (object);
+
+	switch (prop_id) {
+	case PROP_IP6_PRIVACY:
+		g_value_set_enum (value, priv->ip6_privacy);
+		break;
+	case PROP_ADDR_GEN_MODE:
+		g_value_set_int (value, priv->addr_gen_mode);
+		break;
+	case PROP_TOKEN:
+		g_value_set_string (value, priv->token);
+		break;
+	case PROP_DHCP_DUID:
+		g_value_set_string (value, priv->dhcp_duid);
+		break;
+	case PROP_RA_TIMEOUT:
+		g_value_set_int (value, priv->ra_timeout);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+		break;
+	}
+}
+
 static void
 set_property (GObject *object, guint prop_id,
               const GValue *value, GParamSpec *pspec)
@@ -503,35 +524,37 @@ set_property (GObject *object, guint prop_id,
 		g_free (priv->dhcp_duid);
 		priv->dhcp_duid = g_value_dup_string (value);
 		break;
+	case PROP_RA_TIMEOUT:
+		priv->ra_timeout = g_value_get_int (value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
 	}
 }
 
-static void
-get_property (GObject *object, guint prop_id,
-              GValue *value, GParamSpec *pspec)
-{
-	NMSettingIP6ConfigPrivate *priv = NM_SETTING_IP6_CONFIG_GET_PRIVATE (object);
+/*****************************************************************************/
 
-	switch (prop_id) {
-	case PROP_IP6_PRIVACY:
-		g_value_set_enum (value, priv->ip6_privacy);
-		break;
-	case PROP_ADDR_GEN_MODE:
-		g_value_set_int (value, priv->addr_gen_mode);
-		break;
-	case PROP_TOKEN:
-		g_value_set_string (value, priv->token);
-		break;
-	case PROP_DHCP_DUID:
-		g_value_set_string (value, priv->dhcp_duid);
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
+static void
+nm_setting_ip6_config_init (NMSettingIP6Config *setting)
+{
+	NMSettingIP6ConfigPrivate *priv = NM_SETTING_IP6_CONFIG_GET_PRIVATE (setting);
+
+	priv->ip6_privacy   = NM_SETTING_IP6_CONFIG_PRIVACY_UNKNOWN;
+	priv->addr_gen_mode = NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_STABLE_PRIVACY;
+}
+
+/**
+ * nm_setting_ip6_config_new:
+ *
+ * Creates a new #NMSettingIP6Config object with default values.
+ *
+ * Returns: (transfer full): the new empty #NMSettingIP6Config object
+ **/
+NMSetting *
+nm_setting_ip6_config_new (void)
+{
+	return (NMSetting *) g_object_new (NM_TYPE_SETTING_IP6_CONFIG, NULL);
 }
 
 static void
@@ -555,18 +578,19 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 
 	g_type_class_add_private (klass, sizeof (NMSettingIP6ConfigPrivate));
 
-	object_class->set_property = set_property;
 	object_class->get_property = get_property;
+	object_class->set_property = set_property;
 	object_class->finalize     = finalize;
 
 	setting_class->verify = verify;
 
 	/* ---ifcfg-rh---
 	 * property: method
-	 * variable: IPV6INIT, IPV6FORWARDING, IPV6_AUTOCONF, DHCPV6C
+	 * variable: IPV6INIT, IPV6FORWARDING, IPV6_AUTOCONF, DHCPV6C, IPV6_DISABLED
 	 * default:  IPV6INIT=yes; IPV6FORWARDING=no; IPV6_AUTOCONF=!IPV6FORWARDING, DHCPV6=no
 	 * description: Method used for IPv6 protocol configuration.
-	 *   ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes
+	 *   ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes;
+	 *   disabled ~ IPV6_DISABLED=yes
 	 * ---end---
 	 */
 
@@ -657,9 +681,24 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 
 	/* ---ifcfg-rh---
 	 * property: dhcp-hostname
-	 * variable: DHCP_HOSTNAME
+	 * variable: DHCPV6_HOSTNAME
 	 * description: Hostname to send the DHCP server.
 	 * ---end---
+	 */
+
+	/* ---ifcfg-rh---
+	 * property: dhcp-timeout
+	 * variable: IPV6_DHCP_TIMEOUT(+)
+	 * description: A timeout after which the DHCP transaction fails in case of no response.
+	 * example: IPV6_DHCP_TIMEOUT=10
+	 * ---end---
+	 */
+
+	/* ---ifcfg-rh---
+	 * property: dhcp-hostname-flags
+	 * variable: DHCPV6_HOSTNAME_FLAGS
+	 * description: flags for the DHCP hostname property
+	 * example: DHCPV6_HOSTNAME_FLAGS=5
 	 */
 
 	/* ---ifcfg-rh---
@@ -747,14 +786,12 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 * example: IPV6_PRIVACY=rfc3041 IPV6_PRIVACY_PREFER_PUBLIC_IP=yes
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_IP6_PRIVACY,
-		 g_param_spec_enum (NM_SETTING_IP6_CONFIG_IP6_PRIVACY, "", "",
-		                    NM_TYPE_SETTING_IP6_CONFIG_PRIVACY,
-		                    NM_SETTING_IP6_CONFIG_PRIVACY_UNKNOWN,
-		                    G_PARAM_READWRITE |
-		                    G_PARAM_CONSTRUCT |
-		                    G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_IP6_PRIVACY] =
+	    g_param_spec_enum (NM_SETTING_IP6_CONFIG_IP6_PRIVACY, "", "",
+	                       NM_TYPE_SETTING_IP6_CONFIG_PRIVACY,
+	                       NM_SETTING_IP6_CONFIG_PRIVACY_UNKNOWN,
+	                       G_PARAM_READWRITE |
+	                       G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingIP6Config:addr-gen-mode:
@@ -797,14 +834,12 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 * example: IPV6_ADDR_GEN_MODE=stable-privacy
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_ADDR_GEN_MODE,
-		 g_param_spec_int (NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE, "", "",
-		                   G_MININT, G_MAXINT,
-		                   NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_STABLE_PRIVACY,
-		                   G_PARAM_READWRITE |
-		                   G_PARAM_CONSTRUCT |
-		                   G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_ADDR_GEN_MODE] =
+	    g_param_spec_int (NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE, "", "",
+	                      G_MININT, G_MAXINT,
+	                      NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_STABLE_PRIVACY,
+	                      G_PARAM_READWRITE |
+	                      G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingIP6Config:token:
@@ -821,13 +856,38 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 * example: IPV6_TOKEN=::53
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_TOKEN,
-		 g_param_spec_string (NM_SETTING_IP6_CONFIG_TOKEN, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      NM_SETTING_PARAM_INFERRABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_TOKEN] =
+	    g_param_spec_string (NM_SETTING_IP6_CONFIG_TOKEN, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         NM_SETTING_PARAM_INFERRABLE |
+	                         G_PARAM_STATIC_STRINGS);
+
+	/**
+	 * NMSettingIP6Config:ra-timeout:
+	 *
+	 * A timeout for waiting Router Advertisements in seconds. If zero (the default), a
+	 * globally configured default is used. If still unspecified, the timeout depends on the
+	 * sysctl settings of the device.
+	 *
+	 * Set to 2147483647 (MAXINT32) for infinity.
+	 *
+	 * Since: 1.24
+	 **/
+	/* ---ifcfg-rh---
+	 * property: dhcp-timeout
+	 * variable: IPV6_RA_TIMEOUT(+)
+	 * description: A timeout for waiting Router Advertisements in seconds.
+	 * example: IPV6_RA_TIMEOUT=10
+	 * ---end---
+	 */
+
+	obj_properties[PROP_RA_TIMEOUT] =
+	    g_param_spec_int (NM_SETTING_IP6_CONFIG_RA_TIMEOUT, "", "",
+	                      0, G_MAXINT32, 0,
+	                      G_PARAM_READWRITE |
+	                      NM_SETTING_PARAM_FUZZY_IGNORE |
+	                      G_PARAM_STATIC_STRINGS);
 
 	/**
 	 * NMSettingIP6Config:dhcp-duid:
@@ -874,12 +934,11 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 * example: DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DUID=03:01:de:ad:be:ef:00:01
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_DHCP_DUID,
-		 g_param_spec_string (NM_SETTING_IP6_CONFIG_DHCP_DUID, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_DHCP_DUID] =
+	    g_param_spec_string (NM_SETTING_IP6_CONFIG_DHCP_DUID, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         G_PARAM_STATIC_STRINGS);
 
 	/* IP6-specific property overrides */
 
@@ -889,12 +948,14 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 * description: Array of IP addresses of DNS servers (in network byte order)
 	 * ---end---
 	 */
-	_properties_override_add_transform (properties_override,
-	                                    g_object_class_find_property (G_OBJECT_CLASS (setting_class),
-	                                                                  NM_SETTING_IP_CONFIG_DNS),
-	                                    G_VARIANT_TYPE ("aay"),
-	                                    ip6_dns_to_dbus,
-	                                    ip6_dns_from_dbus);
+	_nm_properties_override_gobj (properties_override,
+	                              g_object_class_find_property (G_OBJECT_CLASS (setting_class),
+	                                                            NM_SETTING_IP_CONFIG_DNS),
+	                              NM_SETT_INFO_PROPERT_TYPE (
+	                                  .dbus_type           = NM_G_VARIANT_TYPE ("aay"),
+	                                  .gprop_to_dbus_fcn   = ip6_dns_to_dbus,
+	                                  .gprop_from_dbus_fcn = ip6_dns_from_dbus,
+	                              ));
 
 	/* ---dbus---
 	 * property: addresses
@@ -910,13 +971,14 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 *   that subnet.
 	 * ---end---
 	 */
-	_properties_override_add_override (properties_override,
-	                                   g_object_class_find_property (G_OBJECT_CLASS (setting_class),
-	                                                                 NM_SETTING_IP_CONFIG_ADDRESSES),
-	                                   G_VARIANT_TYPE ("a(ayuay)"),
-	                                   ip6_addresses_get,
-	                                   ip6_addresses_set,
-	                                   NULL);
+	_nm_properties_override_gobj (properties_override,
+	                              g_object_class_find_property (G_OBJECT_CLASS (setting_class),
+	                                                            NM_SETTING_IP_CONFIG_ADDRESSES),
+	                              NM_SETT_INFO_PROPERT_TYPE (
+	                                  .dbus_type     = NM_G_VARIANT_TYPE ("a(ayuay)"),
+	                                  .to_dbus_fcn   = ip6_addresses_get,
+	                                  .from_dbus_fcn = ip6_addresses_set,
+	                              ));
 
 	/* ---dbus---
 	 * property: address-data
@@ -927,11 +989,13 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 *   also exist on some addresses.
 	 * ---end---
 	 */
-	_properties_override_add_dbus_only (properties_override,
-	                                    "address-data",
-	                                    G_VARIANT_TYPE ("aa{sv}"),
-	                                    ip6_address_data_get,
-	                                    ip6_address_data_set);
+	_nm_properties_override_dbus (properties_override,
+	                              "address-data",
+	                              NM_SETT_INFO_PROPERT_TYPE (
+	                                  .dbus_type     = NM_G_VARIANT_TYPE ("aa{sv}"),
+	                                  .to_dbus_fcn   = ip6_address_data_get,
+	                                  .from_dbus_fcn = ip6_address_data_set,
+	                              ));
 
 	/* ---dbus---
 	 * property: routes
@@ -947,13 +1011,14 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 *   default metric for the device.
 	 * ---end---
 	 */
-	_properties_override_add_override (properties_override,
-	                                   g_object_class_find_property (G_OBJECT_CLASS (setting_class),
-	                                                                 NM_SETTING_IP_CONFIG_ROUTES),
-	                                   G_VARIANT_TYPE ("a(ayuayu)"),
-	                                   ip6_routes_get,
-	                                   ip6_routes_set,
-	                                   NULL);
+	_nm_properties_override_gobj (properties_override,
+	                              g_object_class_find_property (G_OBJECT_CLASS (setting_class),
+	                                                            NM_SETTING_IP_CONFIG_ROUTES),
+	                              NM_SETT_INFO_PROPERT_TYPE (
+	                                  .dbus_type     = NM_G_VARIANT_TYPE ("a(ayuayu)"),
+	                                  .to_dbus_fcn   = ip6_routes_get,
+	                                  .from_dbus_fcn = ip6_routes_set,
+	                              ));
 
 	/* ---dbus---
 	 * property: route-data
@@ -968,11 +1033,15 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *klass)
 	 *   also exist on some routes.
 	 * ---end---
 	 */
-	_properties_override_add_dbus_only (properties_override,
-	                                    "route-data",
-	                                    G_VARIANT_TYPE ("aa{sv}"),
-	                                    ip6_route_data_get,
-	                                    ip6_route_data_set);
+	_nm_properties_override_dbus (properties_override,
+	                              "route-data",
+	                              NM_SETT_INFO_PROPERT_TYPE (
+	                                  .dbus_type     = NM_G_VARIANT_TYPE ("aa{sv}"),
+	                                  .to_dbus_fcn   = ip6_route_data_get,
+	                                  .from_dbus_fcn = ip6_route_data_set,
+	                              ));
+
+	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 
 	_nm_setting_class_commit_full (setting_class, NM_META_SETTING_TYPE_IP6_CONFIG,
 	                               NULL, properties_override);

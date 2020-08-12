@@ -1,20 +1,6 @@
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2010 - 2017 Red Hat, Inc.
  */
 
 #ifndef _NM_META_SETTING_ACCESS_H__
@@ -38,6 +24,8 @@ const NMMetaPropertyInfo *nm_meta_property_info_find_by_name (const char *settin
                                                               const char *property_name);
 const NMMetaPropertyInfo *nm_meta_property_info_find_by_setting (NMSetting *setting,
                                                                  const char *property_name);
+
+gboolean nm_meta_setting_info_editor_has_secrets (const NMMetaSettingInfoEditor *setting_info);
 
 /*****************************************************************************/
 
@@ -67,6 +55,7 @@ const char *const*nm_meta_abstract_info_complete (const NMMetaAbstractInfo *abst
                                                   gpointer environment_user_data,
                                                   const NMMetaOperationContext *operation_context,
                                                   const char *text,
+                                                  gboolean *out_complete_filename,
                                                   char ***out_to_free);
 
 /*****************************************************************************/

@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2011 Red Hat, Inc.
+ * Copyright (C) 2011 Red Hat, Inc.
  */
 
 #ifndef __NM_SETTING_PRIVATE_H__
@@ -26,6 +11,7 @@
 #endif
 
 #include "nm-setting.h"
+#include "nm-setting-bridge.h"
 #include "nm-connection.h"
 #include "nm-core-enum-types.h"
 
@@ -39,6 +25,8 @@ int _nm_setting_compare_priority (gconstpointer a, gconstpointer b);
 
 /*****************************************************************************/
 
+void _nm_setting_emit_property_changed (NMSetting *setting);
+
 typedef enum NMSettingUpdateSecretResult {
 	NM_SETTING_UPDATE_SECRET_ERROR              = FALSE,
 	NM_SETTING_UPDATE_SECRET_SUCCESS_MODIFIED   = TRUE,
@@ -48,10 +36,9 @@ typedef enum NMSettingUpdateSecretResult {
 NMSettingUpdateSecretResult _nm_setting_update_secrets (NMSetting *setting,
                                                         GVariant *secrets,
                                                         GError **error);
-gboolean _nm_setting_clear_secrets (NMSetting *setting);
-gboolean _nm_setting_clear_secrets_with_flags (NMSetting *setting,
-                                               NMSettingClearSecretsWithFlagsFn func,
-                                               gpointer user_data);
+gboolean _nm_setting_clear_secrets (NMSetting *setting,
+                                    NMSettingClearSecretsWithFlagsFn func,
+                                    gpointer user_data);
 
 /* The property of the #NMSetting should be considered during comparisons that
  * use the %NM_SETTING_COMPARE_FLAG_INFERRABLE flag. Properties that don't have
@@ -80,11 +67,16 @@ gboolean _nm_setting_clear_secrets_with_flags (NMSetting *setting,
  */
 #define NM_SETTING_PARAM_REAPPLY_IMMEDIATELY (1 << (6 + G_PARAM_USER_SHIFT))
 
-#define NM_SETTING_PARAM_GENDATA_BACKED (1 << (7 + G_PARAM_USER_SHIFT))
+/* property_to_dbus() should ignore the property flags, and instead always calls to_dbus_fcn()
+ */
+#define NM_SETTING_PARAM_TO_DBUS_IGNORE_FLAGS (1 << (7 + G_PARAM_USER_SHIFT))
 
-GVariant *_nm_setting_get_deprecated_virtual_interface_name (NMSetting *setting,
-                                                             NMConnection *connection,
-                                                             const char *property);
+extern const NMSettInfoPropertType nm_sett_info_propert_type_deprecated_interface_name;
+extern const NMSettInfoPropertType nm_sett_info_propert_type_deprecated_ignore_i;
+extern const NMSettInfoPropertType nm_sett_info_propert_type_deprecated_ignore_u;
+
+extern const NMSettInfoPropertType nm_sett_info_propert_type_plain_i;
+extern const NMSettInfoPropertType nm_sett_info_propert_type_plain_u;
 
 NMSettingVerifyResult _nm_setting_verify (NMSetting *setting,
                                           NMConnection *connection,
@@ -95,17 +87,27 @@ gboolean _nm_setting_verify_secret_string (const char *str,
                                            const char *property,
                                            GError **error);
 
+gboolean _nm_setting_aggregate (NMSetting *setting,
+                                NMConnectionAggregateType type,
+                                gpointer arg);
+
 gboolean _nm_setting_slave_type_is_valid (const char *slave_type, const char **out_port_type);
 
 GVariant   *_nm_setting_to_dbus       (NMSetting *setting,
                                        NMConnection *connection,
-                                       NMConnectionSerializationFlags flags);
+                                       NMConnectionSerializationFlags flags,
+                                       const NMConnectionSerializationOptions *options);
 
 NMSetting  *_nm_setting_new_from_dbus (GType setting_type,
                                        GVariant *setting_dict,
                                        GVariant *connection_dict,
                                        NMSettingParseFlags parse_flags,
                                        GError **error);
+
+gboolean _nm_setting_property_is_regular_secret (NMSetting *setting,
+                                                 const char *secret_name);
+gboolean _nm_setting_property_is_regular_secret_flags (NMSetting *setting,
+                                                       const char *secret_flags_name);
 
 /*****************************************************************************/
 
@@ -143,40 +145,44 @@ _nm_setting_class_commit (NMSettingClass *setting_class,
 		__VA_ARGS__ \
 	}))
 
+#define NM_SETT_INFO_PROPERT_TYPE(...) \
+	({ \
+		static const NMSettInfoPropertType _g = { \
+			__VA_ARGS__ \
+		}; \
+		\
+		&_g; \
+	})
+
 #define NM_SETT_INFO_PROPERTY(...) \
 	(&((const NMSettInfoProperty) { \
 		__VA_ARGS__ \
 	}))
 
-void _properties_override_add_struct (GArray *properties_override,
-                                      const NMSettInfoProperty *prop_info);
+gboolean _nm_properties_override_assert (const NMSettInfoProperty *prop_info);
 
-void _properties_override_add__helper (GArray *properties_override,
-                                       NMSettInfoProperty *prop_info);
+static inline void
+_nm_properties_override (GArray *properties_override,
+                         const NMSettInfoProperty *prop_info)
+{
+	nm_assert (properties_override);
+	nm_assert (_nm_properties_override_assert (prop_info));
+	g_array_append_vals (properties_override, prop_info, 1);
+}
 
-#define _properties_override_add(properties_override, \
-                                 ...) \
-	(_properties_override_add_struct (properties_override, \
-	                                  NM_SETT_INFO_PROPERTY (__VA_ARGS__)))
+#define _nm_properties_override_gobj(properties_override, p_param_spec, p_property_type) \
+	_nm_properties_override ((properties_override), \
+	                         NM_SETT_INFO_PROPERTY ( \
+	                             .param_spec = (p_param_spec), \
+	                             .property_type = (p_property_type), \
+	                         ))
 
-void _properties_override_add_dbus_only (GArray *properties_override,
-                                         const char *property_name,
-                                         const GVariantType *dbus_type,
-                                         NMSettingPropertySynthFunc synth_func,
-                                         NMSettingPropertySetFunc set_func);
-
-void _properties_override_add_override (GArray *properties_override,
-                                        GParamSpec *param_spec,
-                                        const GVariantType *dbus_type,
-                                        NMSettingPropertyGetFunc get_func,
-                                        NMSettingPropertySetFunc set_func,
-                                        NMSettingPropertyNotSetFunc not_set_func);
-
-void _properties_override_add_transform (GArray *properties_override,
-                                         GParamSpec *param_spec,
-                                         const GVariantType *dbus_type,
-                                         NMSettingPropertyTransformToFunc to_dbus,
-                                         NMSettingPropertyTransformFromFunc from_dbus);
+#define _nm_properties_override_dbus(properties_override, p_name, p_property_type) \
+	_nm_properties_override ((properties_override), \
+	                         NM_SETT_INFO_PROPERTY ( \
+	                             .name = (""p_name""), \
+	                             .property_type = (p_property_type), \
+	                         ))
 
 /*****************************************************************************/
 
@@ -186,6 +192,14 @@ gboolean _nm_setting_use_legacy_property (NMSetting *setting,
                                           const char *new_property);
 
 GPtrArray  *_nm_setting_need_secrets (NMSetting *setting);
+
+gboolean _nm_setting_should_compare_secret_property (NMSetting *setting,
+                                                     NMSetting *other,
+                                                     const char *secret_name,
+                                                     NMSettingCompareFlags flags);
+
+NMBridgeVlan *_nm_bridge_vlan_dup (const NMBridgeVlan *vlan);
+NMBridgeVlan *_nm_bridge_vlan_dup_and_seal (const NMBridgeVlan *vlan);
 
 /*****************************************************************************/
 

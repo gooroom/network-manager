@@ -1,20 +1,6 @@
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2018 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2018 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -48,7 +34,7 @@ struct _NMDevice6LowpanClass {
 
 G_DEFINE_TYPE (NMDevice6Lowpan, nm_device_6lowpan, NM_TYPE_DEVICE)
 
-#define NM_DEVICE_6LOWPAN_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDevice6Lowpan, NM_IS_DEVICE_6LOWPAN)
+#define NM_DEVICE_6LOWPAN_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMDevice6Lowpan, NM_IS_DEVICE_6LOWPAN, NMDevice)
 
 /*****************************************************************************/
 
@@ -110,9 +96,9 @@ create_and_realize (NMDevice *device,
                     GError **error)
 {
 	const char *iface = nm_device_get_iface (device);
-	NMPlatformError plerr;
 	NMSetting6Lowpan *s_6lowpan;
 	int parent_ifindex;
+	int r;
 
 	s_6lowpan = NM_SETTING_6LOWPAN (nm_connection_get_setting (connection, NM_TYPE_SETTING_6LOWPAN));
 	g_return_val_if_fail (s_6lowpan, FALSE);
@@ -126,13 +112,13 @@ create_and_realize (NMDevice *device,
 		return FALSE;
 	}
 
-	plerr = nm_platform_link_6lowpan_add (nm_device_get_platform (device), iface, parent_ifindex, out_plink);
-	if (plerr != NM_PLATFORM_ERROR_SUCCESS) {
+	r = nm_platform_link_6lowpan_add (nm_device_get_platform (device), iface, parent_ifindex, out_plink);
+	if (r < 0) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
 		             "Failed to create 6lowpan interface '%s' for '%s': %s",
 		             iface,
 		             nm_connection_get_id (connection),
-		             nm_platform_error_to_string_a (plerr));
+		             nm_strerror (r));
 		return FALSE;
 	}
 
@@ -190,6 +176,7 @@ complete_connection (NMDevice *device,
 	                           NULL,
 	                           _("6LOWPAN connection"),
 	                           NULL,
+	                           NULL,
 	                           TRUE);
 
 	s_6lowpan = NM_SETTING_6LOWPAN (nm_connection_get_setting (connection, NM_TYPE_SETTING_6LOWPAN));
@@ -229,20 +216,6 @@ update_connection (NMDevice *device, NMConnection *connection)
 	              NULL);
 }
 
-static NMActStageReturn
-act_stage1_prepare (NMDevice *dev, NMDeviceStateReason *out_failure_reason)
-{
-	NMActStageReturn ret;
-
-	ret = NM_DEVICE_CLASS (nm_device_6lowpan_parent_class)->act_stage1_prepare (dev, out_failure_reason);
-	if (ret != NM_ACT_STAGE_RETURN_SUCCESS)
-		return ret;
-
-	if (!nm_device_hw_addr_set_cloned (dev, nm_device_get_applied_connection (dev), FALSE))
-		return NM_ACT_STAGE_RETURN_FAILURE;
-	return NM_ACT_STAGE_RETURN_SUCCESS;
-}
-
 /*****************************************************************************/
 
 static void
@@ -272,7 +245,7 @@ nm_device_6lowpan_class_init (NMDevice6LowpanClass *klass)
 	device_class->connection_type_check_compatible = NM_SETTING_6LOWPAN_SETTING_NAME;
 	device_class->link_types = NM_DEVICE_DEFINE_LINK_TYPES (NM_LINK_TYPE_6LOWPAN);
 
-	device_class->act_stage1_prepare = act_stage1_prepare;
+	device_class->act_stage1_prepare_set_hwaddr_ethernet = TRUE;
 	device_class->complete_connection = complete_connection;
 	device_class->create_and_realize = create_and_realize;
 	device_class->get_generic_capabilities = get_generic_capabilities;

@@ -1,32 +1,20 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT SC WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2008 - 2018 Red Hat, Inc.
- *
+ * Copyright (C) 2008 - 2018 Red Hat, Inc.
  */
 
 #define NM_GLIB_COMPAT_H_TEST
 
 #include "nm-default.h"
 
-#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
-#include "nm-utils/c-list-util.h"
-#include "nm-utils/nm-enum-utils.h"
+#include "nm-std-aux/c-list-util.h"
+#include "nm-glib-aux/nm-enum-utils.h"
+#include "nm-glib-aux/nm-str-buf.h"
+#include "systemd/nm-sd-utils-shared.h"
 
 #include "nm-utils.h"
 #include "nm-setting-private.h"
@@ -34,6 +22,7 @@
 #include "nm-utils-private.h"
 #include "nm-core-internal.h"
 #include "nm-core-tests-enum-types.h"
+#include "nm-team-utils.h"
 
 #include "nm-setting-8021x.h"
 #include "nm-setting-adsl.h"
@@ -64,9 +53,9 @@
 #include "nm-setting-wireless-security.h"
 #include "nm-setting-wpan.h"
 #include "nm-simple-connection.h"
-#include "nm-keyfile-internal.h"
-#include "nm-utils/nm-dedup-multi.h"
-#include "nm-ethtool-utils.h"
+#include "nm-keyfile/nm-keyfile-internal.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
+#include "nm-libnm-core-intern/nm-ethtool-utils.h"
 
 #include "test-general-enums.h"
 
@@ -79,6 +68,29 @@
  * will just work correctly. */
 G_STATIC_ASSERT (sizeof (gboolean) == sizeof (int));
 G_STATIC_ASSERT (sizeof (bool) <= sizeof (int));
+
+/*****************************************************************************/
+
+static void
+test_nm_ascii_spaces (void)
+{
+	int i;
+	const char *const S = NM_ASCII_SPACES;
+
+	for (i = 0; S[i]; i++)
+		g_assert (!strchr (&S[i + 1], S[i]));
+
+	for (i = 0; S[i] != '\0'; i++)
+		g_assert (g_ascii_isspace (S[i]));
+
+	g_assert (!g_ascii_isspace ((char) 0));
+	for (i = 1; i < 0x100; i++) {
+		if (g_ascii_isspace ((char) i))
+			g_assert (strchr (S, (char) i));
+		else
+			g_assert (!strchr (S, (char) i));
+	}
+}
 
 /*****************************************************************************/
 
@@ -238,51 +250,324 @@ test_nm_g_slice_free_fcn (void)
 /*****************************************************************************/
 
 static void
-_do_test_nm_utils_strsplit_set (gboolean escape, const char *str, ...)
+_do_test_nm_utils_strsplit_set_f_one (NMUtilsStrsplitSetFlags flags,
+                                      const char *str,
+                                      gsize words_len,
+                                      const char *const*exp_words)
 {
-	gs_unref_ptrarray GPtrArray *args_array = g_ptr_array_new ();
-	const char *const*args;
+#define DELIMITERS           " \n"
+#define DELIMITERS_C         ' ', '\n'
+
 	gs_free const char **words = NULL;
-	const char *arg;
-	gsize i;
-	va_list ap;
+	gsize i, j, k;
+	const gboolean f_allow_escaping = NM_FLAGS_HAS (flags, NM_UTILS_STRSPLIT_SET_FLAGS_ALLOW_ESCAPING);
+	const gboolean f_preserve_empty = NM_FLAGS_HAS (flags, NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY);
+	const char *s1;
+	gsize initial_offset;
+	gs_strfreev char **words_g = NULL;
 
-	va_start (ap, str);
-	while ((arg = va_arg (ap, const char *)))
-		g_ptr_array_add (args_array, (gpointer) arg);
-	va_end (ap);
-	g_ptr_array_add (args_array, NULL);
+	g_assert (!NM_FLAGS_ANY (flags, ~(  NM_UTILS_STRSPLIT_SET_FLAGS_ALLOW_ESCAPING
+	                                  | NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY)));
 
-	args = (const char *const*) args_array->pdata;
+	/* assert that the epected words are valid (and don't contain unescaped delimiters). */
+	for (i = 0; i < words_len; i++) {
+		const char *w = exp_words[i];
 
-	words = nm_utils_strsplit_set (str, " \t\n", escape);
+		g_assert (w);
+		if (!f_preserve_empty)
+			g_assert (w[0]);
+		for (k = 0; w[k]; ) {
+			if (   f_allow_escaping
+			    && w[k] == '\\') {
+				k++;
+				if (w[k] == '\0')
+					break;
+				k++;
+				continue;
+			}
+			g_assert (!NM_IN_SET (w[k], DELIMITERS_C));
+			k++;
+		}
+		if (!f_allow_escaping)
+			g_assert (!NM_STRCHAR_ANY (w, ch, NM_IN_SET (ch, DELIMITERS_C)));
+	}
 
-	if (!args[0]) {
+	initial_offset = (f_preserve_empty || !str)
+	                 ? 0u
+	                 : strspn (str, DELIMITERS);
+
+	/* first compare our expected values with what g_strsplit_set() would
+	 * do. */
+	words_g = str ? g_strsplit_set (str, DELIMITERS, -1) : NULL;
+	if (str == NULL) {
+		g_assert_cmpint (words_len, ==, 0);
+		g_assert (!words_g);
+	} else if (nm_streq0 (str, "")) {
+		g_assert_cmpint (words_len, ==, 0);
+		g_assert (words_g);
+		g_assert (!words_g[0]);
+	} else {
+		g_assert (words_g);
+		g_assert (words_g[0]);
+		if (!f_allow_escaping) {
+			if (!f_preserve_empty) {
+				for (i = 0, j = 0; words_g[i]; i++) {
+					if (words_g[i][0] == '\0')
+						g_free (words_g[i]);
+					else
+						words_g[j++] = words_g[i];
+				}
+				words_g[j] = NULL;
+			}
+			if (f_preserve_empty)
+				g_assert_cmpint (words_len, >, 0);
+			for (i = 0; i < words_len; i++) {
+				g_assert (exp_words[i]);
+				g_assert_cmpstr (exp_words[i], ==, words_g[i]);
+			}
+			g_assert (words_g[words_len] == NULL);
+			g_assert_cmpint (NM_PTRARRAY_LEN (words_g), ==, words_len);
+			g_assert (_nm_utils_strv_cmp_n (exp_words, words_len, NM_CAST_STRV_CC (words_g), -1) == 0);
+		}
+	}
+
+	if (   flags == NM_UTILS_STRSPLIT_SET_FLAGS_NONE
+	    && nmtst_get_rand_bool ())
+		words = nm_utils_strsplit_set (str, DELIMITERS);
+	else if (   flags == NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY
+	         && nmtst_get_rand_bool ())
+		words = nm_utils_strsplit_set_with_empty (str, DELIMITERS);
+	else
+		words = nm_utils_strsplit_set_full (str, DELIMITERS, flags);
+
+	g_assert_cmpint (NM_PTRARRAY_LEN (words), ==, words_len);
+
+	if (words_len == 0) {
 		g_assert (!words);
 		g_assert (   !str
-		          || NM_STRCHAR_ALL (str, ch, NM_IN_SET (ch, ' ', '\t', '\n')));
+		          || NM_STRCHAR_ALL (str, ch, NM_IN_SET (ch, DELIMITERS_C)));
 		return;
 	}
+
 	g_assert (words);
-	for (i = 0; args[i] || words[i]; i++) {
-		g_assert (args[i]);
-		g_assert (words[i]);
-		g_assert (args[i][0]);
-		g_assert (escape || NM_STRCHAR_ALL (args[i], ch, !NM_IN_SET (ch, ' ', '\t', '\n')));
-		g_assert_cmpstr (args[i], ==, words[i]);
+	for (i = 0; i < words_len; i++)
+		g_assert_cmpstr (exp_words[i], ==, words[i]);
+	g_assert (words[words_len] == NULL);
+
+	g_assert (_nm_utils_strv_cmp_n (exp_words, words_len, words, -1) == 0);
+
+	s1 = words[0];
+	g_assert (s1 >= (char *) &words[words_len + 1]);
+	s1 = &s1[strlen (str)];
+	for (i = 1; i < words_len; i++) {
+		g_assert (&(words[i - 1])[strlen (words[i - 1])] < words[i]);
+		g_assert (words[i] <= s1);
+	}
+
+	/* while strsplit removes all delimiters, we can relatively easily find them
+	 * in the original string. Assert that the original string and the pointer offsets
+	 * of words correspond. In particular, find idx_delim_after and idx_delim_before
+	 * to determine which delimiter was after/before a word. */
+	{
+		gsize idx_word_start;
+		gsize idx_delim_after_old = G_MAXSIZE;
+
+		idx_word_start = initial_offset;
+		for (i = 0; i < words_len; i++) {
+			const gsize l_i = strlen (words[i]);
+			gsize idx_delim_after;
+			gsize idx_delim_before;
+
+			/* find the delimiter *after* words[i]. We can do that by looking at the next
+			 * word and calculating the pointer difference.
+			 *
+			 * The delimiter after the very last word is '\0' and requires strlen() to find. */
+			idx_delim_after = initial_offset + ((words[i] - words[0]) + l_i);
+			if (idx_delim_after != idx_word_start + l_i) {
+				g_assert (!f_preserve_empty);
+				g_assert_cmpint (idx_word_start + l_i, <, idx_delim_after);
+				idx_word_start = idx_delim_after - l_i;
+			}
+			if (i + 1 < words_len) {
+				gsize x = initial_offset + ((words[i + 1] - words[0]) - 1);
+
+				if (idx_delim_after != x) {
+					g_assert (!f_preserve_empty);
+					g_assert_cmpint (idx_delim_after, <, x);
+					for (k = idx_delim_after; k <= x; k++)
+						g_assert (NM_IN_SET (str[k], DELIMITERS_C));
+				}
+				g_assert (NM_IN_SET (str[idx_delim_after], DELIMITERS_C));
+			} else {
+				if (f_preserve_empty)
+					g_assert (NM_IN_SET (str[idx_delim_after], '\0'));
+				else
+					g_assert (NM_IN_SET (str[idx_delim_after], '\0', DELIMITERS_C));
+			}
+
+			/* find the delimiter *before* words[i]. */
+			if (i == 0) {
+				/* there is only a delimiter *before*, with !f_preserve_empty and leading
+				 * delimiters. */
+				idx_delim_before = G_MAXSIZE;
+				if (initial_offset > 0) {
+					g_assert (!f_preserve_empty);
+					idx_delim_before = initial_offset - 1;
+				}
+			} else
+				idx_delim_before = initial_offset + (words[i] - words[0]) - 1;
+			if (idx_delim_before != G_MAXSIZE)
+				g_assert (NM_IN_SET (str[idx_delim_before], DELIMITERS_C));
+			if (idx_delim_after_old != idx_delim_before) {
+				g_assert (!f_preserve_empty);
+				if (i == 0) {
+					g_assert_cmpint (initial_offset, >, 0);
+					g_assert_cmpint (idx_delim_before, !=, G_MAXSIZE);
+					g_assert_cmpint (idx_delim_before, ==, initial_offset - 1);
+				} else {
+					g_assert_cmpint (idx_delim_after_old, !=, G_MAXSIZE);
+					g_assert_cmpint (idx_delim_before, !=, G_MAXSIZE);
+					g_assert_cmpint (idx_delim_after_old, <, idx_delim_before);
+					for (k = idx_delim_after_old; k <= idx_delim_before; k++)
+						g_assert (NM_IN_SET (str[k], DELIMITERS_C));
+				}
+			}
+
+			for (k = 0; k < l_i; ) {
+				if (   f_allow_escaping
+				    && str[idx_word_start + k] == '\\') {
+					k++;
+					if (k >= l_i)
+						break;
+					k++;
+					continue;
+				}
+				g_assert (!NM_IN_SET (str[idx_word_start + k], DELIMITERS_C));
+				k++;
+			}
+			g_assert (strncmp (words[i], &str[idx_word_start], l_i) == 0);
+
+			if (i > 0) {
+				const char *s = &(words[i - 1])[strlen (words[i - 1]) + 1];
+
+				if (s != words[i]) {
+					g_assert (!f_preserve_empty);
+					g_assert (s < words[i]);
+				}
+			}
+
+			idx_word_start += l_i + 1;
+			idx_delim_after_old = idx_delim_after;
+		}
 	}
 }
 
-#define do_test_nm_utils_strsplit_set(str, ...) \
-	_do_test_nm_utils_strsplit_set (str, ##__VA_ARGS__, NULL)
+static void
+_do_test_nm_utils_strsplit_set_f (NMUtilsStrsplitSetFlags flags,
+                                  const char *str,
+                                  gsize words_len,
+                                  const char *const*exp_words)
+{
+	_do_test_nm_utils_strsplit_set_f_one (flags, str, words_len, exp_words);
+
+	if (NM_FLAGS_HAS (flags, NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY)) {
+		gs_unref_ptrarray GPtrArray *exp_words2 = NULL;
+		gsize k;
+
+		exp_words2 = g_ptr_array_new ();
+		for (k = 0; k < words_len; k++) {
+			if (exp_words[k][0] != '\0')
+				g_ptr_array_add (exp_words2, (gpointer) exp_words[k]);
+		}
+
+		_do_test_nm_utils_strsplit_set_f_one (flags & (~NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY),
+		                                      str,
+		                                      exp_words2->len,
+		                                      (const char *const*) exp_words2->pdata);
+	}
+}
+
+#define do_test_nm_utils_strsplit_set_f(flags, str, ...) \
+	_do_test_nm_utils_strsplit_set_f (flags, \
+	                                  str, \
+	                                  NM_NARG (__VA_ARGS__), \
+	                                  NM_MAKE_STRV (__VA_ARGS__))
+
+#define do_test_nm_utils_strsplit_set(allow_escaping, str, ...) \
+	do_test_nm_utils_strsplit_set_f (  (allow_escaping) \
+	                                 ? NM_UTILS_STRSPLIT_SET_FLAGS_ALLOW_ESCAPING \
+	                                 : NM_UTILS_STRSPLIT_SET_FLAGS_NONE, \
+	                                 str, \
+	                                 ##__VA_ARGS__)
+
+static void
+_do_test_nm_utils_strsplit_set_simple (NMUtilsStrsplitSetFlags flags,
+                                       const char *str,
+                                       gsize words_len,
+                                       const char *const*exp_words)
+{
+	gs_free const char **tokens = NULL;
+	gsize n_tokens;
+
+	tokens = nm_utils_strsplit_set_full (str, DELIMITERS, flags);
+
+	if (!tokens) {
+		g_assert_cmpint (words_len, ==, 0);
+		return;
+	}
+
+	g_assert (str && str[0]);
+	g_assert_cmpint (words_len, >, 0);
+	n_tokens = NM_PTRARRAY_LEN (tokens);
+
+	if (_nm_utils_strv_cmp_n (exp_words, words_len, tokens, -1) != 0) {
+		gsize i;
+
+		g_print (">>> split \"%s\" (flags %x) got %zu tokens (%zu expected)\n", str, (guint) flags, n_tokens, words_len);
+		for (i = 0; i < NM_MAX (n_tokens, words_len); i++) {
+			const char *s1 = i < n_tokens  ? tokens[i]    : NULL;
+			const char *s2 = i < words_len ? exp_words[i] : NULL;
+
+			g_print (">>> [%zu]: %s - %s%s%s vs. %s%s%s\n",
+			         i,
+			         nm_streq0 (s1, s2) ? "same" : "diff",
+			         NM_PRINT_FMT_QUOTE_STRING (s1),
+			         NM_PRINT_FMT_QUOTE_STRING (s2));
+		}
+		g_assert_not_reached ();
+	}
+	g_assert_cmpint (words_len, ==, NM_PTRARRAY_LEN (tokens));
+}
+#define do_test_nm_utils_strsplit_set_simple(flags, str, ...) \
+	_do_test_nm_utils_strsplit_set_simple ((flags), (str), NM_NARG (__VA_ARGS__), NM_MAKE_STRV (__VA_ARGS__))
 
 static void
 test_nm_utils_strsplit_set (void)
 {
+	gs_unref_ptrarray GPtrArray *words_exp = NULL;
+	guint test_run;
+
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_NONE, NULL);
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_NONE, "");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_NONE, " ");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_NONE, "a  b", "a", "b");
+
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, NULL);
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, " ", "", "");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "  ", "", "", "");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "a  ", "a", "", "");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "a  b", "a", "", "b");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, " ab  b", "", "ab", "", "b");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "ab  b", "ab", "", "b");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "abb", "abb");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "abb  bb ", "abb", "", "bb", "");
+	do_test_nm_utils_strsplit_set_f (NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY, "abb bcb ", "abb", "bcb", "");
+
 	do_test_nm_utils_strsplit_set (FALSE, NULL);
 	do_test_nm_utils_strsplit_set (FALSE, "");
-	do_test_nm_utils_strsplit_set (FALSE, "\t");
-	do_test_nm_utils_strsplit_set (FALSE, " \t\n");
+	do_test_nm_utils_strsplit_set (FALSE, "\n");
+	do_test_nm_utils_strsplit_set (TRUE, " \t\n", "\t");
 	do_test_nm_utils_strsplit_set (FALSE, "a", "a");
 	do_test_nm_utils_strsplit_set (FALSE, "a b", "a", "b");
 	do_test_nm_utils_strsplit_set (FALSE, "a\rb", "a\rb");
@@ -302,6 +587,403 @@ test_nm_utils_strsplit_set (void)
 	do_test_nm_utils_strsplit_set (TRUE, "foo\\", "foo\\");
 	do_test_nm_utils_strsplit_set (TRUE, "bar foo\\", "bar", "foo\\");
 	do_test_nm_utils_strsplit_set (TRUE, "\\ a b\\ \\  c", "\\ a", "b\\ \\ ", "c");
+
+	words_exp = g_ptr_array_new_with_free_func (g_free);
+	for (test_run = 0; test_run < 100; test_run++) {
+		gboolean f_allow_escaping = nmtst_get_rand_bool ();
+		guint words_len = nmtst_get_rand_uint32 () % 100;
+		gs_free char *str = NULL;
+		guint i;
+
+		g_ptr_array_set_size (words_exp, 0);
+		for (i = 0; i < words_len; i++) {
+			guint word_len;
+			char *word;
+			guint j;
+
+			word_len = nmtst_get_rand_uint32 ();
+			if ((word_len % 100) < 30)
+				word_len = 0;
+			else
+				word_len = (word_len >> 10) % 100;
+			word = g_new (char, word_len + 3);
+			for (j = 0; j < word_len; ) {
+				guint32 p = nmtst_get_rand_uint32 ();
+				static const char delimiters_arr[] = { DELIMITERS_C };
+				static const char regular_chars[] = "abcdefghijklmnopqrstuvwxyz";
+
+				if (   !f_allow_escaping
+				    || (p % 1000) < 700) {
+					if (((p >> 20) % 100) < 20)
+						word[j++] = '\\';
+					word[j++] = regular_chars[(p >> 11) % (G_N_ELEMENTS (regular_chars) - 1)];
+					continue;
+				}
+				word[j++] = '\\';
+				word[j++] = delimiters_arr[(p >> 11) % G_N_ELEMENTS (delimiters_arr)];
+			}
+			word[j] = '\0';
+			g_ptr_array_add (words_exp, word);
+		}
+		g_ptr_array_add (words_exp, NULL);
+
+		str = g_strjoinv (" ", (char **) words_exp->pdata);
+
+		if (   str[0] == '\0'
+		    && words_len > 0) {
+			g_assert (words_len == 1);
+			g_assert_cmpstr (words_exp->pdata[0], ==, "");
+			words_len = 0;
+		}
+
+		_do_test_nm_utils_strsplit_set_f (  (f_allow_escaping ? NM_UTILS_STRSPLIT_SET_FLAGS_ALLOW_ESCAPING : NM_UTILS_STRSPLIT_SET_FLAGS_NONE)
+		                                  | NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY,
+		                                  str,
+		                                  words_len,
+		                                  (const char *const*) words_exp->pdata);
+	}
+
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED, "\t", "\t");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED | NM_UTILS_STRSPLIT_SET_FLAGS_STRSTRIP, "\t");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED | NM_UTILS_STRSPLIT_SET_FLAGS_STRSTRIP | NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY,
+	                                      "\t", "");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED | NM_UTILS_STRSPLIT_SET_FLAGS_STRSTRIP | NM_UTILS_STRSPLIT_SET_FLAGS_PRESERVE_EMPTY,
+	                                      "\t\\\t\t\t\\\t", "\t\t\t\t");
+
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED, "\ta", "\ta");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED | NM_UTILS_STRSPLIT_SET_FLAGS_STRSTRIP, "\ta", "a");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED, "\ta\\ b\t\\ ", "\ta b\t ");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED | NM_UTILS_STRSPLIT_SET_FLAGS_STRSTRIP, "\ta\\ b\t\\ \t", "a b\t ");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED, "a\\  b", "a ", "b");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED, "\ta\\  b", "\ta ", "b");
+	do_test_nm_utils_strsplit_set_simple (NM_UTILS_STRSPLIT_SET_FLAGS_ESCAPED | NM_UTILS_STRSPLIT_SET_FLAGS_STRSTRIP, "\ta\\  b", "a ", "b");
+}
+
+/*****************************************************************************/
+
+static char *
+_escaped_tokens_create_random_word_full (const char *const*tokens,
+                                         gsize n_tokens,
+                                         gsize len)
+{
+	GString *gstr = g_string_new (NULL);
+	gsize i;
+	char random_token[2] = { 0 };
+
+	for (i = 0; i < len; i++) {
+		const char *token = tokens[nmtst_get_rand_uint32 () % n_tokens];
+
+		if (!token[0]) {
+			do {
+				random_token[0] = nmtst_get_rand_uint32 ();
+			} while (random_token[0] == '\0');
+			token = random_token;
+		}
+		g_string_append (gstr, token);
+	}
+
+	/* reallocate the string, so that we don't have any excess memory from
+	 * the GString buffer. This is so that valgrind may better detect an out
+	 * or range access. */
+	return nm_str_realloc (g_string_free (gstr, FALSE));
+}
+
+/* set to 1 to exclude characters that are annoying to see in the debugger
+ * and printf() output. */
+#define ESCAPED_TOKENS_ONLY_NICE_CHARS 0
+
+static char *
+_escaped_tokens_create_random_whitespace (void)
+{
+	static const char *tokens[] = {
+		" ",
+#if !ESCAPED_TOKENS_ONLY_NICE_CHARS
+		"\n",
+		"\t",
+		"\r",
+		"\f",
+#endif
+	};
+
+	return _escaped_tokens_create_random_word_full (tokens, G_N_ELEMENTS (tokens), nmtst_get_rand_word_length (NULL) / 4u);
+}
+
+static char *
+_escaped_tokens_create_random_word (void)
+{
+	static const char *tokens[] = {
+		"a",
+		"b",
+		"c",
+		" ",
+		",",
+		"=",
+		"\\",
+#if !ESCAPED_TOKENS_ONLY_NICE_CHARS
+		"\n",
+		"\f",
+		":",
+		"",
+#endif
+	};
+
+	return _escaped_tokens_create_random_word_full (tokens, G_N_ELEMENTS (tokens), nmtst_get_rand_word_length (NULL));
+}
+
+static void
+_escaped_tokens_str_append_delimiter (GString *str,
+                                      gboolean strict,
+                                      gboolean needs_delimiter)
+{
+	guint len = nmtst_get_rand_word_length (NULL) / 10u;
+	char *s;
+
+again:
+	if (!strict) {
+		g_string_append (str, (s = _escaped_tokens_create_random_whitespace ()));
+		nm_clear_g_free (&s);
+	}
+
+	if (needs_delimiter)
+		g_string_append_c (str, ',');
+
+	if (!strict) {
+		g_string_append (str, (s = _escaped_tokens_create_random_whitespace ()));
+		nm_clear_g_free (&s);
+		if (len-- > 0) {
+			needs_delimiter = TRUE;
+			goto again;
+		}
+	}
+}
+
+static void
+_escaped_tokens_split (char *str, const char **out_key, const char **out_val)
+{
+	const char *key;
+	const char *val;
+	gsize len = strlen (str);
+
+	g_assert (str);
+
+	nm_utils_escaped_tokens_options_split (str, &key, &val);
+	g_assert (key);
+	g_assert (key == str);
+	if (val) {
+		g_assert (val > str);
+		g_assert (val > key);
+		g_assert (val <= &str[len]);
+	}
+	NM_SET_OUT (out_key, key);
+	NM_SET_OUT (out_val, val);
+}
+
+static void
+_escaped_tokens_combine (GString *combined,
+                         const char *key,
+                         const char *val,
+                         gboolean strict,
+                         gboolean allow_append_delimiter_before,
+                         gboolean needs_delimiter_after)
+{
+	gs_free char *escaped_key = NULL;
+	gs_free char *escaped_val = NULL;
+
+	if (allow_append_delimiter_before)
+		_escaped_tokens_str_append_delimiter (combined, strict, FALSE);
+	g_string_append (combined, nm_utils_escaped_tokens_options_escape_key (key, &escaped_key));
+	if (val) {
+		char *s;
+
+		if (!strict) {
+			g_string_append (combined, (s = _escaped_tokens_create_random_whitespace ()));
+			nm_clear_g_free (&s);
+		}
+		g_string_append_c (combined, '=');
+		if (!strict) {
+			g_string_append (combined, (s = _escaped_tokens_create_random_whitespace ()));
+			nm_clear_g_free (&s);
+		}
+		g_string_append (combined, nm_utils_escaped_tokens_options_escape_val (val, &escaped_val));
+	}
+	_escaped_tokens_str_append_delimiter (combined, strict, needs_delimiter_after);
+}
+
+static void
+_escaped_tokens_check_one_impl (const char *expected_key,
+                                const char *expected_val,
+                                const char *expected_combination,
+                                const char *const*other,
+                                gsize n_other)
+{
+	nm_auto_free_gstring GString *combined = g_string_new (NULL);
+	gsize i;
+
+	g_assert (expected_key);
+	g_assert (expected_combination);
+	g_assert (other);
+
+	_escaped_tokens_combine (combined,
+	                         expected_key,
+	                         expected_val,
+	                         TRUE,
+	                         TRUE,
+	                         FALSE);
+
+	g_assert_cmpstr (combined->str, ==, expected_combination);
+
+	for (i = 0; i < n_other + 2u; i++) {
+		nm_auto_free_gstring GString *str0 = NULL;
+		gs_free const char **strv_split = NULL;
+		gs_free char *strv_split0 = NULL;
+		const char *comb;
+		const char *key;
+		const char *val;
+
+		if (i == 0)
+			comb = expected_combination;
+		else if (i == 1) {
+			_escaped_tokens_combine (nm_gstring_prepare (&str0),
+			                         expected_key,
+			                         expected_val,
+			                         FALSE,
+			                         TRUE,
+			                         FALSE);
+			comb = str0->str;
+		} else
+			comb = other[i - 2];
+
+		strv_split = nm_utils_escaped_tokens_options_split_list (comb);
+		if (!strv_split) {
+			g_assert_cmpstr (expected_key, ==, "");
+			g_assert_cmpstr (expected_val, ==, NULL);
+			continue;
+		}
+		g_assert (expected_val || expected_key[0]);
+
+		g_assert_cmpuint (NM_PTRARRAY_LEN (strv_split), ==, 1u);
+
+		strv_split0 = g_strdup (strv_split[0]);
+
+		_escaped_tokens_split (strv_split0, &key, &val);
+		g_assert_cmpstr (key, ==, expected_key);
+		g_assert_cmpstr (val, ==, expected_val);
+	}
+}
+
+#define _escaped_tokens_check_one(expected_key, expected_val, expected_combination, ...) \
+	_escaped_tokens_check_one_impl (expected_key, expected_val, expected_combination, NM_MAKE_STRV (__VA_ARGS__), NM_NARG (__VA_ARGS__))
+
+static void
+test_nm_utils_escaped_tokens (void)
+{
+	int i_run;
+
+	for (i_run = 0; i_run < 1000; i_run++) {
+		const guint num_options = nmtst_get_rand_word_length (NULL);
+		gs_unref_ptrarray GPtrArray *options = g_ptr_array_new_with_free_func (g_free);
+		nm_auto_free_gstring GString *combined = g_string_new (NULL);
+		gs_free const char **strv_split = NULL;
+		guint i_option;
+		guint i;
+
+		/* Generate a list of random words for option key-value pairs. */
+		for (i_option = 0; i_option < 2u * num_options; i_option++) {
+			char *word = NULL;
+
+			if (   i_option % 2u == 1
+			    && nmtst_get_rand_uint32 () % 5 == 0
+			    && strlen (options->pdata[options->len - 1]) > 0u) {
+				/* For some options, leave the value unset and only generate a key.
+				 *
+				 * If key is "", then we cannot do that, because the test below would try
+				 * to append "" to the combined list, which the parser then would drop.
+				 * Only test omitting the value, if strlen() of the key is positive. */
+			} else
+				word = _escaped_tokens_create_random_word ();
+			g_ptr_array_add (options, word);
+		}
+
+		/* Combine the options in one comma separated list, with proper escaping. */
+		for (i_option = 0; i_option < num_options; i_option++) {
+			_escaped_tokens_combine (combined,
+			                         options->pdata[2u*i_option + 0u],
+			                         options->pdata[2u*i_option + 1u],
+			                         FALSE,
+			                         i_option == 0,
+			                         i_option != num_options - 1);
+		}
+
+		/* ensure that we can split and parse the options without difference. */
+		strv_split = nm_utils_escaped_tokens_options_split_list (combined->str);
+		for (i_option = 0; i_option < num_options; i_option++) {
+			const char *expected_key = options->pdata[2u*i_option + 0u];
+			const char *expected_val = options->pdata[2u*i_option + 1u];
+			gs_free char *s_split = i_option < NM_PTRARRAY_LEN (strv_split) ? g_strdup (strv_split[i_option]) : NULL;
+			const char *key = NULL;
+			const char *val = NULL;
+
+			if (s_split)
+				_escaped_tokens_split (s_split, &key, &val);
+
+			if (   !nm_streq0 (key, expected_key)
+			    || !nm_streq0 (val, expected_val)) {
+				g_print (">>> ASSERTION IS ABOUT TO FAIL for item %5d of %5d\n", i_option, num_options);
+				g_print (">>> combined =  \"%s\"\n", combined->str);
+				g_print (">>> %c   parsed[%5d].key = \"%s\"\n", nm_streq (key, expected_key) ? ' ' : 'X', i_option, key);
+				g_print (">>> %c   parsed[%5d].val = %s%s%s\n", nm_streq0 (val, expected_val) ? ' ' : 'X', i_option, NM_PRINT_FMT_QUOTE_STRING (val));
+				for (i = 0; i < num_options; i++) {
+					g_print (">>> %c original[%5d].key = \"%s\"\n", i == i_option ? '*' : ' ', i, (char *) options->pdata[2u*i + 0u]);
+					g_print (">>> %c original[%5d].val = %s%s%s\n", i == i_option ? '*' : ' ', i, NM_PRINT_FMT_QUOTE_STRING ((char *) options->pdata[2u*i + 1u]));
+				}
+				for (i = 0; i < NM_PTRARRAY_LEN (strv_split); i++)
+					g_print (">>>      split[%5d]     = \"%s\"\n", i, strv_split[i]);
+			}
+
+			g_assert_cmpstr (key, ==, expected_key);
+			g_assert_cmpstr (val, ==, expected_val);
+		}
+		g_assert_cmpint (NM_PTRARRAY_LEN (strv_split), ==, num_options);
+
+		/* Above we show a full round-trip of random option key-value pairs, that they can
+		 * without loss escape, concatenate, split-list, and split. This proofed that every
+		 * option key-value pair can be represented as a combined string and parsed back.
+		 *
+		 * Now, just check that we can also parse arbitrary random words in nm_utils_escaped_tokens_options_split().
+		 * split() is a non-injective surjective function. As we check the round-trip above for random words, where
+		 * options-split() is the last step, we show that every random word can be the output of the function
+		 * (which shows, the surjective part).
+		 *
+		 * But multiple random input arguments, may map to the same output argument (non-injective).
+		 * Just test whether we can handle random input words without crashing. For that, just use the
+		 * above generate list of random words.
+		 */
+		for (i = 0; i < 1u + 2u * i_option; i++) {
+			gs_free char *str = NULL;
+			const char *cstr;
+
+			if (i == 0)
+				cstr = combined->str;
+			else
+				cstr = options->pdata[i - 1u];
+			if (!cstr)
+				continue;
+
+			str = g_strdup (cstr);
+			_escaped_tokens_split (str, NULL, NULL);
+		}
+	}
+
+	_escaped_tokens_check_one ("", NULL, "");
+	_escaped_tokens_check_one ("", "", "=", " =");
+	_escaped_tokens_check_one ("a", "b", "a=b", "a = b");
+	_escaped_tokens_check_one ("a\\=", "b\\=", "a\\\\\\==b\\\\=", "a\\\\\\==b\\\\\\=");
+	_escaped_tokens_check_one ("\\=", "\\=", "\\\\\\==\\\\=", "\\\\\\==\\\\\\=");
+	_escaped_tokens_check_one (" ", "bb=", "\\ =bb=", "\\ =bb\\=");
+	_escaped_tokens_check_one (" ", "bb\\=", "\\ =bb\\\\=", "\\ =bb\\\\\\=");
+	_escaped_tokens_check_one ("a b", "a  b", "a b=a  b");
+	_escaped_tokens_check_one ("a b", "a  b", "a b=a  b");
+	_escaped_tokens_check_one ("a = b", "a = b", "a \\= b=a = b", "a \\= b=a \\= b");
 }
 
 /*****************************************************************************/
@@ -341,7 +1023,7 @@ _do_test_c_list_sort (CListSort *elements, guint n_list, gboolean headless)
 	c_list_init (&head);
 	for (i = 0; i < n_list; i++) {
 		el = &elements[i];
-		el->val = nmtst_get_rand_int () % (2*n_list);
+		el->val = nmtst_get_rand_uint32 () % (2*n_list);
 		c_list_link_tail (&head, &el->lst);
 	}
 
@@ -402,7 +1084,7 @@ test_c_list_sort (void)
 	elements = g_new0 (CListSort, N_ELEMENTS);
 	for (n_list = 1; n_list < N_ELEMENTS; n_list++) {
 		if (n_list > 150) {
-			n_list += nmtst_get_rand_int () % n_list;
+			n_list += nmtst_get_rand_uint32 () % n_list;
 			if (n_list >= N_ELEMENTS)
 				break;
 		}
@@ -410,7 +1092,7 @@ test_c_list_sort (void)
 			const guint N_REPEAT = n_list > 50 ? 1 : 5;
 
 			for (repeat = 0; repeat < N_REPEAT; repeat++)
-				_do_test_c_list_sort (elements, n_list, nmtst_get_rand_int () % 2);
+				_do_test_c_list_sort (elements, n_list, nmtst_get_rand_uint32 () % 2);
 		}
 	}
 }
@@ -755,10 +1437,12 @@ vpn_check_empty_func (const char *key, const char *value, gpointer user_data)
 static void
 test_setting_vpn_items (void)
 {
-	gs_unref_object NMSettingVpn *s_vpn = NULL;
+	gs_unref_object NMConnection *connection = NULL;
+	NMSettingVpn *s_vpn;
 
-	s_vpn = (NMSettingVpn *) nm_setting_vpn_new ();
-	g_assert (s_vpn);
+	connection = nmtst_create_minimal_connection ("vpn-items", NULL, NM_SETTING_VPN_SETTING_NAME, NULL);
+
+	s_vpn = nm_connection_get_setting_vpn (connection);
 
 	nm_setting_vpn_add_data_item (s_vpn, "foobar1", "blahblah1");
 	nm_setting_vpn_add_data_item (s_vpn, "foobar2", "blahblah2");
@@ -772,7 +1456,14 @@ test_setting_vpn_items (void)
 	nm_setting_vpn_remove_data_item (s_vpn, "foobar3");
 	nm_setting_vpn_remove_data_item (s_vpn, "foobar4");
 
+	g_assert (!_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (!_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
 	nm_setting_vpn_add_secret (s_vpn, "foobar1", "blahblah1");
+
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
 	nm_setting_vpn_add_secret (s_vpn, "foobar2", "blahblah2");
 	nm_setting_vpn_add_secret (s_vpn, "foobar3", "blahblah3");
 	nm_setting_vpn_add_secret (s_vpn, "foobar4", "blahblah4");
@@ -782,57 +1473,68 @@ test_setting_vpn_items (void)
 	nm_setting_vpn_remove_secret (s_vpn, "foobar1");
 	nm_setting_vpn_remove_secret (s_vpn, "foobar2");
 	nm_setting_vpn_remove_secret (s_vpn, "foobar3");
+
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
+	nm_setting_vpn_add_data_item (s_vpn, "foobar4-flags", "blahblah4");
+
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
+	nm_setting_vpn_add_data_item (s_vpn, "foobar4-flags", "2");
+
+	g_assert (!_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
 	nm_setting_vpn_remove_secret (s_vpn, "foobar4");
 
+	g_assert (!_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (!_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
+	nm_setting_vpn_remove_data_item (s_vpn, "foobar4-flags");
+
 	/* Try to add some blank values and make sure they are rejected */
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key != NULL));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_data_item (s_vpn, NULL, NULL);
 	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (strlen (key) > 0));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_data_item (s_vpn, "", "");
 	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (item != NULL));
-	nm_setting_vpn_add_data_item (s_vpn, "foobar1", NULL);
-	g_test_assert_expected_messages ();
-
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (strlen (item) > 0));
 	nm_setting_vpn_add_data_item (s_vpn, "foobar1", "");
-	g_test_assert_expected_messages ();
+	g_assert_cmpstr (nm_setting_vpn_get_data_item (s_vpn, "foobar1"), ==, "");
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key != NULL));
+	nm_setting_vpn_add_data_item (s_vpn, "foobar1", NULL);
+	g_assert_cmpstr (nm_setting_vpn_get_data_item (s_vpn, "foobar1"), ==, NULL);
+
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_data_item (s_vpn, NULL, "blahblah1");
 	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (strlen (key) > 0));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_data_item (s_vpn, "", "blahblah1");
 	g_test_assert_expected_messages ();
 
 	nm_setting_vpn_foreach_data_item (s_vpn, vpn_check_empty_func, NULL);
 
 	/* Try to add some blank secrets and make sure they are rejected */
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key != NULL));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_secret (s_vpn, NULL, NULL);
 	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (strlen (key) > 0));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_secret (s_vpn, "", "");
 	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (secret != NULL));
-	nm_setting_vpn_add_secret (s_vpn, "foobar1", NULL);
-	g_test_assert_expected_messages ();
-
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (strlen (secret) > 0));
 	nm_setting_vpn_add_secret (s_vpn, "foobar1", "");
-	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key != NULL));
+	nm_setting_vpn_add_secret (s_vpn, "foobar1", NULL);
+
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_secret (s_vpn, NULL, "blahblah1");
 	g_test_assert_expected_messages ();
 
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (strlen (key) > 0));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (key && key[0]));
 	nm_setting_vpn_add_secret (s_vpn, "", "blahblah1");
 	g_test_assert_expected_messages ();
 
@@ -1320,6 +2022,11 @@ test_setting_ip_route_attributes (void)
 	TEST_ATTR ("src", string, "1.2.3.0/24", AF_INET,  FALSE, TRUE);
 	TEST_ATTR ("src", string, "fd01::12",   AF_INET6, TRUE,  TRUE);
 
+	TEST_ATTR ("type", string, "local", AF_INET, TRUE, TRUE);
+	TEST_ATTR ("type", string, "local", AF_INET6, TRUE, TRUE);
+	TEST_ATTR ("type", string, "unicast", AF_INET, TRUE, TRUE);
+	TEST_ATTR ("type", string, "unicast", AF_INET6, TRUE, TRUE);
+
 #undef TEST_ATTR
 }
 
@@ -1351,8 +2058,6 @@ test_setting_gsm_apn_bad_chars (void)
 	s_gsm = (NMSettingGsm *) nm_setting_gsm_new ();
 	g_assert (s_gsm);
 
-	g_object_set (s_gsm, NM_SETTING_GSM_NUMBER, "*99#", NULL);
-
 	/* Make sure a valid APN works */
 	g_object_set (s_gsm, NM_SETTING_GSM_APN, "foobar123.-baz", NULL);
 	g_assert (nm_setting_verify (NM_SETTING (s_gsm), NULL, NULL));
@@ -1367,7 +2072,7 @@ test_setting_gsm_apn_bad_chars (void)
 
 	/* 0 characters long */
 	g_object_set (s_gsm, NM_SETTING_GSM_APN, "", NULL);
-	g_assert (!nm_setting_verify (NM_SETTING (s_gsm), NULL, NULL));
+	g_assert (nm_setting_verify (NM_SETTING (s_gsm), NULL, NULL));
 
 	/* 65-character long */
 	g_object_set (s_gsm, NM_SETTING_GSM_APN, "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl1", NULL);
@@ -1381,8 +2086,6 @@ test_setting_gsm_apn_underscore (void)
 
 	s_gsm = (NMSettingGsm *) nm_setting_gsm_new ();
 	g_assert (s_gsm);
-
-	g_object_set (s_gsm, NM_SETTING_GSM_NUMBER, "*99#", NULL);
 
 	/* 65-character long */
 	g_object_set (s_gsm, NM_SETTING_GSM_APN, "foobar_baz", NULL);
@@ -1469,7 +2172,7 @@ test_setting_to_dbus_all (void)
 
 	s_wsec = make_test_wsec_setting ("setting-to-dbus-all");
 
-	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_ALL);
+	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
 
 	/* Make sure all keys are there */
 	g_assert (_variant_contains (dict, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT));
@@ -1489,7 +2192,7 @@ test_setting_to_dbus_no_secrets (void)
 
 	s_wsec = make_test_wsec_setting ("setting-to-dbus-no-secrets");
 
-	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_NO_SECRETS);
+	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_NO_SECRETS, NULL);
 
 	/* Make sure non-secret keys are there */
 	g_assert (_variant_contains (dict, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT));
@@ -1511,7 +2214,7 @@ test_setting_to_dbus_only_secrets (void)
 
 	s_wsec = make_test_wsec_setting ("setting-to-dbus-only-secrets");
 
-	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_ONLY_SECRETS);
+	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_ONLY_SECRETS, NULL);
 
 	/* Make sure non-secret keys are not there */
 	g_assert (!_variant_contains (dict, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT));
@@ -1542,7 +2245,7 @@ test_setting_to_dbus_transform (void)
 
 	g_assert_cmpstr (nm_setting_wired_get_mac_address (NM_SETTING_WIRED (s_wired)), ==, test_mac_address);
 
-	dict = _nm_setting_to_dbus (s_wired, NULL, NM_CONNECTION_SERIALIZE_ALL);
+	dict = _nm_setting_to_dbus (s_wired, NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
 	g_assert (dict != NULL);
 
 	val = g_variant_lookup_value (dict, NM_SETTING_WIRED_MAC_ADDRESS, G_VARIANT_TYPE_BYTESTRING);
@@ -1571,7 +2274,7 @@ test_setting_to_dbus_enum (void)
 	              NM_SETTING_IP6_CONFIG_IP6_PRIVACY, NM_SETTING_IP6_CONFIG_PRIVACY_PREFER_TEMP_ADDR,
 	              NULL);
 
-	dict = _nm_setting_to_dbus (s_ip6, NULL, NM_CONNECTION_SERIALIZE_ALL);
+	dict = _nm_setting_to_dbus (s_ip6, NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
 	g_assert (dict != NULL);
 
 	val = g_variant_lookup_value (dict, NM_SETTING_IP6_CONFIG_IP6_PRIVACY, G_VARIANT_TYPE_INT32);
@@ -1590,7 +2293,7 @@ test_setting_to_dbus_enum (void)
 	                                                           NM_SETTING_SECRET_FLAG_NOT_SAVED),
 	              NULL);
 
-	dict = _nm_setting_to_dbus (s_wsec, NULL, NM_CONNECTION_SERIALIZE_ALL);
+	dict = _nm_setting_to_dbus (s_wsec, NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
 	g_assert (dict != NULL);
 
 	val = g_variant_lookup_value (dict, NM_SETTING_WIRELESS_SECURITY_WEP_KEY_TYPE, G_VARIANT_TYPE_UINT32);
@@ -1613,7 +2316,7 @@ test_setting_to_dbus_enum (void)
 	              NM_SETTING_SERIAL_PARITY, NM_SETTING_SERIAL_PARITY_ODD,
 	              NULL);
 
-	dict = _nm_setting_to_dbus (s_serial, NULL, NM_CONNECTION_SERIALIZE_ALL);
+	dict = _nm_setting_to_dbus (s_serial, NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
 	g_assert (dict != NULL);
 
 	val = g_variant_lookup_value (dict, NM_SETTING_SERIAL_PARITY, G_VARIANT_TYPE_BYTE);
@@ -1635,6 +2338,25 @@ test_connection_to_dbus_setting_name (void)
 	connection = nm_simple_connection_new ();
 	s_wsec = make_test_wsec_setting ("connection-to-dbus-setting-name");
 	nm_connection_add_setting (connection, NM_SETTING (s_wsec));
+
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
+	g_object_set (s_wsec,
+	              NM_SETTING_WIRELESS_SECURITY_WEP_KEY_FLAGS, NM_SETTING_SECRET_FLAG_NOT_SAVED,
+	              NM_SETTING_WIRELESS_SECURITY_LEAP_PASSWORD_FLAGS, NM_SETTING_SECRET_FLAG_NOT_SAVED,
+	              NULL);
+
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (!_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
+
+	g_object_set (s_wsec,
+	              NM_SETTING_WIRELESS_SECURITY_WEP_KEY_FLAGS, NM_SETTING_SECRET_FLAG_NONE,
+	              NM_SETTING_WIRELESS_SECURITY_LEAP_PASSWORD_FLAGS, NM_SETTING_SECRET_FLAG_NONE,
+	              NULL);
+
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SECRETS, NULL));
+	g_assert (_nm_connection_aggregate (connection, NM_CONNECTION_AGGREGATE_ANY_SYSTEM_SECRET_FLAGS, NULL));
 
 	dict = nm_connection_to_dbus (connection, NM_CONNECTION_SERIALIZE_ALL);
 
@@ -1709,7 +2431,7 @@ test_setting_new_from_dbus (void)
 	GVariant *dict;
 
 	s_wsec = make_test_wsec_setting ("setting-new-from-dbus");
-	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_ALL);
+	dict = _nm_setting_to_dbus (NM_SETTING (s_wsec), NULL, NM_CONNECTION_SERIALIZE_ALL, NULL);
 	g_object_unref (s_wsec);
 
 	s_wsec = (NMSettingWirelessSecurity *) _nm_setting_new_from_dbus (NM_TYPE_SETTING_WIRELESS_SECURITY, dict, NULL, NM_SETTING_PARSE_FLAGS_NONE, NULL);
@@ -2308,7 +3030,7 @@ test_setting_connection_permissions_helpers (void)
 	g_assert (!success);
 
 	/* Ensure a bad [type] is rejected */
-	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (ptype));
+	NMTST_EXPECT_LIBNM_CRITICAL (NMTST_G_RETURN_MSG (ptype && ptype[0]));
 	success = nm_setting_connection_add_permission (s_con, NULL, "blah", NULL);
 	g_test_assert_expected_messages ();
 	g_assert (!success);
@@ -2619,6 +3341,8 @@ test_connection_diff_a_only (void)
 			{ NM_SETTING_CONNECTION_AUTH_RETRIES,         NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_CONNECTION_MDNS,                 NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_CONNECTION_LLMNR,                NM_SETTING_DIFF_RESULT_IN_A },
+			{ NM_SETTING_CONNECTION_MUD_URL,              NM_SETTING_DIFF_RESULT_IN_A },
+			{ NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT,  NM_SETTING_DIFF_RESULT_IN_A },
 			{ NULL, NM_SETTING_DIFF_RESULT_UNKNOWN }
 		} },
 		{ NM_SETTING_WIRED_SETTING_NAME, {
@@ -2648,17 +3372,20 @@ test_connection_diff_a_only (void)
 			{ NM_SETTING_IP_CONFIG_ROUTES,             NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_ROUTE_METRIC,       NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_ROUTE_TABLE,        NM_SETTING_DIFF_RESULT_IN_A },
+			{ NM_SETTING_IP_CONFIG_ROUTING_RULES,      NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_IGNORE_AUTO_ROUTES, NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_IGNORE_AUTO_DNS,    NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP4_CONFIG_DHCP_CLIENT_ID,    NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_DHCP_TIMEOUT,       NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_DHCP_SEND_HOSTNAME, NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_DHCP_HOSTNAME,      NM_SETTING_DIFF_RESULT_IN_A },
+			{ NM_SETTING_IP_CONFIG_DHCP_HOSTNAME_FLAGS,NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP4_CONFIG_DHCP_FQDN,         NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_NEVER_DEFAULT,      NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_MAY_FAIL,           NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_DAD_TIMEOUT,        NM_SETTING_DIFF_RESULT_IN_A },
 			{ NM_SETTING_IP_CONFIG_DNS_PRIORITY,       NM_SETTING_DIFF_RESULT_IN_A },
+			{ NM_SETTING_IP_CONFIG_DHCP_IAID,          NM_SETTING_DIFF_RESULT_IN_A },
 			{ NULL, NM_SETTING_DIFF_RESULT_UNKNOWN },
 		} },
 	};
@@ -2946,7 +3673,6 @@ test_connection_good_base_types (void)
 
 	setting = nm_setting_gsm_new ();
 	g_object_set (setting,
-	              NM_SETTING_GSM_NUMBER, "*99#",
 	              NM_SETTING_GSM_APN, "metered.billing.sucks",
 	              NULL);
 	nm_connection_add_setting (connection, setting);
@@ -3095,15 +3821,15 @@ test_setting_compare_addresses (void)
 
 	nm_ip_address_unref (a);
 
-	if (nmtst_get_rand_int () % 2)
-		NMTST_SWAP (s1, s2);
+	if (nmtst_get_rand_uint32 () % 2)
+		NM_SWAP (s1, s2);
 
 	success = nm_setting_compare (s1, s2, NM_SETTING_COMPARE_FLAG_EXACT);
 	g_assert (!success);
 
 	success = nm_setting_diff (s1, s2, NM_SETTING_COMPARE_FLAG_EXACT, FALSE, &result);
 	g_assert (!success);
-	g_clear_pointer (&result, g_hash_table_unref);
+	nm_clear_pointer (&result, g_hash_table_unref);
 }
 
 static void
@@ -3127,15 +3853,15 @@ test_setting_compare_routes (void)
 
 	nm_ip_route_unref (r);
 
-	if (nmtst_get_rand_int () % 2)
-		NMTST_SWAP (s1, s2);
+	if (nmtst_get_rand_uint32 () % 2)
+		NM_SWAP (s1, s2);
 
 	success = nm_setting_compare (s1, s2, NM_SETTING_COMPARE_FLAG_EXACT);
 	g_assert (!success);
 
 	success = nm_setting_diff (s1, s2, NM_SETTING_COMPARE_FLAG_EXACT, FALSE, &result);
 	g_assert (!success);
-	g_clear_pointer (&result, g_hash_table_unref);
+	nm_clear_pointer (&result, g_hash_table_unref);
 }
 
 static void
@@ -3153,7 +3879,7 @@ test_setting_compare_wired_cloned_mac_address (void)
 	g_assert_cmpstr ("stable", ==, nm_setting_wired_get_cloned_mac_address ((NMSettingWired *) old));
 	g_object_get (old, NM_SETTING_WIRED_CLONED_MAC_ADDRESS, &str1, NULL);
 	g_assert_cmpstr ("stable", ==, str1);
-	g_clear_pointer (&str1, g_free);
+	nm_clear_g_free (&str1);
 
 	new = nm_setting_duplicate (old);
 	g_object_set (new, NM_SETTING_WIRED_CLONED_MAC_ADDRESS, "11:22:33:44:55:66", NULL);
@@ -3161,7 +3887,7 @@ test_setting_compare_wired_cloned_mac_address (void)
 	g_assert_cmpstr ("11:22:33:44:55:66", ==, nm_setting_wired_get_cloned_mac_address ((NMSettingWired *) new));
 	g_object_get (new, NM_SETTING_WIRED_CLONED_MAC_ADDRESS, &str1, NULL);
 	g_assert_cmpstr ("11:22:33:44:55:66", ==, str1);
-	g_clear_pointer (&str1, g_free);
+	nm_clear_g_free (&str1);
 
 	success = nm_setting_compare (old, new, NM_SETTING_COMPARE_FLAG_EXACT);
 	g_assert (!success);
@@ -3173,7 +3899,7 @@ test_setting_compare_wired_cloned_mac_address (void)
 	g_assert_cmpstr ("stable-bia", ==, nm_setting_wired_get_cloned_mac_address ((NMSettingWired *) new));
 	g_object_get (new, NM_SETTING_WIRED_CLONED_MAC_ADDRESS, &str1, NULL);
 	g_assert_cmpstr ("stable-bia", ==, str1);
-	g_clear_pointer (&str1, g_free);
+	nm_clear_g_free (&str1);
 
 	success = nm_setting_compare (old, new, NM_SETTING_COMPARE_FLAG_EXACT);
 	g_assert (!success);
@@ -3195,7 +3921,7 @@ test_setting_compare_wireless_cloned_mac_address (void)
 	g_assert_cmpstr ("stable", ==, nm_setting_wireless_get_cloned_mac_address ((NMSettingWireless *) old));
 	g_object_get (old, NM_SETTING_WIRELESS_CLONED_MAC_ADDRESS, &str1, NULL);
 	g_assert_cmpstr ("stable", ==, str1);
-	g_clear_pointer (&str1, g_free);
+	nm_clear_g_free (&str1);
 
 	new = nm_setting_duplicate (old);
 	g_object_set (new, NM_SETTING_WIRELESS_CLONED_MAC_ADDRESS, "11:22:33:44:55:66", NULL);
@@ -3203,7 +3929,7 @@ test_setting_compare_wireless_cloned_mac_address (void)
 	g_assert_cmpstr ("11:22:33:44:55:66", ==, nm_setting_wireless_get_cloned_mac_address ((NMSettingWireless *) new));
 	g_object_get (new, NM_SETTING_WIRELESS_CLONED_MAC_ADDRESS, &str1, NULL);
 	g_assert_cmpstr ("11:22:33:44:55:66", ==, str1);
-	g_clear_pointer (&str1, g_free);
+	nm_clear_g_free (&str1);
 
 	success = nm_setting_compare (old, new, NM_SETTING_COMPARE_FLAG_EXACT);
 	g_assert (!success);
@@ -3267,11 +3993,110 @@ test_data_compare_secrets_new (NMSettingSecretFlags secret_flags,
 }
 
 static void
+_test_compare_secrets_check_diff (NMSetting *a,
+                                  NMSetting *b,
+                                  NMSettingCompareFlags flags,
+                                  gboolean exp_same_psk,
+                                  gboolean exp_same_psk_flags)
+{
+	gs_unref_hashtable GHashTable *h = NULL;
+	NMSettingDiffResult _RESULT_IN_A = NM_SETTING_DIFF_RESULT_IN_A;
+	NMSettingDiffResult _RESULT_IN_B = NM_SETTING_DIFF_RESULT_IN_B;
+	gboolean invert_results;
+	gboolean diff_result;
+	NMSettingSecretFlags a_psk_flags = nm_setting_wireless_security_get_psk_flags (NM_SETTING_WIRELESS_SECURITY (a));
+	NMSettingSecretFlags b_psk_flags = nm_setting_wireless_security_get_psk_flags (NM_SETTING_WIRELESS_SECURITY (b));
+	const char *a_psk = nm_setting_wireless_security_get_psk (NM_SETTING_WIRELESS_SECURITY (a));
+	const char *b_psk = nm_setting_wireless_security_get_psk (NM_SETTING_WIRELESS_SECURITY (b));
+
+	g_assert (NM_IS_SETTING_WIRELESS_SECURITY (a));
+	g_assert (NM_IS_SETTING_WIRELESS_SECURITY (b));
+
+	invert_results = nmtst_get_rand_bool ();
+	if (invert_results) {
+		_RESULT_IN_A = NM_SETTING_DIFF_RESULT_IN_B;
+		_RESULT_IN_B = NM_SETTING_DIFF_RESULT_IN_A;
+	}
+
+	diff_result = nm_setting_diff (a, b, flags, invert_results, &h);
+
+	g_assert (exp_same_psk_flags == (a_psk_flags == b_psk_flags));
+
+	if (nm_streq0 (a_psk, b_psk))
+		g_assert (exp_same_psk);
+	else {
+		if (flags == NM_SETTING_COMPARE_FLAG_EXACT)
+			g_assert (!exp_same_psk);
+		else if (flags == NM_SETTING_COMPARE_FLAG_IGNORE_AGENT_OWNED_SECRETS) {
+			if (   !NM_FLAGS_HAS (a_psk_flags, NM_SETTING_SECRET_FLAG_AGENT_OWNED)
+			    && !NM_FLAGS_HAS (b_psk_flags, NM_SETTING_SECRET_FLAG_AGENT_OWNED))
+				g_assert (!exp_same_psk);
+			else if (   !NM_FLAGS_HAS (a_psk_flags, NM_SETTING_SECRET_FLAG_AGENT_OWNED)
+			         && NM_FLAGS_HAS (b_psk_flags, NM_SETTING_SECRET_FLAG_AGENT_OWNED))
+				g_assert (!exp_same_psk);
+			else
+				g_assert (exp_same_psk);
+		} else if (flags == NM_SETTING_COMPARE_FLAG_IGNORE_NOT_SAVED_SECRETS) {
+			if (   !NM_FLAGS_HAS (a_psk_flags, NM_SETTING_SECRET_FLAG_NOT_SAVED)
+			    && !NM_FLAGS_HAS (b_psk_flags, NM_SETTING_SECRET_FLAG_NOT_SAVED))
+				g_assert (!exp_same_psk);
+			else if (   !NM_FLAGS_HAS (a_psk_flags, NM_SETTING_SECRET_FLAG_NOT_SAVED)
+			         && NM_FLAGS_HAS (b_psk_flags, NM_SETTING_SECRET_FLAG_NOT_SAVED))
+				g_assert (!exp_same_psk);
+			else
+				g_assert (exp_same_psk);
+		} else if (flags == NM_SETTING_COMPARE_FLAG_IGNORE_SECRETS)
+			g_assert (exp_same_psk);
+		else
+			g_assert_not_reached ();
+	}
+
+	g_assert (diff_result == (exp_same_psk && exp_same_psk_flags));
+	g_assert (diff_result == (!h));
+
+	if (!diff_result) {
+		if (flags == NM_SETTING_COMPARE_FLAG_EXACT)
+			g_assert (!exp_same_psk);
+		else if (   NM_IN_SET (flags, NM_SETTING_COMPARE_FLAG_IGNORE_AGENT_OWNED_SECRETS,
+		                              NM_SETTING_COMPARE_FLAG_IGNORE_NOT_SAVED_SECRETS)
+		         && (a_psk_flags != b_psk_flags)
+		         && nm_setting_wireless_security_get_psk_flags (NM_SETTING_WIRELESS_SECURITY (a)) == NM_SETTING_SECRET_FLAG_NONE)
+			g_assert (!exp_same_psk);
+		else
+			g_assert (exp_same_psk);
+
+		g_assert ((!exp_same_psk) == g_hash_table_contains (h, NM_SETTING_WIRELESS_SECURITY_PSK));
+		if (!exp_same_psk) {
+			if (nm_setting_wireless_security_get_psk (NM_SETTING_WIRELESS_SECURITY (a)))
+				g_assert_cmpint (GPOINTER_TO_UINT (g_hash_table_lookup (h, NM_SETTING_WIRELESS_SECURITY_PSK)), ==, _RESULT_IN_A);
+			else
+				g_assert_cmpint (GPOINTER_TO_UINT (g_hash_table_lookup (h, NM_SETTING_WIRELESS_SECURITY_PSK)), ==, _RESULT_IN_B);
+		}
+
+		g_assert ((!exp_same_psk_flags) == g_hash_table_contains (h, NM_SETTING_WIRELESS_SECURITY_PSK_FLAGS));
+		if (!exp_same_psk_flags) {
+			if (nm_setting_wireless_security_get_psk_flags (NM_SETTING_WIRELESS_SECURITY (a)) != NM_SETTING_SECRET_FLAG_NONE)
+				g_assert_cmpint (GPOINTER_TO_UINT (g_hash_table_lookup (h, NM_SETTING_WIRELESS_SECURITY_PSK_FLAGS)), ==, _RESULT_IN_A);
+			else
+				g_assert_cmpint (GPOINTER_TO_UINT (g_hash_table_lookup (h, NM_SETTING_WIRELESS_SECURITY_PSK_FLAGS)), ==, _RESULT_IN_B);
+		}
+
+		g_assert_cmpint (g_hash_table_size (h), ==, (!exp_same_psk) + (!exp_same_psk_flags));
+	}
+
+	g_assert (diff_result == nm_setting_compare (a, b, flags));
+	g_assert (diff_result == nm_setting_compare (b, a, flags));
+
+}
+
+static void
 test_setting_compare_secrets (gconstpointer test_data)
 {
 	const TestDataCompareSecrets *data = test_data;
-	gs_unref_object NMSetting *old = NULL, *new = NULL;
-	gboolean success;
+	gs_unref_object NMConnection *conn_old = NULL;
+	gs_unref_object NMConnection *conn_new = NULL;
+	gs_unref_object NMSetting *old = NULL;
+	gs_unref_object NMSetting *new = NULL;
 
 	/* Make sure that a connection with transient/unsaved secrets compares
 	 * successfully to the same connection without those secrets.
@@ -3284,17 +4109,45 @@ test_setting_compare_secrets (gconstpointer test_data)
 	              NULL);
 	nm_setting_set_secret_flags (old, NM_SETTING_WIRELESS_SECURITY_PSK, data->secret_flags, NULL);
 
-	/* Clear the PSK from the duplicated setting */
 	new = nm_setting_duplicate (old);
-	if (data->remove_secret) {
+	if (data->remove_secret)
 		g_object_set (new, NM_SETTING_WIRELESS_SECURITY_PSK, NULL, NULL);
 
-		success = nm_setting_compare (old, new, NM_SETTING_COMPARE_FLAG_EXACT);
-		g_assert (success == FALSE);
+	g_assert ((!data->remove_secret) == nm_setting_compare (old, new, NM_SETTING_COMPARE_FLAG_EXACT));
+	g_assert ((!data->remove_secret) == nm_setting_compare (new, old, NM_SETTING_COMPARE_FLAG_EXACT));
+
+	_test_compare_secrets_check_diff (old, new, NM_SETTING_COMPARE_FLAG_EXACT, !data->remove_secret, TRUE);
+	_test_compare_secrets_check_diff (new, old, NM_SETTING_COMPARE_FLAG_EXACT, !data->remove_secret, TRUE);
+
+	g_assert (nm_setting_compare (old, new, data->comp_flags));
+	g_assert (nm_setting_compare (new, old, data->comp_flags));
+
+	_test_compare_secrets_check_diff (old, new, data->comp_flags, TRUE, TRUE);
+	_test_compare_secrets_check_diff (new, old, data->comp_flags, TRUE, TRUE);
+
+	/* OK. Try again, but this time not only change the secret, also let the secret flags differ... */
+	if (data->secret_flags != NM_SETTING_SECRET_FLAG_NONE) {
+		nm_setting_set_secret_flags (new, NM_SETTING_WIRELESS_SECURITY_PSK, NM_SETTING_SECRET_FLAG_NONE, NULL);
+
+		_test_compare_secrets_check_diff (old, new, NM_SETTING_COMPARE_FLAG_EXACT, FALSE, FALSE);
+		_test_compare_secrets_check_diff (new, old, NM_SETTING_COMPARE_FLAG_EXACT, FALSE, FALSE);
+
+		_test_compare_secrets_check_diff (old, new, data->comp_flags, TRUE, FALSE);
+		_test_compare_secrets_check_diff (new, old, data->comp_flags, FALSE, FALSE);
+
+		nm_setting_set_secret_flags (new, NM_SETTING_WIRELESS_SECURITY_PSK, data->secret_flags, NULL);
 	}
 
-	success = nm_setting_compare (old, new, data->comp_flags);
-	g_assert (success);
+	conn_old = nmtst_create_minimal_connection ("test-compare-secrets", NULL, NM_SETTING_WIRELESS_SETTING_NAME, NULL);
+	nm_connection_add_setting (conn_old, nm_setting_duplicate (old));
+	conn_new = nm_simple_connection_new_clone (conn_old);
+	nm_connection_add_setting (conn_new, nm_setting_duplicate (new));
+
+	g_assert ((!data->remove_secret) == nm_connection_compare (conn_old, conn_new, NM_SETTING_COMPARE_FLAG_EXACT));
+	g_assert ((!data->remove_secret) == nm_connection_compare (conn_new, conn_old, NM_SETTING_COMPARE_FLAG_EXACT));
+
+	g_assert (nm_connection_compare (conn_old, conn_new, data->comp_flags));
+	g_assert (nm_connection_compare (conn_new, conn_old, data->comp_flags));
 }
 
 static void
@@ -3431,6 +4284,16 @@ test_hwaddr_equal (void)
 	g_assert (nm_utils_hwaddr_matches (null_binary, sizeof (null_binary), null_string, -1));
 	g_assert (nm_utils_hwaddr_matches (null_binary, sizeof (null_binary), null_binary, sizeof (null_binary)));
 	g_assert (nm_utils_hwaddr_matches (null_binary, sizeof (null_binary), NULL, ETH_ALEN));
+
+	g_assert (!nm_utils_hwaddr_matches (NULL, -1, NULL, -1));
+	g_assert (!nm_utils_hwaddr_matches (NULL, -1, string, -1));
+	g_assert (!nm_utils_hwaddr_matches (string, -1, NULL, -1));
+	g_assert (!nm_utils_hwaddr_matches (NULL, -1, null_string, -1));
+	g_assert (!nm_utils_hwaddr_matches (null_string, -1, NULL, -1));
+	g_assert (!nm_utils_hwaddr_matches (NULL, -1, binary, sizeof (binary)));
+	g_assert (!nm_utils_hwaddr_matches (binary, sizeof (binary), NULL, -1));
+	g_assert (!nm_utils_hwaddr_matches (NULL, -1, null_binary, sizeof (null_binary)));
+	g_assert (!nm_utils_hwaddr_matches (null_binary, sizeof (null_binary), NULL, -1));
 }
 
 static void
@@ -3473,6 +4336,41 @@ test_connection_changed_cb (NMConnection *connection, gboolean *data)
 	*data = TRUE;
 }
 
+static guint32
+_netmask_to_prefix (guint32 netmask)
+{
+	guint32 prefix;
+	guint8 v;
+	const guint8 *p = (guint8 *) &netmask;
+
+	if (p[3]) {
+		prefix = 24;
+		v = p[3];
+	} else if (p[2]) {
+		prefix = 16;
+		v = p[2];
+	} else if (p[1]) {
+		prefix = 8;
+		v = p[1];
+	} else {
+		prefix = 0;
+		v = p[0];
+	}
+
+	while (v) {
+		prefix++;
+		v <<= 1;
+	}
+
+	g_assert_cmpint (prefix, <=, 32);
+
+	/* we re-implemented the netmask-to-prefix code differently. Check
+	 * that they agree. */
+	g_assert_cmpint (prefix, ==, nm_utils_ip4_netmask_to_prefix (netmask));
+
+	return prefix;
+}
+
 static void
 test_ip4_prefix_to_netmask (void)
 {
@@ -3480,7 +4378,7 @@ test_ip4_prefix_to_netmask (void)
 
 	for (i = 0; i<=32; i++) {
 		guint32 netmask = _nm_utils_ip4_prefix_to_netmask (i);
-		int plen = nm_utils_ip4_netmask_to_prefix (netmask);
+		int plen = _netmask_to_prefix (netmask);
 
 		g_assert_cmpint (i, ==, plen);
 		{
@@ -3510,7 +4408,7 @@ test_ip4_netmask_to_prefix (void)
 		guint32 netmask = _nm_utils_ip4_prefix_to_netmask (i);
 		guint32 netmask_lowest_bit = netmask & ~_nm_utils_ip4_prefix_to_netmask (i-1);
 
-		g_assert_cmpint (i, ==, nm_utils_ip4_netmask_to_prefix (netmask));
+		g_assert_cmpint (i, ==, _netmask_to_prefix (netmask));
 
 		for (j = 0; j < 2*i; j++) {
 			guint32 r = g_rand_int (rand);
@@ -3524,7 +4422,7 @@ test_ip4_netmask_to_prefix (void)
 
 			/* create an invalid netmask with holes and check that the function
 			 * returns the longest prefix. */
-			prefix_holey = nm_utils_ip4_netmask_to_prefix (netmask_holey);
+			prefix_holey = _netmask_to_prefix (netmask_holey);
 
 			g_assert_cmpint (i, ==, prefix_holey);
 		}
@@ -4078,7 +4976,7 @@ test_connection_normalize_virtual_iface_name (void)
 	g_variant_unref (setting_dict);
 	g_variant_unref (var);
 
-	/* If vlan.interface-name is invalid, deserialization will fail. */
+	/* If vlan.interface-name will be ignored. */
 	NMTST_VARIANT_EDITOR (connection_dict,
 	                      NMTST_VARIANT_CHANGE_PROPERTY (NM_SETTING_VLAN_SETTING_NAME,
 	                                                     "interface-name",
@@ -4087,8 +4985,9 @@ test_connection_normalize_virtual_iface_name (void)
 	                      );
 
 	con = _connection_new_from_dbus (connection_dict, &error);
-	g_assert_error (error, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_INVALID_PROPERTY);
-	g_clear_error (&error);
+	nmtst_assert_success (con, error);
+	g_assert_cmpstr (nm_connection_get_interface_name (con), ==, IFACE_NAME);
+	g_clear_object (&con);
 
 	/* If vlan.interface-name is valid, but doesn't match, it will be ignored. */
 	NMTST_VARIANT_EDITOR (connection_dict,
@@ -4513,6 +5412,7 @@ test_connection_normalize_infiniband_mtu (void)
 {
 	gs_unref_object NMConnection *con = NULL;
 	NMSettingInfiniband *s_infini;
+	guint mtu_regular = nmtst_rand_select (2044, 2045, 65520);
 
 	con = nmtst_create_minimal_connection ("test_connection_normalize_infiniband_mtu", NULL,
 	                                       NM_SETTING_INFINIBAND_SETTING_NAME, NULL);
@@ -4525,26 +5425,26 @@ test_connection_normalize_infiniband_mtu (void)
 
 	g_object_set (s_infini,
 	              NM_SETTING_INFINIBAND_TRANSPORT_MODE, "datagram",
-	              NM_SETTING_INFINIBAND_MTU, (guint) 2044,
+	              NM_SETTING_INFINIBAND_MTU, (guint) mtu_regular,
 	              NULL);
 	nmtst_assert_connection_verifies_and_normalizable (con);
 	nmtst_connection_normalize (con);
-	g_assert_cmpint (2044, ==, nm_setting_infiniband_get_mtu (s_infini));
+	g_assert_cmpint (mtu_regular, ==, nm_setting_infiniband_get_mtu (s_infini));
 
 	g_object_set (s_infini,
 	              NM_SETTING_INFINIBAND_TRANSPORT_MODE, "datagram",
-	              NM_SETTING_INFINIBAND_MTU, (guint) 2045,
+	              NM_SETTING_INFINIBAND_MTU, (guint) 65521,
 	              NULL);
 	nmtst_assert_connection_verifies_after_normalization (con, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_INVALID_PROPERTY);
 	nmtst_connection_normalize (con);
-	g_assert_cmpint (2044, ==, nm_setting_infiniband_get_mtu (s_infini));
+	g_assert_cmpint (65520, ==, nm_setting_infiniband_get_mtu (s_infini));
 
 	g_object_set (s_infini,
 	              NM_SETTING_INFINIBAND_TRANSPORT_MODE, "connected",
-	              NM_SETTING_INFINIBAND_MTU, (guint) 65520,
+	              NM_SETTING_INFINIBAND_MTU, (guint) mtu_regular,
 	              NULL);
 	nmtst_assert_connection_verifies_without_normalization (con);
-	g_assert_cmpint (65520, ==, nm_setting_infiniband_get_mtu (s_infini));
+	g_assert_cmpint (mtu_regular, ==, nm_setting_infiniband_get_mtu (s_infini));
 
 	g_object_set (s_infini,
 	              NM_SETTING_INFINIBAND_TRANSPORT_MODE, "connected",
@@ -5054,7 +5954,7 @@ test_setting_ip4_gateway (void)
 	GVariantBuilder addrs_builder;
 	GError *error = NULL;
 
-	g_assert_cmpstr (nm_utils_inet4_ntop (addr_vals_0[0], NULL), ==, "192.168.1.10");
+	nmtst_assert_ip4_address (addr_vals_0[0], "192.168.1.10");
 
 	/* When serializing on the daemon side, ipv4.gateway is copied to the first
 	 * entry of ipv4.addresses
@@ -5096,7 +5996,7 @@ test_setting_ip4_gateway (void)
 
 		addr_array = g_variant_get_fixed_array (addr_var, &length, sizeof (guint32));
 		g_assert_cmpint (length, ==, 3);
-		g_assert_cmpstr (nm_utils_inet4_ntop (addr_array[2], NULL), ==, "192.168.1.1");
+		nmtst_assert_ip4_address (addr_array[2], "192.168.1.1");
 		g_variant_unref (addr_var);
 	}
 	g_variant_unref (value);
@@ -5203,7 +6103,7 @@ test_setting_ip6_gateway (void)
 
 		gateway_bytes = g_variant_get_fixed_array (gateway_var, &length, 1);
 		g_assert_cmpint (length, ==, 16);
-		g_assert_cmpstr (nm_utils_inet6_ntop ((struct in6_addr *) gateway_bytes, NULL), ==, "abcd::1");
+		nmtst_assert_ip6_address ((struct in6_addr *) gateway_bytes, "abcd::1");
 		g_variant_unref (gateway_var);
 	}
 	g_variant_unref (value);
@@ -5322,6 +6222,158 @@ test_setting_user_data (void)
 
 /*****************************************************************************/
 
+typedef union {
+	struct sockaddr     sa;
+	struct sockaddr_in  in;
+	struct sockaddr_in6 in6;
+} SockAddrUnion;
+
+static void
+_sock_addr_endpoint (const char *endpoint,
+                     const char *host,
+                     gint32 port)
+{
+	nm_auto_unref_sockaddrendpoint NMSockAddrEndpoint *ep = NULL;
+	const char *s_endpoint;
+	const char *s_host;
+	gint32 s_port;
+	SockAddrUnion sockaddr = { };
+
+	g_assert (endpoint);
+	g_assert ((!host) == (port == -1));
+	g_assert (port >= -1 && port <= G_MAXUINT16);
+
+	ep = nm_sock_addr_endpoint_new (endpoint);
+	g_assert (ep);
+
+	s_endpoint = nm_sock_addr_endpoint_get_endpoint (ep);
+	s_host = nm_sock_addr_endpoint_get_host (ep);
+	s_port = nm_sock_addr_endpoint_get_port (ep);
+	g_assert_cmpstr (endpoint, ==, s_endpoint);
+	g_assert_cmpstr (host,     ==, s_host);
+	g_assert_cmpint (port,     ==, s_port);
+
+	g_assert (!nm_sock_addr_endpoint_get_fixed_sockaddr (ep, &sockaddr));
+
+	if (endpoint[0] != ' ') {
+		gs_free char *endpoint2 = NULL;
+
+		/* also test with a leading space */
+		endpoint2 = g_strdup_printf (" %s", endpoint);
+		_sock_addr_endpoint (endpoint2, host, port);
+	}
+
+	if (endpoint[0] && endpoint[strlen (endpoint) - 1] != ' ') {
+		gs_free char *endpoint2 = NULL;
+
+		/* also test with a trailing space */
+		endpoint2 = g_strdup_printf ("%s ", endpoint);
+		_sock_addr_endpoint (endpoint2, host, port);
+	}
+}
+
+static void
+_sock_addr_endpoint_fixed (const char *endpoint,
+                           const char *host,
+                           guint16 port,
+                           guint scope_id)
+{
+	nm_auto_unref_sockaddrendpoint NMSockAddrEndpoint *ep = NULL;
+	const char *s_endpoint;
+	const char *s_host;
+	gint32 s_port;
+	int addr_family;
+	NMIPAddr addrbin;
+	SockAddrUnion sockaddr = { };
+
+	g_assert (endpoint);
+	g_assert (host);
+	g_assert (port > 0);
+
+	if (!nm_utils_parse_inaddr_bin (AF_UNSPEC, host, &addr_family, &addrbin))
+		g_assert_not_reached ();
+
+	ep = nm_sock_addr_endpoint_new (endpoint);
+	g_assert (ep);
+
+	s_endpoint = nm_sock_addr_endpoint_get_endpoint (ep);
+	s_host = nm_sock_addr_endpoint_get_host (ep);
+	s_port = nm_sock_addr_endpoint_get_port (ep);
+	g_assert_cmpstr (endpoint, ==, s_endpoint);
+	g_assert_cmpstr (NULL,     !=, s_host);
+	g_assert_cmpint (port,     ==, s_port);
+
+	if (!nm_sock_addr_endpoint_get_fixed_sockaddr (ep, &sockaddr))
+		g_assert_not_reached ();
+
+	g_assert_cmpint (sockaddr.sa.sa_family, ==, addr_family);
+	if (addr_family == AF_INET) {
+		const SockAddrUnion s = {
+			.in = {
+				.sin_family = AF_INET,
+				.sin_addr   = addrbin.addr4_struct,
+				.sin_port   = htons (port),
+			},
+		};
+
+		g_assert_cmpint (sockaddr.in.sin_addr.s_addr, ==, addrbin.addr4);
+		g_assert_cmpint (sockaddr.in.sin_port, ==, htons (port));
+		g_assert (memcmp (&s, &sockaddr, sizeof (s.in)) == 0);
+	} else if (addr_family == AF_INET6) {
+		const SockAddrUnion s = {
+			.in6 = {
+				.sin6_family   = AF_INET6,
+				.sin6_addr     = addrbin.addr6,
+				.sin6_scope_id = scope_id,
+				.sin6_port     = htons (port),
+			},
+		};
+
+		g_assert (memcmp (&sockaddr.in6.sin6_addr, &addrbin, sizeof (addrbin.addr6)) == 0);
+		g_assert_cmpint (sockaddr.in6.sin6_port, ==, htons (port));
+		g_assert_cmpint (sockaddr.in6.sin6_scope_id, ==, scope_id);
+		g_assert_cmpint (sockaddr.in6.sin6_flowinfo, ==, 0);
+		g_assert (memcmp (&s, &sockaddr, sizeof (s.in6)) == 0);
+	} else
+		g_assert_not_reached ();
+}
+
+static void
+test_sock_addr_endpoint (void)
+{
+	_sock_addr_endpoint ("",                NULL, -1);
+	_sock_addr_endpoint (":",               NULL, -1);
+	_sock_addr_endpoint ("a",               NULL, -1);
+	_sock_addr_endpoint ("a:",              NULL, -1);
+	_sock_addr_endpoint (":a",              NULL, -1);
+	_sock_addr_endpoint ("[]:a",            NULL, -1);
+	_sock_addr_endpoint ("[]a",             NULL, -1);
+	_sock_addr_endpoint ("[]:",             NULL, -1);
+	_sock_addr_endpoint ("[a]b",            NULL, -1);
+	_sock_addr_endpoint ("[a:b",            NULL, -1);
+	_sock_addr_endpoint ("[a[:b",           NULL, -1);
+	_sock_addr_endpoint ("a:6",             "a",  6);
+	_sock_addr_endpoint ("a:6",             "a",  6);
+	_sock_addr_endpoint ("[a]:6",           "a",  6);
+	_sock_addr_endpoint ("[a]:6",           "a",  6);
+	_sock_addr_endpoint ("[a]:655",         "a",  655);
+	_sock_addr_endpoint ("[ab]:][6",        NULL, -1);
+	_sock_addr_endpoint ("[ab]:]:[6",       NULL, -1);
+	_sock_addr_endpoint ("[a[]:b",          NULL, -1);
+	_sock_addr_endpoint ("[192.169.6.x]:6", "192.169.6.x", 6);
+	_sock_addr_endpoint ("[192.169.6.x]:0", NULL, -1);
+	_sock_addr_endpoint ("192.169.6.7:0",   NULL, -1);
+
+	_sock_addr_endpoint_fixed ("192.169.6.7:6",   "192.169.6.7", 6, 0);
+	_sock_addr_endpoint_fixed ("[192.169.6.7]:6", "192.169.6.7", 6, 0);
+	_sock_addr_endpoint_fixed ("[a:b::]:6", "a:b::", 6, 0);
+	_sock_addr_endpoint_fixed ("[a:b::%7]:6", "a:b::", 6, 7);
+	_sock_addr_endpoint_fixed ("a:b::1%75:6", "a:b::1", 6, 75);
+	_sock_addr_endpoint_fixed ("a:b::1%0:64", "a:b::1", 64, 0);
+}
+
+/*****************************************************************************/
+
 static void
 test_hexstr2bin (void)
 {
@@ -5360,7 +6412,7 @@ test_hexstr2bin (void)
 static void
 _do_strquote (const char *str, gsize buf_len, const char *expected)
 {
-	char canary = (char) nmtst_get_rand_int ();
+	char canary = (char) nmtst_get_rand_uint32 ();
 	gs_free char *buf_full = g_malloc (buf_len + 2);
 	char *buf = &buf_full[1];
 	const char *b;
@@ -5687,7 +6739,7 @@ __test_uuid (const char *expected_uuid, const char *str, gssize slen, char *uuid
 static void
 test_nm_utils_uuid_generate_from_strings (void)
 {
-	const NMUuid uuid0 = { 0 };
+	const NMUuid uuid0 = { };
 
 	g_assert_cmpmem (&uuid0, sizeof (uuid0), _uuid ("00000000-0000-0000-0000-000000000000"), 16);
 
@@ -5841,6 +6893,11 @@ test_nm_utils_ascii_str_to_int64 (void)
 	test_nm_utils_ascii_str_to_int64_do ("080",  0, G_MININT64, G_MAXINT64, -1, EINVAL, -1);
 	test_nm_utils_ascii_str_to_int64_do ("070",  0, G_MININT64, G_MAXINT64, -1, 0, 7*8);
 	test_nm_utils_ascii_str_to_int64_do ("0x70",  0, G_MININT64, G_MAXINT64, -1, 0, 0x70);
+
+	g_assert_cmpint (21, ==, _nm_utils_ascii_str_to_int64 ("025", 0, 0, 1000, -1));
+	g_assert_cmpint (21, ==, _nm_utils_ascii_str_to_int64 ("0025", 0, 0, 1000, -1));
+	g_assert_cmpint (25, ==, _nm_utils_ascii_str_to_int64 ("025", 10, 0, 1000, -1));
+	g_assert_cmpint (25, ==, _nm_utils_ascii_str_to_int64 ("0025", 10, 0, 1000, -1));
 }
 
 /*****************************************************************************/
@@ -6087,14 +7144,42 @@ _team_config_equal_check (const char *conf1,
                           gboolean port_config,
                           gboolean expected)
 {
-	g_assert_cmpint (_nm_utils_team_config_equal (conf1, conf2, port_config), ==, expected);
+	nm_auto_free_team_setting NMTeamSetting *team_a = NULL;
+	nm_auto_free_team_setting NMTeamSetting *team_b = NULL;
+	gboolean is_same;
+
+	if (nmtst_get_rand_bool ())
+		NM_SWAP (conf1, conf2);
+
+	if (!nm_streq0 (conf1, conf2)) {
+		_team_config_equal_check (conf1, conf1, port_config, TRUE);
+		_team_config_equal_check (conf2, conf2, port_config, TRUE);
+	}
+
+	team_a = nm_team_setting_new (port_config, conf1);
+	team_b = nm_team_setting_new (port_config, conf2);
+
+	is_same = (nm_team_setting_cmp (team_a, team_b, TRUE) == 0);
+	g_assert_cmpint (is_same, ==, expected);
+
+	if (nm_streq0 (conf1, conf2)) {
+		g_assert_cmpint (nm_team_setting_cmp (team_a, team_b, FALSE), ==, 0);
+		g_assert (expected);
+	} else
+		g_assert_cmpint (nm_team_setting_cmp (team_a, team_b, FALSE), !=, 0);
 }
 
 static void
 test_nm_utils_team_config_equal (void)
 {
-#if WITH_JSON_VALIDATION
-	_team_config_equal_check ("", "", TRUE, TRUE);
+	_team_config_equal_check ("",
+	                          "",
+	                          TRUE,
+	                          TRUE);
+	_team_config_equal_check ("",
+	                          " ",
+	                          TRUE,
+	                          TRUE);
 	_team_config_equal_check ("{}",
 	                          "{ }",
 	                          TRUE,
@@ -6102,21 +7187,25 @@ test_nm_utils_team_config_equal (void)
 	_team_config_equal_check ("{}",
 	                          "{",
 	                          TRUE,
-	                          FALSE);
+	                          TRUE);
+	_team_config_equal_check ("{ \"a\": 1 }",
+	                          "{ \"a\": 1 }",
+	                          TRUE,
+	                          TRUE);
+	_team_config_equal_check ("{ \"a\": 1 }",
+	                          "{ \"a\":   1 }",
+	                          TRUE,
+	                          TRUE);
 
 	/* team config */
 	_team_config_equal_check ("{ }",
-	                          "{ \"runner\" :  { \"name\" : \"roundrobin\"} }",
-	                          FALSE,
-	                          TRUE);
-	_team_config_equal_check ("{ }",
 	                          "{ \"runner\" :  { \"name\" : \"random\"} }",
 	                          FALSE,
-	                          FALSE);
+	                          !WITH_JSON_VALIDATION);
 	_team_config_equal_check ("{ \"runner\" :  { \"name\" : \"roundrobin\"} }",
 	                          "{ \"runner\" :  { \"name\" : \"random\"} }",
 	                          FALSE,
-	                          FALSE);
+	                          !WITH_JSON_VALIDATION);
 	_team_config_equal_check ("{ \"runner\" :  { \"name\" : \"random\"} }",
 	                          "{ \"runner\" :  { \"name\" : \"random\"} }",
 	                          FALSE,
@@ -6132,29 +7221,29 @@ test_nm_utils_team_config_equal (void)
 	_team_config_equal_check ("{ \"runner\" :  { \"name\" : \"lacp\"} }",
 	                          "{ \"runner\" :  { \"name\" : \"lacp\", \"tx_hash\" : [ \"eth\", \"ipv4\", \"ipv6\" ] } }",
 	                          FALSE,
-	                          TRUE);
+	                          !WITH_JSON_VALIDATION);
 	_team_config_equal_check ("{ \"runner\" :  { \"name\" : \"roundrobin\"} }",
 	                          "{ \"runner\" :  { \"name\" : \"roundrobin\", \"tx_hash\" : [ \"eth\", \"ipv4\", \"ipv6\" ] } }",
 	                          FALSE,
-	                          FALSE);
+	                          !WITH_JSON_VALIDATION);
 	_team_config_equal_check ("{ \"runner\" :  { \"name\" : \"lacp\"} }",
 	                          "{ \"runner\" :  { \"name\" : \"lacp\", \"tx_hash\" : [ \"eth\" ] } }",
 	                          FALSE,
-	                          FALSE);
+	                          !WITH_JSON_VALIDATION);
 
 	/* team port config */
 	_team_config_equal_check ("{ }",
 	                          "{ \"link_watch\" :  { \"name\" : \"ethtool\"} }",
 	                          TRUE,
-	                          TRUE);
+	                          !WITH_JSON_VALIDATION);
 	_team_config_equal_check ("{ }",
 	                          "{ \"link_watch\" :  { \"name\" : \"arp_ping\"} }",
 	                          TRUE,
-	                          FALSE);
+	                          TRUE);
 	_team_config_equal_check ("{ \"link_watch\" :  { \"name\" : \"ethtool\"} }",
 	                          "{ \"link_watch\" :  { \"name\" : \"arp_ping\"} }",
 	                          TRUE,
-	                          FALSE);
+	                          !WITH_JSON_VALIDATION);
 	_team_config_equal_check ("{ \"link_watch\" :  { \"name\" : \"arp_ping\"} }",
 	                          "{ \"link_watch\" :  { \"name\" : \"arp_ping\"} }",
 	                          TRUE,
@@ -6163,13 +7252,6 @@ test_nm_utils_team_config_equal (void)
 	                          "{ \"link_watch\" :  { \"name\" : \"arp_ping\"}, \"ports\" : { \"eth1\" : {} } }",
 	                          TRUE,
 	                          TRUE);
-#else
-	/* Without JSON library, strings are compared for equality */
-	_team_config_equal_check ("", "", TRUE, TRUE);
-	_team_config_equal_check ("", " ", TRUE, FALSE);
-	_team_config_equal_check ("{ \"a\": 1 }", "{ \"a\": 1 }", TRUE, TRUE);
-	_team_config_equal_check ("{ \"a\": 1 }", "{ \"a\":   1 }", TRUE, FALSE);
-#endif
 }
 
 /*****************************************************************************/
@@ -6468,7 +7550,7 @@ test_nm_utils_ptrarray_find_binary_search_with_duplicates (void)
 			/* fill with random numbers... surely there are some duplicates
 			 * there... or maybe even there are none... */
 			for (i = 0; i < i_len; i++)
-				arr[i] = GINT_TO_POINTER (nmtst_get_rand_int () % (i_len + BIN_SEARCH_W_DUPS_JITTER));
+				arr[i] = GINT_TO_POINTER (nmtst_get_rand_uint32 () % (i_len + BIN_SEARCH_W_DUPS_JITTER));
 			g_qsort_with_data (arr,
 			                   i_len,
 			                   sizeof (gpointer),
@@ -6740,7 +7822,7 @@ _do_test_utils_str_utf8safe_unescape (const char *str, const char *expected, gsi
 	gs_free gpointer buf_free_1 = NULL;
 	gs_free char *str_free_1 = NULL;
 
-	s = nm_utils_buf_utf8safe_unescape (str, &l, &buf_free_1);
+	s = nm_utils_buf_utf8safe_unescape (str, NM_UTILS_STR_UTF8_SAFE_FLAG_NONE, &l, &buf_free_1);
 	g_assert_cmpint (expected_len, ==, l);
 	g_assert_cmpstr (s, ==, expected);
 
@@ -6764,7 +7846,7 @@ _do_test_utils_str_utf8safe_unescape (const char *str, const char *expected, gsi
 	if (   expected
 	    && l == strlen (expected)) {
 		/* there are no embeeded NULs. Check that nm_utils_str_utf8safe_unescape() yields the same result. */
-		s = nm_utils_str_utf8safe_unescape (str, &str_free_1);
+		s = nm_utils_str_utf8safe_unescape (str, NM_UTILS_STR_UTF8_SAFE_FLAG_NONE, &str_free_1);
 		g_assert_cmpstr (s, ==, expected);
 		if (strchr (str, '\\')) {
 			g_assert (str_free_1 != str);
@@ -6792,10 +7874,11 @@ _do_test_utils_str_utf8safe (const char *str, gsize str_len, const char *expecte
 	gs_free char *str_free_7 = NULL;
 	gs_free char *str_free_8 = NULL;
 	gboolean str_has_nul = FALSE;
+#define RND_FLAG ((nmtst_get_rand_bool ()) ? NM_UTILS_STR_UTF8_SAFE_FLAG_NONE : NM_UTILS_STR_UTF8_SAFE_FLAG_SECRET)
 
-	buf_safe = nm_utils_buf_utf8safe_escape (str, str_len, flags, &str_free_1);
+	buf_safe = nm_utils_buf_utf8safe_escape (str, str_len, flags | RND_FLAG, &str_free_1);
 
-	str_safe = nm_utils_str_utf8safe_escape (str, flags, &str_free_2);
+	str_safe = nm_utils_str_utf8safe_escape (str, flags | RND_FLAG, &str_free_2);
 
 	if (str_len == 0) {
 		g_assert (buf_safe == NULL);
@@ -6815,7 +7898,7 @@ _do_test_utils_str_utf8safe (const char *str, gsize str_len, const char *expecte
 	} else
 		str_has_nul = TRUE;
 
-	str_free_3 = nm_utils_str_utf8safe_escape_cp (str, flags);
+	str_free_3 = nm_utils_str_utf8safe_escape_cp (str, flags | RND_FLAG);
 	g_assert_cmpstr (str_free_3, ==, str_safe);
 	g_assert ((!str && !str_free_3) || (str != str_free_3));
 
@@ -6832,10 +7915,10 @@ _do_test_utils_str_utf8safe (const char *str, gsize str_len, const char *expecte
 			g_assert (g_utf8_validate (str, -1, NULL));
 		}
 
-		g_assert (str == nm_utils_str_utf8safe_unescape (str_safe, &str_free_4));
+		g_assert (str == nm_utils_str_utf8safe_unescape (str_safe, NM_UTILS_STR_UTF8_SAFE_FLAG_NONE, &str_free_4));
 		g_assert (!str_free_4);
 
-		str_free_5 = nm_utils_str_utf8safe_unescape_cp (str_safe);
+		str_free_5 = nm_utils_str_utf8safe_unescape_cp (str_safe, NM_UTILS_STR_UTF8_SAFE_FLAG_NONE);
 		if (str) {
 			g_assert (str_free_5 != str);
 			g_assert_cmpstr (str_free_5, ==, str);
@@ -6859,11 +7942,11 @@ _do_test_utils_str_utf8safe (const char *str, gsize str_len, const char *expecte
 		str_free_6 = g_strcompress (str_safe);
 		g_assert_cmpstr (str, ==, str_free_6);
 
-		str_free_7 = nm_utils_str_utf8safe_unescape_cp (str_safe);
+		str_free_7 = nm_utils_str_utf8safe_unescape_cp (str_safe, NM_UTILS_STR_UTF8_SAFE_FLAG_NONE);
 		g_assert (str_free_7 != str);
 		g_assert_cmpstr (str_free_7, ==, str);
 
-		s = nm_utils_str_utf8safe_unescape (str_safe, &str_free_8);
+		s = nm_utils_str_utf8safe_unescape (str_safe, NM_UTILS_STR_UTF8_SAFE_FLAG_NONE, &str_free_8);
 		g_assert (str_free_8 != str);
 		g_assert (s == str_free_8);
 		g_assert_cmpstr (str_free_8, ==, str);
@@ -7008,7 +8091,7 @@ test_nm_in_set (void)
 	_ASSERT (5,  NM_IN_SET_SE (-1, G( 1), G( 2), G( 3), G(-1), G( 5)));
 	_ASSERT (6,  NM_IN_SET_SE (-1, G( 1), G( 2), G( 3), G( 4), G( 5), G(-1)));
 
-	(void) NM_IN_SET ("a",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
+	g_assert (!NM_IN_SET (0,  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16));
 #undef G
 #undef N
 #undef _ASSERT
@@ -7135,7 +8218,9 @@ test_nm_in_strset (void)
 	_ASSERT (6,  NM_IN_STRSET ("a",  G(NULL), G("b"),  G("c"),  G("d"),  G("e"),  G("a")));
 	_ASSERT (6, !NM_IN_STRSET ("a",  G(NULL), G("b"),  G("c"),  G("d"),  G("e"),  G("f")));
 
-	(void) NM_IN_STRSET ("a",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
+	g_assert (!NM_IN_STRSET (NULL,  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"));
+	g_assert (!NM_IN_STRSET ("_",   "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"));
+	g_assert ( NM_IN_STRSET ("10",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"));
 #undef G
 #undef N
 #undef _ASSERT
@@ -7230,6 +8315,33 @@ test_route_attributes_format (void)
 	g_assert_cmpstr (str, ==, "from:aaaa\\:bbbb\\:cccc\\:dddd\\:\\:\\/64/initcwnd:21/window:30000");
 	g_hash_table_remove_all (ht);
 	g_free (str);
+}
+
+/*****************************************************************************/
+
+static void
+test_variant_attribute_spec (void)
+{
+	const NMVariantAttributeSpec *const *const specs_list[] = {
+		nm_ip_route_get_variant_attribute_spec (),
+	};
+	int i_specs;
+
+	for (i_specs = 0; i_specs < G_N_ELEMENTS (specs_list); i_specs++) {
+		const NMVariantAttributeSpec *const *const specs = specs_list[i_specs];
+		gsize len;
+		gsize i;
+
+		g_assert (specs);
+
+		len = NM_PTRARRAY_LEN (specs);
+		g_assert_cmpint (len, >, 0u);
+
+		_nmtst_variant_attribute_spec_assert_sorted (specs, len);
+		for (i = 0; i < len; i++)
+			g_assert (specs[i] == _nm_variant_attribute_spec_find_binary_search (specs, len, specs[i]->name));
+		g_assert (!_nm_variant_attribute_spec_find_binary_search (specs, len, "bogus"));
+	}
 }
 
 /*****************************************************************************/
@@ -7354,51 +8466,636 @@ test_ethtool_offload (void)
 	g_assert_cmpstr (d->optname, ==, NM_ETHTOOL_OPTNAME_FEATURE_RXHASH);
 }
 
-static void
-test_nm_utils_escape_spaces (void)
+/*****************************************************************************/
+
+typedef struct {
+	GMainLoop *loop1;
+	GMainContext *c2;
+	GSource *extra_sources[2];
+	bool got_signal[5];
+	int fd_2;
+} IntegData;
+
+static gboolean
+_test_integrate_cb_handle (IntegData *d, int signal)
 {
-	char *to_free;
+	int i;
 
-	g_assert_cmpstr (_nm_utils_escape_spaces (NULL, &to_free), ==, NULL);
-	g_free (to_free);
+	g_assert (d);
+	g_assert (signal >= 0);
+	g_assert (signal < G_N_ELEMENTS (d->got_signal));
 
-	g_assert_cmpstr (_nm_utils_escape_spaces ("", &to_free), ==, "");
-	g_free (to_free);
+	g_assert (!d->got_signal[signal]);
+	d->got_signal[signal] = TRUE;
 
-	g_assert_cmpstr (_nm_utils_escape_spaces (" ", &to_free), ==, "\\ ");
-	g_free (to_free);
+	for (i = 0; i < G_N_ELEMENTS (d->got_signal); i++) {
+		if (!d->got_signal[i])
+			break;
+	}
+	if (i == G_N_ELEMENTS (d->got_signal))
+		g_main_loop_quit (d->loop1);
+	return G_SOURCE_REMOVE;
+}
 
-	g_assert_cmpstr (_nm_utils_escape_spaces ("\t ", &to_free), ==, "\\\t\\ ");
-	g_free (to_free);
+static gboolean
+_test_integrate_cb_timeout_1 (gpointer user_data)
+{
+	return _test_integrate_cb_handle (user_data, 0);
+}
 
-	g_assert_cmpstr (_nm_utils_escape_spaces ("abc", &to_free), ==, "abc");
-	g_free (to_free);
+static gboolean
+_test_integrate_cb_fd_2 (int fd,
+                         GIOCondition condition,
+                         gpointer user_data)
 
-	g_assert_cmpstr (_nm_utils_escape_spaces ("abc def", &to_free), ==, "abc\\ def");
-	g_free (to_free);
+{
+	IntegData *d = user_data;
 
-	g_assert_cmpstr (_nm_utils_escape_spaces ("abc\tdef", &to_free), ==, "abc\\\tdef");
-	g_free (to_free);
+	g_assert (d->got_signal[1]);
+	g_assert (d->got_signal[2]);
+	g_assert (d->got_signal[3]);
+	g_assert (d->extra_sources[0]);
+	g_assert (d->extra_sources[1]);
+
+	return _test_integrate_cb_handle (d, 4);
+}
+
+static gboolean
+_test_integrate_cb_idle_2 (gpointer user_data)
+{
+	IntegData *d = user_data;
+	GSource *extra_source;
+
+	g_assert (d->got_signal[1]);
+	g_assert (d->got_signal[2]);
+	g_assert (d->extra_sources[0]);
+	g_assert (!d->extra_sources[1]);
+
+	extra_source = nm_g_unix_fd_source_new (d->fd_2,
+	                                        G_IO_IN,
+	                                        G_PRIORITY_DEFAULT,
+	                                        _test_integrate_cb_fd_2,
+	                                        d,
+	                                        NULL);
+	g_source_attach (extra_source, d->c2);
+
+	d->extra_sources[1] = extra_source;
+
+	return _test_integrate_cb_handle (d, 3);
+}
+
+static gboolean
+_test_integrate_cb_idle_1 (gpointer user_data)
+{
+	IntegData *d = user_data;
+	GSource *extra_source;
+
+	g_assert (d->got_signal[2]);
+	g_assert (!d->extra_sources[0]);
+
+	extra_source = g_idle_source_new ();
+	g_source_set_callback (extra_source, _test_integrate_cb_idle_2, d, NULL);
+	g_source_attach (extra_source, d->c2);
+
+	d->extra_sources[0] = extra_source;
+
+	return _test_integrate_cb_handle (d, 1);
+}
+
+static gboolean
+_test_integrate_cb_fd_1 (int fd,
+                         GIOCondition condition,
+                         gpointer user_data)
+
+{
+	IntegData *d = user_data;
+
+	g_assert (!d->got_signal[1]);
+	return _test_integrate_cb_handle (d, 2);
+}
+
+static gboolean
+_test_integrate_maincontext_cb_idle1 (gpointer user_data)
+{
+	guint32 *p_count = user_data;
+
+	g_assert (*p_count < 5);
+	(*p_count)++;
+	return G_SOURCE_CONTINUE;
 }
 
 static void
-test_nm_utils_unescape_spaces (void)
+test_integrate_maincontext (gconstpointer test_data)
 {
-#define CHECK_STR(in, out) \
-	G_STMT_START { \
-		gs_free char *str = g_strdup (in); \
-		\
-		g_assert_cmpstr (_nm_utils_unescape_spaces (str), ==, out); \
-	} G_STMT_END
+	const guint TEST_IDX = GPOINTER_TO_UINT (test_data);
+	GMainContext *c1 = g_main_context_default ();
+	nm_auto_unref_gmaincontext GMainContext *c2 = g_main_context_new ();
+	nm_auto_destroy_and_unref_gsource GSource *integ_source = NULL;
 
-	CHECK_STR ("\\a", "\\a");
-	CHECK_STR ("foobar", "foobar");
-	CHECK_STR ("foo bar", "foo bar");
-	CHECK_STR ("foo\\ bar", "foo bar");
-	CHECK_STR ("foo\\", "foo\\");
-	CHECK_STR ("\\\\\t", "\\\t");
+	integ_source = nm_utils_g_main_context_create_integrate_source (c2);
+	g_source_attach (integ_source, c1);
 
-#undef CHECK_STR
+	if (TEST_IDX == 1) {
+		nm_auto_destroy_and_unref_gsource GSource *idle_source_1 = NULL;
+		guint32 count = 0;
+
+		idle_source_1 = g_idle_source_new ();
+		g_source_set_callback (idle_source_1, _test_integrate_maincontext_cb_idle1, &count, NULL);
+		g_source_attach (idle_source_1, c2);
+
+		nmtst_main_context_iterate_until_assert (c1, 2000, count == 5);
+	}
+
+	if (TEST_IDX == 2) {
+		nm_auto_destroy_and_unref_gsource GSource *main_timeout_source = NULL;
+		nm_auto_destroy_and_unref_gsource GSource *timeout_source_1 = NULL;
+		nm_auto_destroy_and_unref_gsource GSource *idle_source_1 = NULL;
+		nm_auto_destroy_and_unref_gsource GSource *fd_source_1 = NULL;
+		nm_auto_unref_gmainloop GMainLoop *loop1 = NULL;
+		nm_auto_close int fd_1 = -1;
+		nm_auto_close int fd_2 = -1;
+		IntegData d;
+		int i;
+
+		main_timeout_source = g_timeout_source_new (3000);
+		g_source_set_callback (main_timeout_source, nmtst_g_source_assert_not_called, NULL, NULL);
+		g_source_attach (main_timeout_source, c1);
+
+		loop1 = g_main_loop_new (c1, FALSE);
+
+		d = (IntegData) {
+			.loop1 = loop1,
+			.c2    = c2,
+		};
+
+		fd_1 = open ("/dev/null", O_RDONLY | O_CLOEXEC);
+		g_assert (fd_1 >= 0);
+		fd_source_1 = nm_g_unix_fd_source_new (fd_1,
+		                                       G_IO_IN,
+		                                       G_PRIORITY_DEFAULT,
+		                                       _test_integrate_cb_fd_1,
+		                                       &d,
+		                                       NULL);
+		g_source_attach (fd_source_1, c2);
+
+		fd_2 = open ("/dev/null", O_RDONLY | O_CLOEXEC);
+		g_assert (fd_2 >= 0);
+		d.fd_2 = fd_2;
+
+		idle_source_1 = g_idle_source_new ();
+		g_source_set_callback (idle_source_1, _test_integrate_cb_idle_1, &d, NULL);
+		g_source_attach (idle_source_1, c2);
+
+		timeout_source_1 = g_timeout_source_new (5);
+		g_source_set_callback (timeout_source_1, _test_integrate_cb_timeout_1, &d, NULL);
+		g_source_attach (timeout_source_1, c2);
+
+		g_main_loop_run (loop1);
+
+		for (i = 0; i < G_N_ELEMENTS (d.extra_sources); i++) {
+			g_assert (d.extra_sources[i]);
+			nm_clear_pointer (&d.extra_sources[i], nm_g_source_destroy_and_unref);
+		}
+	}
+}
+
+/*****************************************************************************/
+
+static void
+test_nm_ip_addr_zero (void)
+{
+	in_addr_t a4 = nmtst_inet4_from_string ("0.0.0.0");
+	struct in6_addr a6 = *nmtst_inet6_from_string ("::");
+	char buf[NM_UTILS_INET_ADDRSTRLEN];
+	NMIPAddr a = NM_IP_ADDR_INIT;
+
+	g_assert (memcmp (&a, &nm_ip_addr_zero, sizeof (a)) == 0);
+
+	g_assert (IN6_IS_ADDR_UNSPECIFIED (&nm_ip_addr_zero.addr6));
+	g_assert (memcmp (&nm_ip_addr_zero.addr6, &in6addr_any, sizeof (in6addr_any)) == 0);
+
+	g_assert (memcmp (&nm_ip_addr_zero, &a4, sizeof (a4)) == 0);
+	g_assert (memcmp (&nm_ip_addr_zero, &a6, sizeof (a6)) == 0);
+
+	g_assert_cmpstr (_nm_utils_inet4_ntop (nm_ip_addr_zero.addr4, buf), ==, "0.0.0.0");
+	g_assert_cmpstr (_nm_utils_inet6_ntop (&nm_ip_addr_zero.addr6, buf), ==, "::");
+
+	g_assert_cmpstr (nm_utils_inet_ntop (AF_INET, &nm_ip_addr_zero, buf), ==, "0.0.0.0");
+	g_assert_cmpstr (nm_utils_inet_ntop (AF_INET6, &nm_ip_addr_zero, buf), ==, "::");
+
+	G_STATIC_ASSERT_EXPR (sizeof (a) == sizeof (a.array));
+}
+
+static void
+test_connection_ovs_ifname (gconstpointer test_data)
+{
+	const guint TEST_CASE = GPOINTER_TO_UINT (test_data);
+	gs_unref_object NMConnection *con = NULL;
+	NMSettingConnection *s_con = NULL;
+	NMSettingOvsBridge *s_ovs_bridge = NULL;
+	NMSettingOvsPort *s_ovs_port = NULL;
+	NMSettingOvsInterface *s_ovs_iface = NULL;
+	NMSettingOvsPatch *s_ovs_patch = NULL;
+	const char *ovs_iface_type = NULL;
+
+	switch (TEST_CASE) {
+	case 1:
+		con = nmtst_create_minimal_connection ("test_connection_ovs_ifname_bridge",
+		                                       NULL,
+		                                       NM_SETTING_OVS_BRIDGE_SETTING_NAME, &s_con);
+		s_ovs_bridge = nm_connection_get_setting_ovs_bridge (con);
+		g_assert (s_ovs_bridge);
+		break;
+	case 2:
+		con = nmtst_create_minimal_connection ("test_connection_ovs_ifname_port",
+		                                       NULL,
+		                                       NM_SETTING_OVS_PORT_SETTING_NAME, &s_con);
+
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_MASTER,
+		              "master0",
+		              NM_SETTING_CONNECTION_SLAVE_TYPE,
+		              NM_SETTING_OVS_BRIDGE_SETTING_NAME,
+		              NULL);
+
+		s_ovs_port = nm_connection_get_setting_ovs_port (con);
+		g_assert (s_ovs_port);
+		break;
+	case 3:
+		con = nmtst_create_minimal_connection ("test_connection_ovs_ifname_interface_patch",
+		                                       NULL,
+		                                       NM_SETTING_OVS_INTERFACE_SETTING_NAME, &s_con);
+		s_ovs_iface = nm_connection_get_setting_ovs_interface (con);
+		g_assert (s_ovs_iface);
+
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_MASTER,
+		              "master0",
+		              NM_SETTING_CONNECTION_SLAVE_TYPE,
+		              NM_SETTING_OVS_PORT_SETTING_NAME,
+		              NULL);
+
+		g_object_set (s_ovs_iface,
+		              NM_SETTING_OVS_INTERFACE_TYPE,
+		              "patch",
+		              NULL);
+
+		s_ovs_patch = NM_SETTING_OVS_PATCH (nm_setting_ovs_patch_new());
+		g_assert (s_ovs_patch);
+
+		g_object_set (s_ovs_patch,
+		              NM_SETTING_OVS_PATCH_PEER, "1.2.3.4",
+		              NULL);
+
+		nm_connection_add_setting (con, NM_SETTING (s_ovs_patch));
+		s_ovs_patch = nm_connection_get_setting_ovs_patch (con);
+		g_assert (s_ovs_patch);
+		ovs_iface_type = "patch";
+		break;
+	case 4:
+		con = nmtst_create_minimal_connection ("test_connection_ovs_ifname_interface_internal",
+		                                       NULL,
+		                                       NM_SETTING_OVS_INTERFACE_SETTING_NAME, &s_con);
+		s_ovs_iface = nm_connection_get_setting_ovs_interface (con);
+		g_assert (s_ovs_iface);
+
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_MASTER,
+		              "master0",
+		              NM_SETTING_CONNECTION_SLAVE_TYPE,
+		              NM_SETTING_OVS_PORT_SETTING_NAME,
+		              NULL);
+
+		g_object_set (s_ovs_iface,
+		              NM_SETTING_OVS_INTERFACE_TYPE,
+		              "internal",
+		              NULL);
+		ovs_iface_type = "internal";
+		break;
+	case 5:
+		con = nmtst_create_minimal_connection ("test_connection_ovs_ifname_interface_system",
+		                                       NULL,
+		                                       NM_SETTING_WIRED_SETTING_NAME, &s_con);
+
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_MASTER,
+		              "master0",
+		              NM_SETTING_CONNECTION_SLAVE_TYPE,
+		              NM_SETTING_OVS_PORT_SETTING_NAME,
+		              NULL);
+
+		s_ovs_iface = NM_SETTING_OVS_INTERFACE (nm_setting_ovs_interface_new());
+		g_assert (s_ovs_iface);
+
+		g_object_set (s_ovs_iface,
+		              NM_SETTING_OVS_INTERFACE_TYPE,
+		              "system",
+		              NULL);
+
+		nm_connection_add_setting (con, NM_SETTING (s_ovs_iface));
+		s_ovs_iface = nm_connection_get_setting_ovs_interface (con);
+		g_assert (s_ovs_iface);
+
+		ovs_iface_type = "system";
+		break;
+	case 6:
+		con = nmtst_create_minimal_connection ("test_connection_ovs_ifname_interface_dpdk",
+		                                       NULL,
+		                                       NM_SETTING_OVS_INTERFACE_SETTING_NAME, &s_con);
+		s_ovs_iface = nm_connection_get_setting_ovs_interface (con);
+		g_assert (s_ovs_iface);
+
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_MASTER,
+		              "master0",
+		              NM_SETTING_CONNECTION_SLAVE_TYPE,
+		              NM_SETTING_OVS_PORT_SETTING_NAME,
+		              NULL);
+
+		g_object_set (s_ovs_iface,
+		              NM_SETTING_OVS_INTERFACE_TYPE,
+		              "dpdk",
+		              NULL);
+		ovs_iface_type = "dpdk";
+		break;
+	}
+
+	if (!nm_streq0 (ovs_iface_type, "system")) {
+		/* wrong: contains backward slash */
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_INTERFACE_NAME, "ovs\\0",
+		              NULL);
+		nmtst_assert_connection_unnormalizable (con,
+		                                        NM_CONNECTION_ERROR,
+		                                        NM_CONNECTION_ERROR_INVALID_PROPERTY);
+
+		/* wrong: contains forward slash */
+		g_object_set (s_con,
+		              NM_SETTING_CONNECTION_INTERFACE_NAME, "ovs/0",
+		              NULL);
+		nmtst_assert_connection_unnormalizable (con,
+		                                        NM_CONNECTION_ERROR,
+		                                        NM_CONNECTION_ERROR_INVALID_PROPERTY);
+	}
+
+	/* wrong: contains space */
+	g_object_set (s_con,
+	              NM_SETTING_CONNECTION_INTERFACE_NAME, "ovs 0",
+	              NULL);
+	nmtst_assert_connection_unnormalizable (con,
+	                                        NM_CONNECTION_ERROR,
+	                                        NM_CONNECTION_ERROR_INVALID_PROPERTY);
+
+	/* good */
+	g_object_set (s_con,
+	              NM_SETTING_CONNECTION_INTERFACE_NAME, "ovs0",
+	              NULL);
+	nmtst_assert_connection_verifies (con);
+
+	g_object_set (s_con,
+	              NM_SETTING_CONNECTION_INTERFACE_NAME, "ovs-br0",
+	              NULL);
+	nmtst_assert_connection_verifies (con);
+
+	/* good if bridge, port, or patch interface */
+	g_object_set (s_con,
+	              NM_SETTING_CONNECTION_INTERFACE_NAME, "ovs123123123123130123123",
+	              NULL);
+
+	if (!ovs_iface_type || nm_streq (ovs_iface_type, "patch"))
+		nmtst_assert_connection_verifies (con);
+	else {
+		nmtst_assert_connection_unnormalizable (con,
+		                                        NM_CONNECTION_ERROR,
+		                                        NM_CONNECTION_ERROR_INVALID_PROPERTY);
+	}
+}
+
+/*****************************************************************************/
+
+static gboolean
+_strsplit_quoted_char_needs_escaping (char ch)
+{
+	return    NM_IN_SET (ch, '\'', '\"', '\\')
+	       || strchr (NM_ASCII_WHITESPACES, ch);
+}
+
+static char *
+_strsplit_quoted_create_str_rand (gssize len)
+{
+	NMStrBuf strbuf = NM_STR_BUF_INIT (nmtst_get_rand_uint32 () % 200, nmtst_get_rand_bool ());
+
+	g_assert (len >= -1);
+
+	if (len == -1)
+		len = nmtst_get_rand_word_length (NULL);
+
+	while (len-- > 0) {
+		char ch;
+
+		ch = nmtst_rand_select ('a', ' ', '\\', '"', '\'', nmtst_get_rand_uint32 () % 255 + 1);
+		g_assert (ch);
+		nm_str_buf_append_c (&strbuf, ch);
+	}
+
+	if (!strbuf.allocated)
+		nm_str_buf_maybe_expand (&strbuf, 1, nmtst_get_rand_bool ());
+	return nm_str_buf_finalize (&strbuf, NULL);
+}
+
+static char **
+_strsplit_quoted_create_strv_rand (void)
+{
+	guint len = nmtst_get_rand_word_length (NULL);
+	char **ptr;
+	guint i;
+
+	ptr = g_new (char *, len + 1);
+	for (i = 0; i < len; i++)
+		ptr[i] = _strsplit_quoted_create_str_rand (-1);
+	ptr[i] = NULL;
+	return ptr;
+}
+
+static char *
+_strsplit_quoted_join_strv_rand (const char *const*strv)
+{
+	NMStrBuf strbuf = NM_STR_BUF_INIT (nmtst_get_rand_uint32 () % 200, nmtst_get_rand_bool ());
+	char *result;
+	gsize l;
+	gsize l2;
+	gsize *p_l2 = nmtst_get_rand_bool () ? &l2 : NULL;
+	gsize i;
+
+	g_assert (strv);
+
+	nm_str_buf_append_c_repeated (&strbuf, ' ', nmtst_get_rand_word_length (NULL) / 4);
+	for (i = 0; strv[i]; i++) {
+		const char *s = strv[i];
+		gsize j;
+		char quote;
+
+		nm_str_buf_append_c_repeated (&strbuf, ' ', 1 + nmtst_get_rand_word_length (NULL) / 4);
+
+		j = 0;
+		quote = '\0';
+		while (TRUE) {
+			char ch = s[j++];
+
+			/* extract_first_word*/
+			if (quote != '\0') {
+				if (ch == '\0') {
+					nm_str_buf_append_c (&strbuf, quote);
+					break;
+				}
+				if (   ch == quote
+				    || ch == '\\'
+				    || nmtst_get_rand_uint32 () % 5 == 0)
+					nm_str_buf_append_c (&strbuf, '\\');
+				nm_str_buf_append_c (&strbuf, ch);
+				if (nmtst_get_rand_uint32 () % 3 == 0) {
+					nm_str_buf_append_c (&strbuf, quote);
+					quote = '\0';
+					goto next_maybe_quote;
+				}
+				continue;
+			}
+
+			if (ch == '\0') {
+				if (s == strv[i]) {
+					quote = nmtst_rand_select ('\'', '"');
+					nm_str_buf_append_c_repeated (&strbuf, quote, 2);
+				}
+				break;
+			}
+
+			if (   _strsplit_quoted_char_needs_escaping (ch)
+			    || nmtst_get_rand_uint32 () % 5 == 0)
+				nm_str_buf_append_c (&strbuf, '\\');
+
+			nm_str_buf_append_c (&strbuf, ch);
+
+next_maybe_quote:
+			if (nmtst_get_rand_uint32 () % 5 == 0) {
+				quote = nmtst_rand_select ('\'', '\"');
+				nm_str_buf_append_c (&strbuf, quote);
+				if (nmtst_get_rand_uint32 () % 5 == 0) {
+					nm_str_buf_append_c (&strbuf, quote);
+					quote = '\0';
+				}
+			}
+		}
+	}
+	nm_str_buf_append_c_repeated (&strbuf, ' ', nmtst_get_rand_word_length (NULL) / 4);
+
+	nm_str_buf_maybe_expand (&strbuf, 1, nmtst_get_rand_bool ());
+
+	l = strbuf.len;
+	result = nm_str_buf_finalize (&strbuf, p_l2);
+	g_assert (!p_l2 || l == *p_l2);
+	g_assert (strlen (result) == l);
+	return result;
+}
+
+static void
+_strsplit_quoted_assert_strv (const char *topic,
+                              const char *str,
+                              const char *const*strv1,
+                              const char *const*strv2)
+{
+	nm_auto_str_buf NMStrBuf s1 = { };
+	nm_auto_str_buf NMStrBuf s2 = { };
+	gs_free char *str_escaped = NULL;
+	int i;
+
+	g_assert (str);
+	g_assert (strv1);
+	g_assert (strv2);
+
+	if (_nm_utils_strv_equal ((char **) strv1, (char **) strv2))
+		return;
+
+	for (i = 0; strv1[i]; i++) {
+		gs_free char *s = g_strescape (strv1[i], NULL);
+
+		g_print (">>> [%s] strv1[%d] = \"%s\"\n", topic, i, s);
+		if (i > 0)
+			nm_str_buf_append_c (&s1, ' ');
+		nm_str_buf_append_printf (&s1, "\"%s\"", s);
+	}
+
+	for (i = 0; strv2[i]; i++) {
+		gs_free char *s = g_strescape (strv2[i], NULL);
+
+		g_print (">>> [%s] strv2[%d] = \"%s\"\n", topic, i, s);
+		if (i > 0)
+			nm_str_buf_append_c (&s2, ' ');
+		nm_str_buf_append_printf (&s2, "\"%s\"", s);
+	}
+
+	nm_str_buf_maybe_expand (&s1, 1, FALSE);
+	nm_str_buf_maybe_expand (&s2, 1, FALSE);
+
+	str_escaped = g_strescape (str, NULL);
+	g_error ("compared words differs: [%s] str=\"%s\"; strv1=%s; strv2=%s", topic, str_escaped, nm_str_buf_get_str (&s1), nm_str_buf_get_str (&s2));
+}
+
+static void
+_strsplit_quoted_test (const char *str,
+                       const char *const*strv_expected)
+{
+	gs_strfreev char **strv_systemd = NULL;
+	gs_strfreev char **strv_nm = NULL;
+	int r;
+
+	g_assert (str);
+
+	r = nmtst_systemd_extract_first_word_all (str, &strv_systemd);
+	g_assert_cmpint (r, ==, 1);
+	g_assert (strv_systemd);
+
+	if (!strv_expected)
+		strv_expected = (const char *const*) strv_systemd;
+
+	_strsplit_quoted_assert_strv ("systemd", str, strv_expected, (const char *const*) strv_systemd);
+
+	strv_nm = nm_utils_strsplit_quoted (str);
+	g_assert (strv_nm);
+	_strsplit_quoted_assert_strv ("nm", str, strv_expected, (const char *const*) strv_nm);
+}
+
+static void
+test_strsplit_quoted (void)
+{
+	int i_run;
+
+	_strsplit_quoted_test ("", NM_MAKE_STRV ());
+	_strsplit_quoted_test (" ", NM_MAKE_STRV ());
+	_strsplit_quoted_test ("  ", NM_MAKE_STRV ());
+	_strsplit_quoted_test ("  \t", NM_MAKE_STRV ());
+	_strsplit_quoted_test ("a b", NM_MAKE_STRV ("a", "b"));
+	_strsplit_quoted_test ("a\\ b", NM_MAKE_STRV ("a b"));
+	_strsplit_quoted_test (" a\\ \"b\"", NM_MAKE_STRV ("a b"));
+	_strsplit_quoted_test (" a\\ \"b\" c \n", NM_MAKE_STRV ("a b", "c"));
+
+	for (i_run = 0; i_run < 1000; i_run++) {
+		gs_strfreev char **strv = NULL;
+		gs_free char *str = NULL;
+
+		/* create random strv array and join them carefully so that splitting
+		 * them will yield the original value. */
+		strv = _strsplit_quoted_create_strv_rand ();
+		str = _strsplit_quoted_join_strv_rand ((const char *const*) strv);
+		_strsplit_quoted_test (str, (const char *const*) strv);
+	}
+
+	/* Create random words and assert that systemd and our implementation can
+	 * both split them (and in the exact same way). */
+	for (i_run = 0; i_run < 1000; i_run++) {
+		gs_free char *s = _strsplit_quoted_create_str_rand (nmtst_get_rand_uint32 () % 150);
+
+		_strsplit_quoted_test (s, NULL);
+	}
 }
 
 /*****************************************************************************/
@@ -7409,12 +9106,14 @@ int main (int argc, char **argv)
 {
 	nmtst_init (&argc, &argv, TRUE);
 
+	g_test_add_func ("/core/general/test_nm_ascii_spaces", test_nm_ascii_spaces);
 	g_test_add_func ("/core/general/test_nm_hash", test_nm_hash);
 	g_test_add_func ("/core/general/test_nm_g_slice_free_fcn", test_nm_g_slice_free_fcn);
 	g_test_add_func ("/core/general/test_c_list_sort", test_c_list_sort);
 	g_test_add_func ("/core/general/test_dedup_multi", test_dedup_multi);
 	g_test_add_func ("/core/general/test_utils_str_utf8safe", test_utils_str_utf8safe);
 	g_test_add_func ("/core/general/test_nm_utils_strsplit_set", test_nm_utils_strsplit_set);
+	g_test_add_func ("/core/general/test_nm_utils_escaped_tokens", test_nm_utils_escaped_tokens);
 	g_test_add_func ("/core/general/test_nm_in_set", test_nm_in_set);
 	g_test_add_func ("/core/general/test_nm_in_strset", test_nm_in_strset);
 	g_test_add_func ("/core/general/test_setting_vpn_items", test_setting_vpn_items);
@@ -7492,6 +9191,13 @@ int main (int argc, char **argv)
 	g_test_add_data_func ("/core/general/test_connection_normalize_ovs_interface_type_ovs_interface/11", GUINT_TO_POINTER (11), test_connection_normalize_ovs_interface_type_ovs_interface);
 	g_test_add_data_func ("/core/general/test_connection_normalize_ovs_interface_type_ovs_interface/12", GUINT_TO_POINTER (12), test_connection_normalize_ovs_interface_type_ovs_interface);
 
+	g_test_add_data_func ("/core/general/test_connection_ovs_ifname/1", GUINT_TO_POINTER (1), test_connection_ovs_ifname);
+	g_test_add_data_func ("/core/general/test_connection_ovs_ifname/2", GUINT_TO_POINTER (2), test_connection_ovs_ifname);
+	g_test_add_data_func ("/core/general/test_connection_ovs_ifname/3", GUINT_TO_POINTER (3), test_connection_ovs_ifname);
+	g_test_add_data_func ("/core/general/test_connection_ovs_ifname/4", GUINT_TO_POINTER (4), test_connection_ovs_ifname);
+	g_test_add_data_func ("/core/general/test_connection_ovs_ifname/5", GUINT_TO_POINTER (5), test_connection_ovs_ifname);
+	g_test_add_data_func ("/core/general/test_connection_ovs_ifname/6", GUINT_TO_POINTER (6), test_connection_ovs_ifname);
+
 	g_test_add_func ("/core/general/test_setting_connection_permissions_helpers", test_setting_connection_permissions_helpers);
 	g_test_add_func ("/core/general/test_setting_connection_permissions_property", test_setting_connection_permissions_property);
 
@@ -7535,6 +9241,8 @@ int main (int argc, char **argv)
 	g_test_add_func ("/core/general/test_setting_compare_default_strv", test_setting_compare_default_strv);
 	g_test_add_func ("/core/general/test_setting_user_data", test_setting_user_data);
 
+	g_test_add_func ("/core/general/test_sock_addr_endpoint", test_sock_addr_endpoint);
+
 	g_test_add_func ("/core/general/hexstr2bin", test_hexstr2bin);
 	g_test_add_func ("/core/general/nm_strquote", test_nm_strquote);
 	g_test_add_func ("/core/general/test_nm_utils_uuid_generate_from_string", test_nm_utils_uuid_generate_from_string);
@@ -7551,17 +9259,22 @@ int main (int argc, char **argv)
 	g_test_add_func ("/core/general/_nm_utils_dns_option_find_idx", test_nm_utils_dns_option_find_idx);
 	g_test_add_func ("/core/general/_nm_utils_validate_json", test_nm_utils_check_valid_json);
 	g_test_add_func ("/core/general/_nm_utils_team_config_equal", test_nm_utils_team_config_equal);
-	g_test_add_func ("/core/general/_nm_utils_escape_spaces", test_nm_utils_escape_spaces);
-	g_test_add_func ("/core/general/_nm_utils_unescape_spaces", test_nm_utils_unescape_spaces);
 	g_test_add_func ("/core/general/test_nm_utils_enum", test_nm_utils_enum);
 	g_test_add_func ("/core/general/nm-set-out", test_nm_set_out);
 	g_test_add_func ("/core/general/route_attributes/parse", test_route_attributes_parse);
 	g_test_add_func ("/core/general/route_attributes/format", test_route_attributes_format);
+	g_test_add_func ("/core/general/test_variant_attribute_spec", test_variant_attribute_spec);
 
 	g_test_add_func ("/core/general/get_start_time_for_pid", test_get_start_time_for_pid);
 	g_test_add_func ("/core/general/test_nm_va_args_macros", test_nm_va_args_macros);
 	g_test_add_func ("/core/general/test_ethtool_offload", test_ethtool_offload);
 
+	g_test_add_data_func ("/core/general/test_integrate_maincontext/1", GUINT_TO_POINTER (1), test_integrate_maincontext);
+	g_test_add_data_func ("/core/general/test_integrate_maincontext/2", GUINT_TO_POINTER (2), test_integrate_maincontext);
+
+	g_test_add_func ("/core/general/test_nm_ip_addr_zero", test_nm_ip_addr_zero);
+
+	g_test_add_func ("/core/general/test_strsplit_quoted", test_strsplit_quoted);
+
 	return g_test_run ();
 }
-

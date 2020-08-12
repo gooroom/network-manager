@@ -8,7 +8,7 @@
 <link rel="up" href="ch01.html" title="Configuration Settings">
 <link rel="prev" href="settings-6lowpan.html" title="6lowpan">
 <link rel="next" href="settings-adsl.html" title="adsl">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.32 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -38,7 +38,7 @@
             Properties
         </h2>
 <div class="table">
-<a name="id-1.3.3.4.2.2.1"></a><p class="title"><b>Table 66. </b></p>
+<a name="id-1.3.3.4.2.2.1"></a><p class="title"><b>Table 44. </b></p>
 <div class="table-contents"><table class="table" border="1">
 <colgroup>
 <col>
@@ -56,7 +56,7 @@
 <tr>
 <td><pre class="screen">altsubject-matches</pre></td>
 <td><pre class="screen">array of string</pre></td>
-<td><pre class="screen">[]</pre></td>
+<td><pre class="screen"></pre></td>
 <td>List of strings to be matched against the altSubjectName of the certificate presented by the authentication server. If the list is empty, no verification of the server certificate's altSubjectName is performed.</td>
 </tr>
 <tr>
@@ -75,7 +75,7 @@
 <td><pre class="screen">ca-cert</pre></td>
 <td><pre class="screen">byte array</pre></td>
 <td><pre class="screen"></pre></td>
-<td>Contains the CA certificate if used by the EAP method specified in the "eap" property. Certificate data is specified using a "scheme"; two are currently supported: blob and path. When using the blob scheme (which is backwards compatible with NM 0.7.x) this property should be set to the certificate's DER encoded data. When using the path scheme, this property should be set to the full UTF-8 encoded path of the certificate, prefixed with the string "file://" and ending with a terminating NUL byte. This property can be unset even if the EAP method supports CA certificates, but this allows man-in-the-middle attacks and is NOT recommended.</td>
+<td>Contains the CA certificate if used by the EAP method specified in the "eap" property. Certificate data is specified using a "scheme"; three are currently supported: blob, path and pkcs#11 URL. When using the blob scheme this property should be set to the certificate's DER encoded data. When using the path scheme, this property should be set to the full UTF-8 encoded path of the certificate, prefixed with the string "file://" and ending with a terminating NUL byte. This property can be unset even if the EAP method supports CA certificates, but this allows man-in-the-middle attacks and is NOT recommended. Note that enabling NMSetting8021x:system-ca-certs will override this setting to use the built-in path, if the built-in path is not a directory.</td>
 </tr>
 <tr>
 <td><pre class="screen">ca-cert-password</pre></td>
@@ -93,7 +93,7 @@
 <td><pre class="screen">ca-path</pre></td>
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
-<td>UTF-8 encoded path to a directory containing PEM or DER formatted certificates to be added to the verification chain in addition to the certificate specified in the "ca-cert" property.</td>
+<td>UTF-8 encoded path to a directory containing PEM or DER formatted certificates to be added to the verification chain in addition to the certificate specified in the "ca-cert" property. If NMSetting8021x:system-ca-certs is enabled and the built-in CA path is an existing directory, then this setting is ignored.</td>
 </tr>
 <tr>
 <td><pre class="screen">client-cert</pre></td>
@@ -114,15 +114,21 @@
 <td>Flags indicating how to handle the "client-cert-password" property.</td>
 </tr>
 <tr>
+<td><pre class="screen">domain-match</pre></td>
+<td><pre class="screen">string</pre></td>
+<td><pre class="screen"></pre></td>
+<td>Constraint for server domain name. If set, this list of FQDNs is used as a match requirement for dNSName element(s) of the certificate presented by the authentication server.  If a matching dNSName is found, this constraint is met.  If no dNSName values are present, this constraint is matched against SubjectName CN using the same comparison. Multiple valid FQDNs can be passed as a ";" delimited list.</td>
+</tr>
+<tr>
 <td><pre class="screen">domain-suffix-match</pre></td>
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
-<td>Constraint for server domain name. If set, this FQDN is used as a suffix match requirement for dNSName element(s) of the certificate presented by the authentication server.  If a matching dNSName is found, this constraint is met.  If no dNSName values are present, this constraint is matched against SubjectName CN using same suffix match comparison.</td>
+<td>Constraint for server domain name. If set, this FQDN is used as a suffix match requirement for dNSName element(s) of the certificate presented by the authentication server.  If a matching dNSName is found, this constraint is met.  If no dNSName values are present, this constraint is matched against SubjectName CN using same suffix match comparison. Since version 1.24, multiple valid FQDNs can be passed as a ";" delimited list.</td>
 </tr>
 <tr>
 <td><pre class="screen">eap</pre></td>
 <td><pre class="screen">array of string</pre></td>
-<td><pre class="screen">[]</pre></td>
+<td><pre class="screen"></pre></td>
 <td>The allowed EAP method to be used when authenticating to the network with 802.1x.  Valid methods are: "leap", "md5", "tls", "peap", "ttls", "pwd", and "fast".  Each method requires different configuration using the properties of this setting; refer to wpa_supplicant documentation for the allowed combinations.</td>
 </tr>
 <tr>
@@ -130,6 +136,12 @@
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
 <td>Identity string for EAP authentication methods.  Often the user's user or login name.</td>
+</tr>
+<tr>
+<td><pre class="screen">optional</pre></td>
+<td><pre class="screen">boolean</pre></td>
+<td><pre class="screen">FALSE</pre></td>
+<td>Whether the 802.1X authentication is optional. If TRUE, the activation will continue even after a timeout or an authentication failure. Setting the property to TRUE is currently allowed only for Ethernet connections. If set to FALSE, the activation can continue only after a successful authentication.</td>
 </tr>
 <tr>
 <td><pre class="screen">pac-file</pre></td>
@@ -188,26 +200,26 @@
 <tr>
 <td><pre class="screen">phase2-altsubject-matches</pre></td>
 <td><pre class="screen">array of string</pre></td>
-<td><pre class="screen">[]</pre></td>
+<td><pre class="screen"></pre></td>
 <td>List of strings to be matched against the altSubjectName of the certificate presented by the authentication server during the inner "phase 2" authentication. If the list is empty, no verification of the server certificate's altSubjectName is performed.</td>
 </tr>
 <tr>
 <td><pre class="screen">phase2-auth</pre></td>
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
-<td>Specifies the allowed "phase 2" inner non-EAP authentication methods when an EAP method that uses an inner TLS tunnel is specified in the "eap" property.  Recognized non-EAP "phase 2" methods are "pap", "chap", "mschap", "mschapv2", "gtc", "otp", "md5", and "tls". Each "phase 2" inner method requires specific parameters for successful authentication; see the wpa_supplicant documentation for more details.</td>
+<td>Specifies the allowed "phase 2" inner non-EAP authentication method when an EAP method that uses an inner TLS tunnel is specified in the "eap" property.  Recognized non-EAP "phase 2" methods are "pap", "chap", "mschap", "mschapv2", "gtc", "otp", "md5", and "tls". Each "phase 2" inner method requires specific parameters for successful authentication; see the wpa_supplicant documentation for more details.</td>
 </tr>
 <tr>
 <td><pre class="screen">phase2-autheap</pre></td>
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
-<td>Specifies the allowed "phase 2" inner EAP-based authentication methods when an EAP method that uses an inner TLS tunnel is specified in the "eap" property.  Recognized EAP-based "phase 2" methods are "md5", "mschapv2", "otp", "gtc", and "tls". Each "phase 2" inner method requires specific parameters for successful authentication; see the wpa_supplicant documentation for more details.</td>
+<td>Specifies the allowed "phase 2" inner EAP-based authentication method when an EAP method that uses an inner TLS tunnel is specified in the "eap" property.  Recognized EAP-based "phase 2" methods are "md5", "mschapv2", "otp", "gtc", and "tls". Each "phase 2" inner method requires specific parameters for successful authentication; see the wpa_supplicant documentation for more details.</td>
 </tr>
 <tr>
 <td><pre class="screen">phase2-ca-cert</pre></td>
 <td><pre class="screen">byte array</pre></td>
 <td><pre class="screen"></pre></td>
-<td>Contains the "phase 2" CA certificate if used by the EAP method specified in the "phase2-auth" or "phase2-autheap" properties. Certificate data is specified using a "scheme"; two are currently supported: blob and path. When using the blob scheme (which is backwards compatible with NM 0.7.x) this property should be set to the certificate's DER encoded data. When using the path scheme, this property should be set to the full UTF-8 encoded path of the certificate, prefixed with the string "file://" and ending with a terminating NUL byte. This property can be unset even if the EAP method supports CA certificates, but this allows man-in-the-middle attacks and is NOT recommended.</td>
+<td>Contains the "phase 2" CA certificate if used by the EAP method specified in the "phase2-auth" or "phase2-autheap" properties. Certificate data is specified using a "scheme"; three are currently supported: blob, path and pkcs#11 URL. When using the blob scheme this property should be set to the certificate's DER encoded data. When using the path scheme, this property should be set to the full UTF-8 encoded path of the certificate, prefixed with the string "file://" and ending with a terminating NUL byte. This property can be unset even if the EAP method supports CA certificates, but this allows man-in-the-middle attacks and is NOT recommended. Note that enabling NMSetting8021x:system-ca-certs will override this setting to use the built-in path, if the built-in path is not a directory.</td>
 </tr>
 <tr>
 <td><pre class="screen">phase2-ca-cert-password</pre></td>
@@ -225,7 +237,7 @@
 <td><pre class="screen">phase2-ca-path</pre></td>
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
-<td>UTF-8 encoded path to a directory containing PEM or DER formatted certificates to be added to the verification chain in addition to the certificate specified in the "phase2-ca-cert" property.</td>
+<td>UTF-8 encoded path to a directory containing PEM or DER formatted certificates to be added to the verification chain in addition to the certificate specified in the "phase2-ca-cert" property. If NMSetting8021x:system-ca-certs is enabled and the built-in CA path is an existing directory, then this setting is ignored.</td>
 </tr>
 <tr>
 <td><pre class="screen">phase2-client-cert</pre></td>
@@ -246,10 +258,16 @@
 <td>Flags indicating how to handle the "phase2-client-cert-password" property.</td>
 </tr>
 <tr>
+<td><pre class="screen">phase2-domain-match</pre></td>
+<td><pre class="screen">string</pre></td>
+<td><pre class="screen"></pre></td>
+<td>Constraint for server domain name. If set, this list of FQDNs is used as a match requirement for dNSName element(s) of the certificate presented by the authentication server during the inner "phase 2" authentication. If a matching dNSName is found, this constraint is met.  If no dNSName values are present, this constraint is matched against SubjectName CN using the same comparison. Multiple valid FQDNs can be passed as a ";" delimited list.</td>
+</tr>
+<tr>
 <td><pre class="screen">phase2-domain-suffix-match</pre></td>
 <td><pre class="screen">string</pre></td>
 <td><pre class="screen"></pre></td>
-<td>Constraint for server domain name. If set, this FQDN is used as a suffix match requirement for dNSName element(s) of the certificate presented by the authentication server during the inner "phase 2" authentication.  If a matching dNSName is found, this constraint is met.  If no dNSName values are present, this constraint is matched against SubjectName CN using same suffix match comparison.</td>
+<td>Constraint for server domain name. If set, this FQDN is used as a suffix match requirement for dNSName element(s) of the certificate presented by the authentication server during the inner "phase 2" authentication.  If a matching dNSName is found, this constraint is met.  If no dNSName values are present, this constraint is matched against SubjectName CN using same suffix match comparison. Since version 1.24, multiple valid FQDNs can be passed as a ";" delimited list.</td>
 </tr>
 <tr>
 <td><pre class="screen">phase2-private-key</pre></td>
@@ -324,6 +342,6 @@
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.32</div>
 </body>
 </html>

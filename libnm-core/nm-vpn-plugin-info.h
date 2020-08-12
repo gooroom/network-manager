@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2015 Red Hat, Inc.
+ * Copyright (C) 2015 Red Hat, Inc.
  */
 
 #ifndef __NM_VPN_PLUGIN_INFO_H__
@@ -44,24 +29,7 @@ G_BEGIN_DECLS
 #define NM_VPN_PLUGIN_INFO_KF_GROUP_LIBNM        "libnm"
 #define NM_VPN_PLUGIN_INFO_KF_GROUP_GNOME        "GNOME"
 
-struct _NMVpnPluginInfo;
-
-/**
- * NMVpnPluginInfo:
- */
-struct _NMVpnPluginInfo {
-	NM_AVAILABLE_IN_1_2
-	GObject parent;
-};
-
-typedef struct {
-	NM_AVAILABLE_IN_1_2
-	GObjectClass parent;
-
-	/*< private >*/
-	NM_AVAILABLE_IN_1_2
-	gpointer padding[8];
-} NMVpnPluginInfoClass NM_AVAILABLE_IN_1_2;
+typedef struct _NMVpnPluginInfoClass NMVpnPluginInfoClass;
 
 NM_AVAILABLE_IN_1_2
 GType  nm_vpn_plugin_info_get_type       (void);

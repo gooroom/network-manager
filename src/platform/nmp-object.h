@@ -1,31 +1,62 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-platform.c - Handle runtime kernel networking configuration
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2015 - 2018 Red Hat, Inc.
  */
 
 #ifndef __NMP_OBJECT_H__
 #define __NMP_OBJECT_H__
 
-#include "nm-utils/nm-obj.h"
-#include "nm-utils/nm-dedup-multi.h"
+#include <netinet/in.h>
+
+#include "nm-glib-aux/nm-obj.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 #include "nm-platform.h"
 
 struct udev_device;
+
+/*****************************************************************************/
+
+/* "struct __kernel_timespec" uses "long long", but we use gint64. In practice,
+ * these are the same types. */
+G_STATIC_ASSERT (sizeof (long long) == sizeof (gint64));
+
+typedef struct {
+	/* like "struct __kernel_timespec". */
+	gint64 tv_sec;
+	gint64 tv_nsec;
+} NMPTimespec64;
+
+/*****************************************************************************/
+
+typedef union {
+	struct sockaddr     sa;
+	struct sockaddr_in  in;
+	struct sockaddr_in6 in6;
+} NMSockAddrUnion;
+
+#define NM_SOCK_ADDR_UNION_INIT_UNSPEC \
+	{ \
+		.sa = { \
+			.sa_family = AF_UNSPEC, \
+		}, \
+	}
+
+int nm_sock_addr_union_cmp (const NMSockAddrUnion *a,
+                            const NMSockAddrUnion *b);
+
+void nm_sock_addr_union_hash_update (const NMSockAddrUnion *a,
+                                     NMHashState *h);
+
+void nm_sock_addr_union_cpy (NMSockAddrUnion *dst,
+                             gconstpointer src /* unaligned (const NMSockAddrUnion *) */);
+
+void nm_sock_addr_union_cpy_untrusted (NMSockAddrUnion *dst,
+                                       gconstpointer src /* unaligned (const NMSockAddrUnion *) */,
+                                       gsize src_len);
+
+const char *nm_sock_addr_union_to_string (const NMSockAddrUnion *sa,
+                                          char *buf,
+                                          gsize len);
 
 /*****************************************************************************/
 
@@ -36,10 +67,13 @@ typedef struct {
 } NMPWireGuardAllowedIP;
 
 typedef struct _NMPWireGuardPeer {
-	NMIPAddr endpoint_addr;
-	struct timespec last_handshake_time;
+	NMSockAddrUnion endpoint;
+
+	NMPTimespec64 last_handshake_time;
+
 	guint64 rx_bytes;
 	guint64 tx_bytes;
+
 	union {
 		const NMPWireGuardAllowedIP *allowed_ips;
 		guint _construct_idx_start;
@@ -48,11 +82,11 @@ typedef struct _NMPWireGuardPeer {
 		guint allowed_ips_len;
 		guint _construct_idx_end;
 	};
+
 	guint16 persistent_keepalive_interval;
-	guint16 endpoint_port;
+
 	guint8 public_key[NMP_WIREGUARD_PUBLIC_KEY_LEN];
 	guint8 preshared_key[NMP_WIREGUARD_SYMMETRIC_KEY_LEN];
-	guint8 endpoint_family;
 } NMPWireGuardPeer;
 
 /*****************************************************************************/
@@ -100,14 +134,14 @@ typedef enum { /*< skip >*/
 	 *
 	 * Also, note that links may be considered invisible. This index type
 	 * expose all links, even invisible ones. For addresses/routes, this
-	 * distiction doesn't exist, as all addresses/routes that are alive
+	 * distinction doesn't exist, as all addresses/routes that are alive
 	 * are visible as well. */
 	NMP_CACHE_ID_TYPE_OBJECT_TYPE,
 
 	/* index for the link objects by ifname. */
 	NMP_CACHE_ID_TYPE_LINK_BY_IFNAME,
 
-	/* indeces for the visible default-routes, ignoring ifindex.
+	/* indices for the visible default-routes, ignoring ifindex.
 	 * This index only contains two partitions: all visible default-routes,
 	 * separate for IPv4 and IPv6. */
 	NMP_CACHE_ID_TYPE_DEFAULT_ROUTES,
@@ -124,6 +158,11 @@ typedef enum { /*< skip >*/
 	 * that by having this index to contain overlapping routes which require special
 	 * cache-resync. */
 	NMP_CACHE_ID_TYPE_ROUTES_BY_WEAK_ID,
+
+	/* a filter for objects that track an explicit address family.
+	 *
+	 * Note that currently on NMPObjectRoutingRule is indexed by this filter. */
+	NMP_CACHE_ID_TYPE_OBJECT_BY_ADDR_FAMILY,
 
 	__NMP_CACHE_ID_TYPE_MAX,
 	NMP_CACHE_ID_TYPE_MAX = __NMP_CACHE_ID_TYPE_MAX - 1,
@@ -248,6 +287,10 @@ typedef struct {
 } NMPObjectLnkVlan;
 
 typedef struct {
+	NMPlatformLnkVrf _public;
+} NMPObjectLnkVrf;
+
+typedef struct {
 	NMPlatformLnkVxlan _public;
 } NMPObjectLnkVxlan;
 
@@ -276,6 +319,10 @@ typedef struct {
 } NMPObjectIP6Route;
 
 typedef struct {
+	NMPlatformRoutingRule _public;
+} NMPObjectRoutingRule;
+
+typedef struct {
 	NMPlatformQdisc _public;
 } NMPObjectQdisc;
 
@@ -290,6 +337,8 @@ struct _NMPObject {
 	};
 	union {
 		NMPlatformObject        object;
+
+		NMPlatformObjWithIfindex obj_with_ifindex;
 
 		NMPlatformLink          link;
 		NMPObjectLink           _link;
@@ -321,6 +370,9 @@ struct _NMPObject {
 		NMPlatformLnkVlan       lnk_vlan;
 		NMPObjectLnkVlan        _lnk_vlan;
 
+		NMPlatformLnkVrf        lnk_vrf;
+		NMPObjectLnkVrf         _lnk_vrf;
+
 		NMPlatformLnkVxlan      lnk_vxlan;
 		NMPObjectLnkVxlan       _lnk_vxlan;
 
@@ -341,6 +393,9 @@ struct _NMPObject {
 		NMPObjectIP4Route       _ip4_route;
 		NMPObjectIP6Route       _ip6_route;
 
+		NMPlatformRoutingRule   routing_rule;
+		NMPObjectRoutingRule    _routing_rule;
+
 		NMPlatformQdisc         qdisc;
 		NMPObjectQdisc          _qdisc;
 		NMPlatformTfilter       tfilter;
@@ -348,12 +403,25 @@ struct _NMPObject {
 	};
 };
 
+/*****************************************************************************/
+
 static inline gboolean
 NMP_CLASS_IS_VALID (const NMPClass *klass)
 {
 	return klass >= &_nmp_classes[0]
 	    && klass <= &_nmp_classes[G_N_ELEMENTS (_nmp_classes)]
 	    && ((((char *) klass) - ((char *) _nmp_classes)) % (sizeof (_nmp_classes[0]))) == 0;
+}
+
+static inline const NMPClass *
+nmp_class_from_type (NMPObjectType obj_type)
+{
+	nm_assert (obj_type > 0);
+	nm_assert (obj_type <= G_N_ELEMENTS (_nmp_classes));
+	nm_assert (_nmp_classes[obj_type - 1].obj_type == obj_type);
+	nm_assert (NMP_CLASS_IS_VALID (&_nmp_classes[obj_type - 1]));
+
+	return &_nmp_classes[obj_type - 1];
 }
 
 static inline NMPObject *
@@ -405,95 +473,88 @@ NMP_OBJECT_GET_TYPE (const NMPObject *obj)
 	return obj ? obj->_class->obj_type : NMP_OBJECT_TYPE_UNKNOWN;
 }
 
-#define NMP_OBJECT_CAST_LINK(obj) \
+static inline gboolean
+_NMP_OBJECT_TYPE_IS_OBJ_WITH_IFINDEX (NMPObjectType obj_type)
+{
+	switch (obj_type) {
+	case NMP_OBJECT_TYPE_LINK:
+	case NMP_OBJECT_TYPE_IP4_ADDRESS:
+	case NMP_OBJECT_TYPE_IP6_ADDRESS:
+	case NMP_OBJECT_TYPE_IP4_ROUTE:
+	case NMP_OBJECT_TYPE_IP6_ROUTE:
+
+	case NMP_OBJECT_TYPE_QDISC:
+
+	case NMP_OBJECT_TYPE_TFILTER:
+
+	case NMP_OBJECT_TYPE_LNK_GRE:
+	case NMP_OBJECT_TYPE_LNK_GRETAP:
+	case NMP_OBJECT_TYPE_LNK_INFINIBAND:
+	case NMP_OBJECT_TYPE_LNK_IP6TNL:
+	case NMP_OBJECT_TYPE_LNK_IP6GRE:
+	case NMP_OBJECT_TYPE_LNK_IP6GRETAP:
+	case NMP_OBJECT_TYPE_LNK_IPIP:
+	case NMP_OBJECT_TYPE_LNK_MACSEC:
+	case NMP_OBJECT_TYPE_LNK_MACVLAN:
+	case NMP_OBJECT_TYPE_LNK_MACVTAP:
+	case NMP_OBJECT_TYPE_LNK_SIT:
+	case NMP_OBJECT_TYPE_LNK_TUN:
+	case NMP_OBJECT_TYPE_LNK_VLAN:
+	case NMP_OBJECT_TYPE_LNK_VRF:
+	case NMP_OBJECT_TYPE_LNK_VXLAN:
+	case NMP_OBJECT_TYPE_LNK_WIREGUARD:
+		return TRUE;
+
+	case NMP_OBJECT_TYPE_ROUTING_RULE:
+		return FALSE;
+
+	case NMP_OBJECT_TYPE_UNKNOWN:
+	case __NMP_OBJECT_TYPE_LAST:
+		break;
+	}
+	nm_assert_not_reached ();
+	return FALSE;
+}
+
+#define NMP_OBJECT_CAST_OBJECT(obj) \
 	({ \
 		typeof (obj) _obj = (obj); \
 		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_LINK); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->link : NULL; \
+		nm_assert (   !_obj \
+		           || nmp_class_from_type (NMP_OBJECT_GET_TYPE (_obj)))); \
+		_obj ? &NM_CONSTCAST (NMPObject, _obj)->object : NULL; \
 	})
 
-#define NMP_OBJECT_CAST_IP_ADDRESS(obj) \
+#define NMP_OBJECT_CAST_OBJ_WITH_IFINDEX(obj) \
 	({ \
 		typeof (obj) _obj = (obj); \
 		\
-		nm_assert (!_obj || NM_IN_SET (NMP_OBJECT_GET_TYPE (_obj), NMP_OBJECT_TYPE_IP4_ADDRESS, NMP_OBJECT_TYPE_IP6_ADDRESS)); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ip_address : NULL; \
+		nm_assert (   !_obj \
+		           || _NMP_OBJECT_TYPE_IS_OBJ_WITH_IFINDEX (NMP_OBJECT_GET_TYPE (_obj))); \
+		_obj ? &NM_CONSTCAST (NMPObject, _obj)->obj_with_ifindex : NULL; \
 	})
 
-#define NMP_OBJECT_CAST_IPX_ADDRESS(obj) \
+#define _NMP_OBJECT_CAST(obj, field, ...) \
 	({ \
 		typeof (obj) _obj = (obj); \
 		\
-		nm_assert (!_obj || NM_IN_SET (NMP_OBJECT_GET_TYPE (_obj), NMP_OBJECT_TYPE_IP4_ADDRESS, NMP_OBJECT_TYPE_IP6_ADDRESS)); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ipx_address : NULL; \
+		nm_assert (!_obj || NM_IN_SET (NMP_OBJECT_GET_TYPE (_obj), __VA_ARGS__)); \
+		_obj ? &NM_CONSTCAST (NMPObject, _obj)->field : NULL; \
 	})
 
-#define NMP_OBJECT_CAST_IP4_ADDRESS(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_IP4_ADDRESS); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ip4_address : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_IP6_ADDRESS(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_IP6_ADDRESS); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ip6_address : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_IPX_ROUTE(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NM_IN_SET (NMP_OBJECT_GET_TYPE (_obj), NMP_OBJECT_TYPE_IP4_ROUTE, NMP_OBJECT_TYPE_IP6_ROUTE)); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ipx_route : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_IP_ROUTE(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NM_IN_SET (NMP_OBJECT_GET_TYPE (_obj), NMP_OBJECT_TYPE_IP4_ROUTE, NMP_OBJECT_TYPE_IP6_ROUTE)); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ip_route : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_IP4_ROUTE(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_IP4_ROUTE); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ip4_route : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_IP6_ROUTE(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_IP6_ROUTE); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->ip6_route : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_QDISC(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_QDISC); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->qdisc : NULL; \
-	})
-
-#define NMP_OBJECT_CAST_TFILTER(obj) \
-	({ \
-		typeof (obj) _obj = (obj); \
-		\
-		nm_assert (!_obj || NMP_OBJECT_GET_TYPE ((const NMPObject *) _obj) == NMP_OBJECT_TYPE_TFILTER); \
-		_obj ? &NM_CONSTCAST (NMPObject, _obj)->tfilter : NULL; \
-	})
-
-const NMPClass *nmp_class_from_type (NMPObjectType obj_type);
+#define NMP_OBJECT_CAST_LINK(obj)          _NMP_OBJECT_CAST (obj, link,          NMP_OBJECT_TYPE_LINK)
+#define NMP_OBJECT_CAST_IP_ADDRESS(obj)    _NMP_OBJECT_CAST (obj, ip_address,    NMP_OBJECT_TYPE_IP4_ADDRESS, NMP_OBJECT_TYPE_IP6_ADDRESS)
+#define NMP_OBJECT_CAST_IPX_ADDRESS(obj)   _NMP_OBJECT_CAST (obj, ipx_address,   NMP_OBJECT_TYPE_IP4_ADDRESS, NMP_OBJECT_TYPE_IP6_ADDRESS)
+#define NMP_OBJECT_CAST_IP4_ADDRESS(obj)   _NMP_OBJECT_CAST (obj, ip4_address,   NMP_OBJECT_TYPE_IP4_ADDRESS)
+#define NMP_OBJECT_CAST_IP6_ADDRESS(obj)   _NMP_OBJECT_CAST (obj, ip6_address,   NMP_OBJECT_TYPE_IP6_ADDRESS)
+#define NMP_OBJECT_CAST_IP_ROUTE(obj)      _NMP_OBJECT_CAST (obj, ip_route,      NMP_OBJECT_TYPE_IP4_ROUTE, NMP_OBJECT_TYPE_IP6_ROUTE)
+#define NMP_OBJECT_CAST_IPX_ROUTE(obj)     _NMP_OBJECT_CAST (obj, ipx_route,     NMP_OBJECT_TYPE_IP4_ROUTE, NMP_OBJECT_TYPE_IP6_ROUTE)
+#define NMP_OBJECT_CAST_IP4_ROUTE(obj)     _NMP_OBJECT_CAST (obj, ip4_route,     NMP_OBJECT_TYPE_IP4_ROUTE)
+#define NMP_OBJECT_CAST_IP6_ROUTE(obj)     _NMP_OBJECT_CAST (obj, ip6_route,     NMP_OBJECT_TYPE_IP6_ROUTE)
+#define NMP_OBJECT_CAST_ROUTING_RULE(obj)  _NMP_OBJECT_CAST (obj, routing_rule,  NMP_OBJECT_TYPE_ROUTING_RULE)
+#define NMP_OBJECT_CAST_QDISC(obj)         _NMP_OBJECT_CAST (obj, qdisc,         NMP_OBJECT_TYPE_QDISC)
+#define NMP_OBJECT_CAST_TFILTER(obj)       _NMP_OBJECT_CAST (obj, tfilter,       NMP_OBJECT_TYPE_TFILTER)
+#define NMP_OBJECT_CAST_LNK_WIREGUARD(obj) _NMP_OBJECT_CAST (obj, lnk_wireguard, NMP_OBJECT_TYPE_LNK_WIREGUARD)
 
 static inline const NMPObject *
 nmp_object_ref (const NMPObject *obj)
@@ -504,7 +565,7 @@ nmp_object_ref (const NMPObject *obj)
 	}
 
 	/* ref and unref accept const pointers. NMPObject is supposed to be shared
-	 * and kept immutable. Disallowing to take/retrun a reference to a const
+	 * and kept immutable. Disallowing to take/return a reference to a const
 	 * NMPObject is cumbersome, because callers are precisely expected to
 	 * keep a ref on the otherwise immutable object. */
 	g_return_val_if_fail (NMP_OBJECT_IS_VALID (obj), NULL);
@@ -516,9 +577,11 @@ nmp_object_ref (const NMPObject *obj)
 static inline void
 nmp_object_unref (const NMPObject *obj)
 {
-	nm_assert (!obj || NMP_OBJECT_IS_VALID (obj));
+	if (obj) {
+		nm_assert (NMP_OBJECT_IS_VALID (obj));
 
-	nm_dedup_multi_obj_unref ((const NMDedupMultiObj *) obj);
+		nm_dedup_multi_obj_unref ((const NMDedupMultiObj *) obj);
+	}
 }
 
 #define nm_clear_nmp_object(ptr) \
@@ -536,7 +599,7 @@ nmp_object_unref (const NMPObject *obj)
 		_changed; \
 	})
 
-NMPObject *nmp_object_new (NMPObjectType obj_type, const NMPlatformObject *plob);
+NMPObject *nmp_object_new (NMPObjectType obj_type, gconstpointer plobj);
 NMPObject *nmp_object_new_link (int ifindex);
 
 const NMPObject *nmp_object_stackinit (NMPObject *obj, NMPObjectType obj_type, gconstpointer plobj);
@@ -646,6 +709,9 @@ const NMPLookup *nmp_lookup_init_ip6_route_by_weak_id (NMPLookup *lookup,
                                                        guint32 metric,
                                                        const struct in6_addr *src,
                                                        guint8 src_plen);
+const NMPLookup *nmp_lookup_init_object_by_addr_family (NMPLookup *lookup,
+                                                        NMPObjectType obj_type,
+                                                        int addr_family);
 
 GArray *nmp_cache_lookup_to_array (const NMDedupMultiHeadEntry *head_entry,
                                    NMPObjectType obj_type,
@@ -735,7 +801,34 @@ NMPCacheOpsType nmp_cache_update_link_master_connected (NMPCache *cache,
                                                         const NMPObject **out_obj_old,
                                                         const NMPObject **out_obj_new);
 
-void nmp_cache_dirty_set_all (NMPCache *cache, NMPObjectType obj_type);
+static inline const NMDedupMultiEntry *
+nmp_cache_reresolve_main_entry (NMPCache *cache,
+                                const NMDedupMultiEntry *entry,
+                                const NMPLookup *lookup)
+{
+	const NMDedupMultiEntry *main_entry;
+
+	nm_assert (cache);
+	nm_assert (entry);
+	nm_assert (lookup);
+
+	if (lookup->cache_id_type == NMP_CACHE_ID_TYPE_OBJECT_TYPE) {
+		nm_assert (entry == nmp_cache_lookup_entry (cache, entry->obj));
+		return entry;
+	}
+
+	/* we only track the dirty flag for the OBJECT-TYPE index. That means,
+	 * for other lookup types we need to check the dirty flag of the main-entry. */
+	main_entry = nmp_cache_lookup_entry (cache, entry->obj);
+
+	nm_assert (main_entry);
+	nm_assert (main_entry->obj == entry->obj);
+
+	return main_entry;
+}
+
+void nmp_cache_dirty_set_all_main (NMPCache *cache,
+                                   const NMPLookup *lookup);
 
 NMPCache *nmp_cache_new (NMDedupMultiIndex *multi_idx, gboolean use_udev);
 void nmp_cache_free (NMPCache *cache);
@@ -888,6 +981,17 @@ nm_platform_lookup_ip6_route_by_weak_id (NMPlatform *platform,
 	NMPLookup lookup;
 
 	nmp_lookup_init_ip6_route_by_weak_id (&lookup, network, plen, metric, src, src_plen);
+	return nm_platform_lookup (platform, &lookup);
+}
+
+static inline const NMDedupMultiHeadEntry *
+nm_platform_lookup_object_by_addr_family (NMPlatform *platform,
+                                          NMPObjectType obj_type,
+                                          int addr_family)
+{
+	NMPLookup lookup;
+
+	nmp_lookup_init_object_by_addr_family (&lookup, obj_type, addr_family);
 	return nm_platform_lookup (platform, &lookup);
 }
 

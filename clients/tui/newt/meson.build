@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1+
+
 sources = files(
   'nmt-newt-button-box.c',
   'nmt-newt-button.c',
@@ -18,18 +20,23 @@ sources = files(
   'nmt-newt-textbox.c',
   'nmt-newt-toggle-button.c',
   'nmt-newt-utils.c',
-  'nmt-newt-widget.c'
+  'nmt-newt-widget.c',
 )
+
+deps = [
+  libnm_nm_default_dep,
+  newt_dep,
+]
 
 libnmt_newt = static_library(
   'nmt-newt',
-  sources: sources + [libnm_enum[1]],
-  include_directories: libnm_inc,
+  sources: sources,
   dependencies: deps,
-  c_args: cflags
+  c_args: common_c_flags,
 )
 
 libnmt_newt_dep = declare_dependency(
   include_directories: include_directories('.'),
-  link_with: libnmt_newt
+  dependencies: newt_dep,
+  link_with: libnmt_newt,
 )

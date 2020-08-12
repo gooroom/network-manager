@@ -8,7 +8,7 @@
 <link rel="up" href="ref-dbus-devices.html" title="The /org/freedesktop/NetworkManager/Devices/* objects">
 <link rel="prev" href="ref-dbus-devices.html" title="The /org/freedesktop/NetworkManager/Devices/* objects">
 <link rel="next" href="gdbus-org.freedesktop.NetworkManager.Device.Statistics.html" title="org.freedesktop.NetworkManager.Device.Statistics">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.32 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -58,6 +58,7 @@
 <a name="id-1.4.8.2.5"></a><h2>Properties</h2>
 <pre class="synopsis">
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Udi" title='The "Udi" property'>Udi</a>                   readable   s
+<a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Path" title='The "Path" property'>Path</a>                  readable   s
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Interface" title='The "Interface" property'>Interface</a>             readable   s
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.IpInterface" title='The "IpInterface" property'>IpInterface</a>           readable   s
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Driver" title='The "Driver" property'>Driver</a>                readable   s
@@ -83,6 +84,10 @@
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Metered" title='The "Metered" property'>Metered</a>               readable   u
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.LldpNeighbors" title='The "LldpNeighbors" property'>LldpNeighbors</a>         readable   aa{sv}
 <a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Real" title='The "Real" property'>Real</a>                  readable   b
+<a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Ip4Connectivity" title='The "Ip4Connectivity" property'>Ip4Connectivity</a>       readable   u
+<a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.Ip6Connectivity" title='The "Ip6Connectivity" property'>Ip6Connectivity</a>       readable   u
+<a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.InterfaceFlags" title='The "InterfaceFlags" property'>InterfaceFlags</a>        readable   u
+<a class="link" href="gdbus-org.freedesktop.NetworkManager.Device.html#gdbus-property-org-freedesktop-NetworkManager-Device.HwAddress" title='The "HwAddress" property'>HwAddress</a>             readable   s
 </pre>
 </div>
 <div class="refsect1">
@@ -249,6 +254,18 @@ Udi  readable   s
         each device in your application, use the object path. If you're looking
         for a way to track a specific piece of hardware across reboot or hotplug,
         use a MAC address or USB serial number.
+</p>
+<p>        Note that non-UTF-8 characters are backslash escaped. Use g_strcompress()
+        to obtain the true (non-UTF-8) string.
+</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="gdbus-property-org-freedesktop-NetworkManager-Device.Path"></a><h3>The "Path" property</h3>
+<pre class="programlisting">
+Path  readable   s
+</pre>
+<p>        The path of the device as exposed by the udev property ID_PATH.
 </p>
 <p>        Note that non-UTF-8 characters are backslash escaped. Use g_strcompress()
         to obtain the true (non-UTF-8) string.
@@ -464,7 +481,7 @@ NmPluginMissing  readable   b
 <pre class="programlisting">
 DeviceType  readable   u
 </pre>
-<p>        The general type of the network device; ie Ethernet, WiFi, etc.
+<p>        The general type of the network device; ie Ethernet, Wi-Fi, etc.
 </p>
 <p>        Returns: <a class="link" href="nm-dbus-types.html#NMDeviceType" title="enum NMDeviceType">NMDeviceType</a>
 </p>
@@ -533,9 +550,61 @@ Real  readable   b
         their AvailableConnections was activated.
 </p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="gdbus-property-org-freedesktop-NetworkManager-Device.Ip4Connectivity"></a><h3>The "Ip4Connectivity" property</h3>
+<pre class="programlisting">
+Ip4Connectivity  readable   u
+</pre>
+<p>        The result of the last IPv4 connectivity check.
+</p>
+<p>        Since: 1.16
+</p>
+<p>        Returns: <a class="link" href="nm-dbus-types.html#NMConnectivityState" title="enum NMConnectivityState">NMConnectivityState</a>
+</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="gdbus-property-org-freedesktop-NetworkManager-Device.Ip6Connectivity"></a><h3>The "Ip6Connectivity" property</h3>
+<pre class="programlisting">
+Ip6Connectivity  readable   u
+</pre>
+<p>        The result of the last IPv6 connectivity check.
+</p>
+<p>        Since: 1.16
+</p>
+<p>        Returns: <a class="link" href="nm-dbus-types.html#NMConnectivityState" title="enum NMConnectivityState">NMConnectivityState</a>
+</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="gdbus-property-org-freedesktop-NetworkManager-Device.InterfaceFlags"></a><h3>The "InterfaceFlags" property</h3>
+<pre class="programlisting">
+InterfaceFlags  readable   u
+</pre>
+<p>        The flags of the network interface. See
+        <a class="link" href="nm-dbus-types.html#NMDeviceInterfaceFlags" title="enum NMDeviceInterfaceFlags">NMDeviceInterfaceFlags</a> for
+        the currently defined flags.
+</p>
+<p>        Since: 1.22
+</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="gdbus-property-org-freedesktop-NetworkManager-Device.HwAddress"></a><h3>The "HwAddress" property</h3>
+<pre class="programlisting">
+HwAddress  readable   s
+</pre>
+<p>        The hardware address of the device.
+</p>
+<p>        This replaces the other 'HwAddress' properties on the device-specific D-Bus interfaces.
+</p>
+<p>        Since: 1.24
+</p>
+</div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.32</div>
 </body>
 </html>

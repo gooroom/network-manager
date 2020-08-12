@@ -1,30 +1,58 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager system settings service
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * (C) Copyright 2008 - 2017 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2008 - 2017 Red Hat, Inc.
  */
 
 #ifndef _UTILS_H_
 #define _UTILS_H_
 
 #include "nm-connection.h"
-#include "nm-ethtool-utils.h"
+#include "nm-libnm-core-intern/nm-ethtool-utils.h"
 
 #include "shvar.h"
+
+/*****************************************************************************/
+
+typedef enum {
+	NMS_IFCFG_KEY_TYPE_UNKNOWN         = 0,
+	NMS_IFCFG_KEY_TYPE_WELL_KNOWN      = (1u << 0),
+
+	NMS_IFCFG_KEY_TYPE_IS_PLAIN        = (1u << 1),
+	NMS_IFCFG_KEY_TYPE_IS_NUMBERED     = (1u << 2),
+	NMS_IFCFG_KEY_TYPE_IS_PREFIX       = (1u << 3),
+
+	/* by default, well knowns keys that are not explicitly set
+	 * by the writer (the unvisited, dirty ones) are removed.
+	 * With this flag, such keys are kept if they are present. */
+	NMS_IFCFG_KEY_TYPE_KEEP_WHEN_DIRTY = (1u << 4),
+
+} NMSIfcfgKeyTypeFlags;
+
+typedef struct {
+	const char *key_name;
+	NMSIfcfgKeyTypeFlags key_flags;
+} NMSIfcfgKeyTypeInfo;
+
+extern const NMSIfcfgKeyTypeInfo nms_ifcfg_well_known_keys[240];
+
+const NMSIfcfgKeyTypeInfo *nms_ifcfg_well_known_key_find_info (const char *key, gssize *out_idx);
+
+static inline NMSIfcfgKeyTypeFlags
+nms_ifcfg_well_known_key_find_info_flags (const char *key)
+{
+	const NMSIfcfgKeyTypeInfo *ti;
+
+	ti = nms_ifcfg_well_known_key_find_info (key, NULL);
+	if (!ti)
+		return NMS_IFCFG_KEY_TYPE_UNKNOWN;
+	return ti->key_flags;
+}
+
+/*****************************************************************************/
+
+gboolean nms_ifcfg_rh_utils_parse_unhandled_spec (const char *unhandled_spec,
+                                                  const char **out_unmanaged_spec,
+                                                  const char **out_unrecognized_spec);
 
 #define NM_IFCFG_CONNECTION_LOG_PATH(path)  ((path) ?: "in-memory")
 #define NM_IFCFG_CONNECTION_LOG_FMT         "%s (%s,\"%s\")"
@@ -48,6 +76,8 @@ shvarFile *utils_get_keys_ifcfg (const char *parent, gboolean should_create);
 shvarFile *utils_get_route_ifcfg (const char *parent, gboolean should_create);
 
 gboolean utils_has_route_file_new_syntax (const char *filename);
+gboolean utils_has_route_file_new_syntax_content (const char *contents,
+                                                  gsize len);
 gboolean utils_has_complex_routes (const char *filename, int addr_family);
 
 gboolean utils_is_ifcfg_alias_file (const char *alias, const char *ifcfg);
@@ -61,6 +91,12 @@ static inline const char *
 _nms_ifcfg_rh_utils_numbered_tag (char *buf, gsize buf_len, const char *tag_name, int which)
 {
 	gsize l;
+
+#if NM_MORE_ASSERTS > 5
+	nm_assert (NM_FLAGS_ALL (nms_ifcfg_well_known_key_find_info_flags (tag_name),
+	                           NMS_IFCFG_KEY_TYPE_WELL_KNOWN
+	                         | NMS_IFCFG_KEY_TYPE_IS_NUMBERED));
+#endif
 
 	l = g_strlcpy (buf, tag_name, buf_len);
 	nm_assert (l < buf_len);
@@ -81,20 +117,43 @@ _nms_ifcfg_rh_utils_numbered_tag (char *buf, gsize buf_len, const char *tag_name
 		_nms_ifcfg_rh_utils_numbered_tag (buf, sizeof (buf), ""tag_name"", (which)); \
 	})
 
+gboolean nms_ifcfg_rh_utils_is_numbered_tag_impl (const char *key,
+                                                  const char *tag,
+                                                  gsize tag_len,
+                                                  gint64 *out_idx);
+
+static inline gboolean
+nms_ifcfg_rh_utils_is_numbered_tag (const char *key,
+                                    const char *tag,
+                                    gint64 *out_idx)
+{
+	nm_assert (tag);
+
+	return nms_ifcfg_rh_utils_is_numbered_tag_impl (key, tag, strlen (tag), out_idx);
+}
+
+#define NMS_IFCFG_RH_UTIL_IS_NUMBERED_TAG(key, tag, out_idx) \
+	nms_ifcfg_rh_utils_is_numbered_tag_impl (key, tag, NM_STRLEN (tag), out_idx)
+
 /*****************************************************************************/
 
-extern const char *const _nm_ethtool_ifcfg_names[_NM_ETHTOOL_ID_FEATURE_NUM];
+const NMSIfcfgKeyTypeInfo *nms_ifcfg_rh_utils_is_well_known_key (const char *key);
+
+/*****************************************************************************/
+
+extern const char *const _nm_ethtool_ifcfg_names[_NM_ETHTOOL_ID_NUM];
 
 static inline const char *
 nms_ifcfg_rh_utils_get_ethtool_name (NMEthtoolID ethtool_id)
 {
-	nm_assert (ethtool_id >= _NM_ETHTOOL_ID_FEATURE_FIRST && ethtool_id <= _NM_ETHTOOL_ID_FEATURE_LAST);
-	nm_assert ((ethtool_id - _NM_ETHTOOL_ID_FEATURE_FIRST) < G_N_ELEMENTS (_nm_ethtool_ifcfg_names));
-	nm_assert (_nm_ethtool_ifcfg_names[ethtool_id - _NM_ETHTOOL_ID_FEATURE_FIRST]);
+	nm_assert (ethtool_id >= _NM_ETHTOOL_ID_FIRST && ethtool_id <= _NM_ETHTOOL_ID_LAST);
+	nm_assert (ethtool_id < G_N_ELEMENTS (_nm_ethtool_ifcfg_names));
+	nm_assert (_nm_ethtool_ifcfg_names[ethtool_id]);
 
-	return _nm_ethtool_ifcfg_names[ethtool_id - _NM_ETHTOOL_ID_FEATURE_FIRST];
+	return _nm_ethtool_ifcfg_names[ethtool_id];
 }
 
-const NMEthtoolData *nms_ifcfg_rh_utils_get_ethtool_by_name (const char *name);
+const NMEthtoolData *nms_ifcfg_rh_utils_get_ethtool_by_name (const char *name,
+                                                             NMEthtoolType ethtool_type);
 
 #endif  /* _UTILS_H_ */

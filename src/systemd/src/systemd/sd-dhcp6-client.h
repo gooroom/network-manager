@@ -21,10 +21,10 @@
 
 #include <inttypes.h>
 #include <net/ethernet.h>
-#include <stdbool.h>
 #include <sys/types.h>
 
 #include "sd-dhcp6-lease.h"
+#include "sd-dhcp6-option.h"
 #include "sd-event.h"
 
 #include "_sd-common.h"
@@ -67,12 +67,14 @@ enum {
         SD_DHCP6_OPTION_IA_PD_PREFIX               = 26,  /* RFC 3633, prefix delegation */
 
         SD_DHCP6_OPTION_SNTP_SERVERS               = 31,  /* RFC 4075, deprecated */
+        SD_DHCP6_OPTION_INFORMATION_REFRESH_TIME   = 32,  /* RFC 8415, sec. 21.23 */
 
         /* option code 35 is unassigned */
 
         SD_DHCP6_OPTION_FQDN                       = 39,  /* RFC 4704 */
 
         SD_DHCP6_OPTION_NTP_SERVER                 = 56,  /* RFC 5908 */
+        SD_DHCP6_OPTION_MUD_URL                    = 112, /* RFC 8250 */
 
         /* option codes 89-142 are unassigned */
         /* option codes 144-65535 are unassigned */
@@ -108,6 +110,12 @@ int sd_dhcp6_client_set_duid_llt(
 int sd_dhcp6_client_set_iaid(
                 sd_dhcp6_client *client,
                 uint32_t iaid);
+int sd_dhcp6_client_get_iaid(
+                sd_dhcp6_client *client,
+                uint32_t *iaid);
+int sd_dhcp6_client_duid_as_string(
+                sd_dhcp6_client *client,
+                char **duid);
 int sd_dhcp6_client_set_fqdn(
                 sd_dhcp6_client *client,
                 const char *fqdn);
@@ -120,12 +128,37 @@ int sd_dhcp6_client_get_information_request(
 int sd_dhcp6_client_set_request_option(
                 sd_dhcp6_client *client,
                 uint16_t option);
+int sd_dhcp6_client_set_request_mud_url(
+                sd_dhcp6_client *client,
+                const char *mudurl);
+int sd_dhcp6_client_set_request_user_class(
+                sd_dhcp6_client *client,
+                char** user_class);
+int sd_dhcp6_client_set_request_vendor_class(
+                sd_dhcp6_client *client,
+                char** vendor_class);
+int sd_dhcp6_client_set_prefix_delegation_hint(
+                sd_dhcp6_client *client,
+                uint8_t prefixlen,
+                const struct in6_addr *pd_address);
+int sd_dhcp6_client_get_prefix_delegation(sd_dhcp6_client *client,
+                                          int *delegation);
 int sd_dhcp6_client_set_prefix_delegation(sd_dhcp6_client *client,
-                                          bool delegation);
+                                          int delegation);
+int sd_dhcp6_client_get_address_request(sd_dhcp6_client *client,
+                                        int *request);
+int sd_dhcp6_client_set_address_request(sd_dhcp6_client *client,
+                                        int request);
+int sd_dhcp6_client_set_transaction_id(sd_dhcp6_client *client,
+                                       uint32_t transaction_id);
+int sd_dhcp6_client_add_vendor_option(sd_dhcp6_client *client,
+                                      sd_dhcp6_option *v);
 
 int sd_dhcp6_client_get_lease(
                 sd_dhcp6_client *client,
                 sd_dhcp6_lease **ret);
+
+int sd_dhcp6_client_add_option(sd_dhcp6_client *client, sd_dhcp6_option *v);
 
 int sd_dhcp6_client_stop(sd_dhcp6_client *client);
 int sd_dhcp6_client_start(sd_dhcp6_client *client);

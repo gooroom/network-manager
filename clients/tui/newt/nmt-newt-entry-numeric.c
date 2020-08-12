@@ -1,19 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright (C) 2013 Red Hat, Inc.
  */
 
 /**
@@ -127,8 +114,8 @@ newt_entry_numeric_validate (NmtNewtEntry *entry,
 	if (!*text)
 		return priv->optional ? TRUE : FALSE;
 
-	val = _nm_utils_ascii_str_to_int64 (text, 10, priv->min, priv->max, 0);
-	return val != 0 || errno == 0;
+	val = _nm_utils_ascii_str_to_int64 (text, 10, priv->min, priv->max, G_MAXINT64);
+	return val != G_MAXINT64 || errno == 0;
 }
 
 static void

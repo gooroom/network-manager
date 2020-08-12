@@ -163,6 +163,7 @@ DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 ALL_LINGUAS = @ALL_LINGUAS@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AM_TESTS_FD_REDIRECT = @AM_TESTS_FD_REDIRECT@
 AR = @AR@
@@ -185,8 +186,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBUS_CFLAGS = @DBUS_CFLAGS@
-DBUS_LIBS = @DBUS_LIBS@
 DBUS_SYS_DIR = @DBUS_SYS_DIR@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
@@ -209,7 +208,6 @@ GENHTML = @GENHTML@
 GETTEXT_MACRO_VERSION = @GETTEXT_MACRO_VERSION@
 GETTEXT_PACKAGE = @GETTEXT_PACKAGE@
 GLIB_CFLAGS = @GLIB_CFLAGS@
-GLIB_COMPILE_RESOURCES = @GLIB_COMPILE_RESOURCES@
 GLIB_LIBS = @GLIB_LIBS@
 GLIB_MAKEFILE = @GLIB_MAKEFILE@
 GLIB_MKENUMS = @GLIB_MKENUMS@
@@ -288,6 +286,8 @@ MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MM_GLIB_CFLAGS = @MM_GLIB_CFLAGS@
 MM_GLIB_LIBS = @MM_GLIB_LIBS@
+MOBILE_BROADBAND_PROVIDER_INFO_CFLAGS = @MOBILE_BROADBAND_PROVIDER_INFO_CFLAGS@
+MOBILE_BROADBAND_PROVIDER_INFO_LIBS = @MOBILE_BROADBAND_PROVIDER_INFO_LIBS@
 MOC = @MOC@
 MSGFMT = @MSGFMT@
 MSGFMT_015 = @MSGFMT_015@
@@ -474,42 +474,43 @@ MKHTML_OPTIONS = --path="$(abs_srcdir)"
 # Files to be included in $(DOC_MAIN_SGML_FILE)
 content_files = $(GENERATED_FILES) \
 	dbus-org.freedesktop.NetworkManager.AccessPoint.xml \
-	dbus-org.freedesktop.NetworkManager.Connection.Active.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Team.xml \
-	dbus-org.freedesktop.NetworkManager.DHCP6Config.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Wireless.xml \
-	dbus-org.freedesktop.NetworkManager.xml \
-	dbus-org.freedesktop.NetworkManager.VPN.Connection.xml \
-	dbus-org.freedesktop.NetworkManager.SecretAgent.xml \
-	dbus-org.freedesktop.NetworkManager.Device.xml \
-	dbus-org.freedesktop.NetworkManager.VPN.Plugin.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Bluetooth.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Dummy.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Vxlan.xml \
-	dbus-org.freedesktop.NetworkManager.Settings.Connection.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Bond.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Macvlan.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Macsec.xml \
-	dbus-org.freedesktop.NetworkManager.PPP.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Vlan.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Adsl.xml \
 	dbus-org.freedesktop.NetworkManager.AgentManager.xml \
-	dbus-org.freedesktop.NetworkManager.Device.IPTunnel.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Tun.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Bridge.xml \
-	dbus-org.freedesktop.NetworkManager.Device.OlpcMesh.xml \
+	dbus-org.freedesktop.NetworkManager.Connection.Active.xml \
 	dbus-org.freedesktop.NetworkManager.DHCP4Config.xml \
+	dbus-org.freedesktop.NetworkManager.DHCP6Config.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Adsl.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Bluetooth.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Bond.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Bridge.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Dummy.xml \
 	dbus-org.freedesktop.NetworkManager.Device.Generic.xml \
+	dbus-org.freedesktop.NetworkManager.Device.IPTunnel.xml \
 	dbus-org.freedesktop.NetworkManager.Device.Infiniband.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Macsec.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Macvlan.xml \
 	dbus-org.freedesktop.NetworkManager.Device.Modem.xml \
-	dbus-org.freedesktop.NetworkManager.IP6Config.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Veth.xml \
-	dbus-org.freedesktop.NetworkManager.Settings.xml \
-	dbus-org.freedesktop.NetworkManager.Device.Wired.xml \
-	dbus-org.freedesktop.NetworkManager.Device.WireGuard.xml \
-	dbus-org.freedesktop.NetworkManager.IP4Config.xml \
+	dbus-org.freedesktop.NetworkManager.Device.OlpcMesh.xml \
 	dbus-org.freedesktop.NetworkManager.Device.Statistics.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Team.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Tun.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Veth.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Vlan.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Vxlan.xml \
+	dbus-org.freedesktop.NetworkManager.Device.WifiP2P.xml \
+	dbus-org.freedesktop.NetworkManager.Device.WireGuard.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Wired.xml \
+	dbus-org.freedesktop.NetworkManager.Device.Wireless.xml \
+	dbus-org.freedesktop.NetworkManager.Device.xml \
 	dbus-org.freedesktop.NetworkManager.DnsManager.xml \
+	dbus-org.freedesktop.NetworkManager.IP4Config.xml \
+	dbus-org.freedesktop.NetworkManager.IP6Config.xml \
+	dbus-org.freedesktop.NetworkManager.PPP.xml \
+	dbus-org.freedesktop.NetworkManager.SecretAgent.xml \
+	dbus-org.freedesktop.NetworkManager.Settings.Connection.xml \
+	dbus-org.freedesktop.NetworkManager.Settings.xml \
+	dbus-org.freedesktop.NetworkManager.VPN.Connection.xml \
+	dbus-org.freedesktop.NetworkManager.VPN.Plugin.xml \
+	dbus-org.freedesktop.NetworkManager.xml \
 	$(top_builddir)/libnm-core/nm-dbus-types.xml \
 	$(top_builddir)/libnm-core/nm-vpn-dbus-types.xml \
 	$(top_builddir)/man/nmcli.xml $(top_builddir)/man/nmtui.xml \
@@ -518,9 +519,10 @@ content_files = $(GENERATED_FILES) \
 	$(top_builddir)/man/NetworkManager.xml \
 	$(top_builddir)/man/NetworkManager.conf.xml \
 	$(top_builddir)/man/nmcli-examples.xml \
-	$(top_builddir)/man/nm-settings.xml \
-	$(top_builddir)/man/nm-settings-keyfile.xml version.xml \
-	../../COPYING $(NULL) $(am__append_2) $(am__append_3)
+	$(top_builddir)/man/nm-settings-dbus.xml \
+	$(top_builddir)/man/nm-settings-keyfile.xml \
+	$(top_builddir)/man/nm-settings-nmcli.xml version.xml $(NULL) \
+	$(am__append_2) $(am__append_3)
 @GTK_DOC_USE_LIBTOOL_FALSE@GTKDOC_CC = $(CC) $(INCLUDES) $(GTKDOC_DEPS_CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 @GTK_DOC_USE_LIBTOOL_TRUE@GTKDOC_CC = $(LIBTOOL) --tag=CC --mode=compile $(CC) $(INCLUDES) $(GTKDOC_DEPS_CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 @GTK_DOC_USE_LIBTOOL_FALSE@GTKDOC_LD = $(CC) $(GTKDOC_DEPS_LIBS) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS)
@@ -807,8 +809,8 @@ uninstall-am: uninstall-local
 .PRECIOUS: Makefile
 
 
-@BUILD_DOCS_TRUE@settings-spec.xml: settings-spec.xsl $(top_builddir)/libnm/nm-settings-docs.xml
-@BUILD_DOCS_TRUE@	$(AM_V_GEN) xsltproc --output $@ $^
+@BUILD_DOCS_TRUE@settings-spec.xml: settings-spec.xsl $(top_builddir)/man/nm-settings-docs-dbus.xml
+@BUILD_DOCS_TRUE@	$(AM_V_GEN) (! test -f $@ || chmod u+w $@) && xsltproc --output $@ $^
 
 # Top-level SGML file includes (depends on) settings-spec.xml
 @BUILD_DOCS_TRUE@$(DOC_MAIN_SGML_FILE): settings-spec.xml
@@ -1010,6 +1012,25 @@ dist-hook: dist-check-gtkdoc all-gtk-doc dist-hook-local
 	@$(GTKDOC_REBASE) --online --relative --html-dir=$(distdir)/html
 
 .PHONY : dist-hook-local docs
+
+# workaround setup-build.stamp from gtk-doc.make, which copies
+# the file as read-only. That breaks later build steps, as the
+# file can no longer be written. Instead, copy the file with `cp -f`
+# only.
+setup-build.stamp:
+	-$(GTK_DOC_V_SETUP)if test "$(abs_srcdir)" != "$(abs_builddir)" ; then \
+	  files=`echo $(SETUP_FILES) $(DOC_MODULE).types`; \
+	  if test "x$$files" != "x" ; then \
+	    for file in $$files ; do \
+	      destdir=`dirname $(abs_builddir)/$$file`; \
+	      test -d "$$destdir" || mkdir -p "$$destdir"; \
+	      test -f $(abs_srcdir)/$$file && \
+	        ( cp -pf $(abs_srcdir)/$$file $(abs_builddir)/$$file ; \
+	        chmod u+w $(abs_builddir)/$$file ) || true; \
+	    done; \
+	  fi; \
+	fi
+	$(AM_V_at)touch setup-build.stamp
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

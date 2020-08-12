@@ -56,9 +56,7 @@
         does not start the network connection unless (1) device is idle and able
         to connect to the network described by the new connection, and (2) the
         connection is allowed to be started automatically. Use the 'Save' method
-        on the connection to save these changes to disk. Note that unsaved changes
-        will be lost if the connection is reloaded from disk (either automatically
-        on file change or due to an explicit ReloadConnections call).
+        on the connection to save these changes to disk.
     -->
     <method name="AddConnectionUnsaved">
       <arg name="connection" type="a{sa{sv}}" direction="in"/>
@@ -66,16 +64,51 @@
     </method>
 
     <!--
+        AddConnection2:
+        @settings: New connection settings, properties, and (optionally) secrets.
+        @flags: optional flags argument. Currently the following flags are supported:
+          "0x1" (to-disk),
+          "0x2" (in-memory),
+          "0x20" (block-autoconnect).
+          Unknown flags cause the call to fail.
+        @args: optional arguments dictionary, for extensibility. Currently no
+          arguments are accepted. Specifying unknown keys causes the call
+          to fail.
+        @path: Object path of the new connection that was just added.
+        @result: output argument, currently no additional results are returned.
+
+        Add a new connection profile.
+
+        Either the flags 0x1 (to-disk) or 0x2 (in-memory) must be specified.
+        The effect is whether to behave like AddConnection or AddConnectionUnsaved.
+        If 0x20 (block-autoconnect) is specified, autoconnect for the new profile
+        is blocked from the beginnin. Otherwise, the profile might automatically
+        connect if a suitable device is around.
+
+        AddConnection2 is a extensible alternative to AddConnection, and AddConnectionUnsaved.
+        The new variant can do everything that the older variants could, and more.
+
+        Since: 1.20
+    -->
+    <method name="AddConnection2">
+      <arg name="settings" type="a{sa{sv}}" direction="in"/>
+      <arg name="flags" type="u" direction="in"/>
+      <arg name="args" type="a{sv}" direction="in"/>
+      <arg name="path" type="o" direction="out"/>
+      <arg name="result" type="a{sv}" direction="out"/>
+    </method>
+
+    <!--
         LoadConnections:
         @filenames: Array of paths to on-disk connection profiles in directories monitored by NetworkManager.
         @status: Success or failure of the operation as a whole. True if NetworkManager at least tried to load the indicated connections, even if it did not succeed. False if an error occurred before trying to load the connections (eg, permission denied).
+          Note that before 1.20, NetworkManager had a bug and this @status value was wrong. It is better to assume success if the method does not return with a D-Bus error. On top of that, you can look at @failures to know whether any of the requested files failed.
         @failures: Paths of connection files that could not be loaded.
 
         Loads or reloads the indicated connections from disk. You should call this
         after making changes directly to an on-disk connection file to make sure
-        that NetworkManager sees the changes. (If "monitor-connection-files" in
-        NetworkManager.conf is "true", then this will have no real effect, but is
-        harmless.) As with AddConnection(), this operation does not necessarily
+        that NetworkManager sees the changes.
+        As with AddConnection(), this operation does not necessarily
         start the network connection.
     -->
     <method name="LoadConnections">
@@ -86,13 +119,10 @@
 
     <!--
         ReloadConnections:
-        @status: Success or failure.
+        @status: This always returns %TRUE.
 
         Tells NetworkManager to reload all connection files from disk, including
-        noticing any added or deleted connection files. By default, connections
-        are re-read automatically any time they change, so you only need to use
-        this command if you have set "monitor-connection-files=false" in
-        NetworkManager.conf.
+        noticing any added or deleted connection files.
     -->
     <method name="ReloadConnections">
       <arg name="status" type="b" direction="out"/>

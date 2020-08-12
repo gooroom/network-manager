@@ -1,20 +1,6 @@
-/* NetworkManager -- Network link manager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2018 Lubomir Rintel <lkundrak@v3.sk>
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2018 Lubomir Rintel <lkundrak@v3.sk>
  */
 
 #include "nm-default.h"
@@ -23,7 +9,6 @@
 #include "nm-device-wpan.h"
 
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 #include <linux/if.h>
 
@@ -67,6 +52,7 @@ complete_connection (NMDevice *device,
 	                           existing_connections,
 	                           NULL,
 	                           _("WPAN connection"),
+	                           NULL,
 	                           NULL,
 	                           TRUE);
 
@@ -119,11 +105,11 @@ static NMActStageReturn
 act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 {
 	NMDeviceWpan *self = NM_DEVICE_WPAN (device);
-	NMConnection *connection;
 	NMSettingWpan *s_wpan;
 	NMPlatform *platform;
 	guint16 pan_id;
 	guint16 short_address;
+	gint16 page, channel;
 	int ifindex;
 	const guint8 *hwaddr;
 	gsize hwaddr_len = 0;
@@ -131,24 +117,23 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 	NMDevice *lowpan_device = NULL;
 	NMActStageReturn ret = NM_ACT_STAGE_RETURN_FAILURE;
 
-	ret = NM_DEVICE_CLASS (nm_device_wpan_parent_class)->act_stage1_prepare (device, out_failure_reason);
-	if (ret != NM_ACT_STAGE_RETURN_SUCCESS)
-		return ret;
-
 	platform = nm_device_get_platform (device);
-	g_return_val_if_fail (platform, NM_ACT_STAGE_RETURN_FAILURE);
+	nm_assert (NM_IS_PLATFORM (platform));
 
 	ifindex = nm_device_get_ifindex (device);
+
 	g_return_val_if_fail (ifindex > 0, NM_ACT_STAGE_RETURN_FAILURE);
 
-	connection = nm_device_get_applied_connection (device);
-	g_return_val_if_fail (connection, NM_ACT_STAGE_RETURN_FAILURE);
+	s_wpan = nm_device_get_applied_setting (device, NM_TYPE_SETTING_WPAN);
 
-	s_wpan = NM_SETTING_WPAN (nm_connection_get_setting (connection, NM_TYPE_SETTING_WPAN));
 	g_return_val_if_fail (s_wpan, NM_ACT_STAGE_RETURN_FAILURE);
 
 	hwaddr = nm_platform_link_get_address (platform, ifindex, &hwaddr_len);
-	g_return_val_if_fail (hwaddr, NM_ACT_STAGE_RETURN_FAILURE);
+
+	if (!hwaddr) {
+		*out_failure_reason = NM_DEVICE_STATE_REASON_CONFIG_FAILED;
+		return NM_ACT_STAGE_RETURN_FAILURE;
+	}
 
 	/* As of kernel 4.16, the 6LoWPAN devices layered on top of WPANs
 	 * need to be DOWN as well as the WPAN device itself in order to
@@ -157,8 +142,9 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 	                                                NM_LINK_TYPE_6LOWPAN,
 	                                                hwaddr,
 	                                                hwaddr_len);
-	if (lowpan_plink && NM_FLAGS_HAS (lowpan_plink->n_ifi_flags, IFF_UP)) {
-		lowpan_device = nm_manager_get_device_by_ifindex (nm_manager_get (),
+	if (   lowpan_plink
+	    && NM_FLAGS_HAS (lowpan_plink->n_ifi_flags, IFF_UP)) {
+		lowpan_device = nm_manager_get_device_by_ifindex (NM_MANAGER_GET,
 		                                                  lowpan_plink->ifindex);
 	}
 
@@ -183,9 +169,19 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 		}
 	}
 
+	channel = nm_setting_wpan_get_channel (s_wpan);
+	if (channel != NM_SETTING_WPAN_CHANNEL_DEFAULT) {
+		page = nm_setting_wpan_get_page (s_wpan);
+		if (!nm_platform_wpan_set_channel (platform, ifindex, page, channel)) {
+			_LOGW (LOGD_DEVICE, "unable to set the channel");
+			goto out;
+		}
+	}
+
 	ret = NM_ACT_STAGE_RETURN_SUCCESS;
+
 out:
-        nm_device_bring_up (device, TRUE, NULL);
+	nm_device_bring_up (device, TRUE, NULL);
 
 	if (lowpan_device)
 		nm_device_bring_up (lowpan_device, TRUE, NULL);

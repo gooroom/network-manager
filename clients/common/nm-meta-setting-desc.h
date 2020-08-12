@@ -1,28 +1,14 @@
-/* nmcli - command-line tool to control NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright 2010 - 2018 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2010 - 2018 Red Hat, Inc.
  */
 
 #ifndef __NM_META_SETTING_DESC_H__
 #define __NM_META_SETTING_DESC_H__
 
-#include "nm-utils/nm-obj.h"
+#include "nm-glib-aux/nm-obj.h"
 #include "nm-meta-setting.h"
-#include "nm-ethtool-utils.h"
+#include "nm-libnm-core-intern/nm-ethtool-utils.h"
 
 struct _NMDevice;
 
@@ -62,7 +48,8 @@ struct _NMDevice;
 #define NM_META_TEXT_WORD_INFRA  "infrastructure"
 #define NM_META_TEXT_WORD_AP     "ap"
 #define NM_META_TEXT_WORD_ADHOC  "adhoc"
-#define NM_META_TEXT_PROMPT_WIFI_MODE_CHOICES "(" NM_META_TEXT_WORD_INFRA "/" NM_META_TEXT_WORD_AP "/" NM_META_TEXT_WORD_ADHOC ") [" NM_META_TEXT_WORD_INFRA "]"
+#define NM_META_TEXT_WORD_MESH   "mesh"
+#define NM_META_TEXT_PROMPT_WIFI_MODE_CHOICES "(" NM_META_TEXT_WORD_INFRA "/" NM_META_TEXT_WORD_AP "/" NM_META_TEXT_WORD_ADHOC "/" NM_META_TEXT_WORD_MESH ") [" NM_META_TEXT_WORD_INFRA "]"
 
 #define NM_META_TEXT_PROMPT_TUN_MODE N_("Tun mode")
 #define NM_META_TEXT_WORD_TUN  "tun"
@@ -89,6 +76,7 @@ typedef enum {
 	NM_META_COLOR_CONNECTION_ACTIVATING,
 	NM_META_COLOR_CONNECTION_DISCONNECTING,
 	NM_META_COLOR_CONNECTION_INVISIBLE,
+	NM_META_COLOR_CONNECTION_EXTERNAL,
 	NM_META_COLOR_CONNECTION_UNKNOWN,
 	NM_META_COLOR_CONNECTIVITY_FULL,
 	NM_META_COLOR_CONNECTIVITY_LIMITED,
@@ -101,6 +89,8 @@ typedef enum {
 	NM_META_COLOR_DEVICE_FIRMWARE_MISSING,
 	NM_META_COLOR_DEVICE_PLUGIN_MISSING,
 	NM_META_COLOR_DEVICE_UNAVAILABLE,
+	NM_META_COLOR_DEVICE_DISABLED,
+	NM_META_COLOR_DEVICE_EXTERNAL,
 	NM_META_COLOR_DEVICE_UNKNOWN,
 	NM_META_COLOR_MANAGER_RUNNING,
 	NM_META_COLOR_MANAGER_STARTING,
@@ -127,6 +117,12 @@ typedef enum {
 	NM_META_COLOR_ENABLED,
 	_NM_META_COLOR_NUM
 } NMMetaColor;
+
+typedef enum {
+	NM_META_ACCESSOR_MODIFIER_SET,
+	NM_META_ACCESSOR_MODIFIER_ADD,
+	NM_META_ACCESSOR_MODIFIER_DEL,
+} NMMetaAccessorModifier;
 
 typedef enum {
 	NM_META_ACCESSOR_GET_TYPE_PRETTY,
@@ -209,15 +205,9 @@ struct _NMMetaPropertyType {
 	                     const NMMetaEnvironment *environment,
 	                     gpointer environment_user_data,
 	                     NMSetting *setting,
+	                     NMMetaAccessorModifier modifier,
 	                     const char *value,
 	                     GError **error);
-	gboolean (*remove_fcn) (const NMMetaPropertyInfo *property_info,
-	                        const NMMetaEnvironment *environment,
-	                        gpointer environment_user_data,
-	                        NMSetting *setting,
-	                        const char *option,
-	                        guint32 idx,
-	                        GError **error);
 
 	const char *const*(*values_fcn) (const NMMetaPropertyInfo *property_info,
 	                                 char ***out_to_free);
@@ -227,7 +217,12 @@ struct _NMMetaPropertyType {
 	                                   gpointer environment_user_data,
 	                                   const NMMetaOperationContext *operation_context,
 	                                   const char *text,
+	                                   gboolean *out_complete_filename,
 	                                   char ***out_to_free);
+
+	/* Whether set_fcn() supports the '-' modifier. That is, whether the property
+	 * is a list type. */
+	bool set_supports_remove:1;
 };
 
 struct _NMUtilsEnumValueInfo;
@@ -244,9 +239,6 @@ typedef struct {
 
 struct _NMMetaPropertyTypData {
 	union {
-		struct {
-			gboolean (*fcn) (NMSetting *setting);
-		} get_with_default;
 		struct {
 			GType (*get_gtype) (void);
 			int min;
@@ -267,17 +259,90 @@ struct _NMMetaPropertyTypData {
 		} gobject_int;
 		struct {
 			const char *(*validate_fcn) (const char *value, char **out_to_free, GError **error);
+			bool handle_emptyunset:1;
 		} gobject_string;
+		struct {
+			bool legacy_format:1;
+		} gobject_bytes;
+		struct {
+			guint32 (*get_num_fcn_u32) (NMSetting *setting);
+			guint (*get_num_fcn_u) (NMSetting *setting);
+			void (*clear_all_fcn) (NMSetting *setting);
+
+			/* some multilist properties distinguish between an empty list and
+			 * and unset. If this function pointer is set, certain behaviors come
+			 * into action to handle that. */
+			void (*clear_emptyunset_fcn) (NMSetting *setting,
+			                              gboolean is_set /* or else set default */);
+
+			gboolean (*add_fcn) (NMSetting *setting,
+			                     const char *item);
+			void (*add2_fcn) (NMSetting *setting,
+			                  const char *item);
+			const char *(*validate_fcn) (const char *item, GError **error);
+			const char *(*validate2_fcn) (NMSetting *setting, const char *item, GError **error);
+			void (*remove_by_idx_fcn_u32) (NMSetting *setting, guint32 idx);
+			void (*remove_by_idx_fcn_u) (NMSetting *setting, guint idx);
+			void (*remove_by_idx_fcn_s) (NMSetting *setting, int idx);
+			gboolean (*remove_by_value_fcn) (NMSetting *setting, const char *item);
+			bool strsplit_plain:1;
+			bool strsplit_with_spaces:1;
+		} multilist;
+		struct {
+			guint (*get_num_fcn) (NMSetting *setting);
+			void (*obj_to_str_fcn) (NMMetaAccessorGetType get_type,
+			                        NMSetting *setting,
+			                        guint idx,
+			                        GString *str);
+			gboolean (*set_fcn) (NMSetting *setting,
+			                     gboolean do_add /* or else remove. */,
+			                     const char *value,
+			                     GError **error);
+			void (*clear_all_fcn) (NMSetting *setting);
+			void (*remove_by_idx_fcn_u) (NMSetting *setting, guint idx);
+			void (*remove_by_idx_fcn_s) (NMSetting *setting, int idx);
+			bool delimit_pretty_with_semicolon:1;
+			bool strsplit_plain:1;
+		} objlist;
+		struct {
+			gboolean (*set_fcn) (NMSetting *setting,
+			                     const char *option,
+			                     const char *value,
+			                     GError **error);
+			bool no_empty_value:1;
+		} optionlist;
 		struct {
 			guint32 (*get_fcn) (NMSetting *setting);
 		} mtu;
 		struct {
+			NMSetting8021xSchemeType scheme_type;
+		} cert_8021x;
+		struct {
 			NMMetaPropertyTypeMacMode mode;
 		} mac;
+		struct {
+			guint (*get_fcn) (NMSettingDcb *setting,
+			                  guint user_priority);
+			void (*set_fcn) (NMSettingDcb *setting,
+			                 guint id,
+			                 guint value);
+			guint max;
+			guint other;
+			bool is_percent:1;
+		} dcb;
+		struct {
+			gboolean (*get_fcn) (NMSettingDcb *s_dcb,
+			                     guint priority);
+			void (*set_fcn) (NMSettingDcb *setting,
+			                 guint user_priority,
+			                 gboolean enabled);
+			bool with_flow_control_flags:1;
+		} dcb_bool;
 		struct {
 			NMEthtoolID ethtool_id;
 		} ethtool;
 	} subtype;
+	gboolean (*is_default_fcn) (NMSetting *setting);
 	const char *const*values_static;
 	const NMMetaPropertyTypDataNested *nested;
 	NMMetaPropertyTypFlags typ_flags;
@@ -314,6 +379,7 @@ struct _NMMetaPropertyInfo {
 	bool is_secret:1;
 
 	bool is_cli_option:1;
+	bool hide_if_default:1;
 
 	const char *prompt;
 
@@ -377,13 +443,14 @@ struct _NMMetaType {
 	                          NMMetaAccessorGetType get_type,
 	                          NMMetaAccessorGetFlags get_flags,
 	                          NMMetaAccessorGetOutFlags *out_flags,
-	                          gboolean *out_is_defalt,
+	                          gboolean *out_is_default,
 	                          gpointer *out_to_free);
 	const char *const*(*complete_fcn) (const NMMetaAbstractInfo *info,
 	                                   const NMMetaEnvironment *environment,
 	                                   gpointer environment_user_data,
 	                                   const NMMetaOperationContext *operation_context,
 	                                   const char *text,
+	                                   gboolean *out_complete_filename,
 	                                   char ***out_to_free);
 };
 
@@ -412,7 +479,7 @@ typedef enum {
 
 /* the settings-meta data is supposed to be independent of an actual client
  * implementation. Hence, there is a need for hooks to the meta-data.
- * The meta-data handlers may call back to the enviroment with certain
+ * The meta-data handlers may call back to the environment with certain
  * actions. */
 struct _NMMetaEnvironment {
 
@@ -453,7 +520,14 @@ struct _NMMetaPropertyTypDataNested  {
 	guint nested_len;
 };
 
-const NMMetaPropertyTypDataNested nm_meta_property_typ_data_bond;
+extern const NMMetaPropertyTypDataNested nm_meta_property_typ_data_bond;
+
+/*****************************************************************************/
+
+gboolean _nm_meta_setting_bond_add_option (NMSetting *setting,
+                                           const char *name,
+                                           const char *value,
+                                           GError **error);
 
 /*****************************************************************************/
 

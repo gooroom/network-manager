@@ -55,7 +55,7 @@
       The NetworkManager daemon attempts to make networking
       configuration and operation as painless and automatic as
       possible by managing the primary network connection and other
-      network interfaces, like Ethernet, WiFi, and Mobile Broadband
+      network interfaces, like Ethernet, Wi-Fi, and Mobile Broadband
       devices.  NetworkManager will connect any network device when a
       connection for that device becomes available, unless that
       behavior is disabled.  Information about networking is exported
@@ -80,8 +80,8 @@
       device an operation just happened on, and second the action. For device actions,
       the interface is the name of the kernel interface suitable for IP configuration.
       Thus it is either VPN_IP_IFACE, DEVICE_IP_IFACE, or DEVICE_IFACE, as applicable.
-      For the <varname>hostname</varname> and <varname>connectivity-change</varname>
-      actions it is always "none".
+      For the <varname>hostname</varname> action the device name is always <literal>"none"</literal>
+      and for <varname>connectivity-change</varname> it is empty.
     </para>
     <para>The actions are:</para>
     <variablelist class="dispatcher-options">
@@ -437,16 +437,13 @@
       <varlistentry>
         <term><varname>NM_UNMANAGED</varname></term>
         <listitem><para>
-          No default connection will be created and automatic activation
-          will not be attempted when this property of a device is set to a
-          true value ("1" or "true"). You will still be able to attach a
-          connection to the device manually or observe externally added
-          configuration such as addresses or routes.
-        </para><para>
-          Create an udev rule that sets this property to prevent NetworkManager
-          from interfering with virtual Ethernet device interfaces that are
-          managed by virtualization tools.
-        </para></listitem>
+          If set to <literal>"1"</literal> or <literal>"true"</literal>, the device is
+          configured as unmanaged by NetworkManager. Note that the user still can
+          explicitly overrule this configuration via means like
+          <command>nmcli device set "$DEVICE" managed yes</command> or
+          <literal>"device*.managed=1"</literal> in NetworkManager.conf.
+        </para>
+        </listitem>
       </varlistentry>
     </variablelist>
   </refsect1>

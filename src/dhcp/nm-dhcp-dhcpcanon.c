@@ -1,20 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-dhcp-dhcpcanon.c - dhcpcanon specific hooks for NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+// SPDX-License-Identifier: GPL-2.0+
+/*
  * Copyright (C) 2017 juga <juga at riseup dot net>
  */
 
@@ -22,9 +7,7 @@
 
 #if WITH_DHCPCANON
 
-#include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <unistd.h>
 
 #include "nm-utils.h"
@@ -188,29 +171,20 @@ ip4_start (NMDhcpClient *client,
 	                        error);
 }
 
-static gboolean
-ip6_start (NMDhcpClient *client,
-           const char *dhcp_anycast_addr,
-           const struct in6_addr *ll_addr,
-           NMSettingIP6ConfigPrivacy privacy,
-           guint needed_prefixes,
-           GError **error)
-{
-	nm_utils_error_set_literal (error, NM_UTILS_ERROR_UNKNOWN, "dhcpcanon plugin does not support IPv6");
-	return FALSE;
-}
-
 static void
 stop (NMDhcpClient *client, gboolean release)
 {
 	NMDhcpDhcpcanon *self = NM_DHCP_DHCPCANON (client);
 	NMDhcpDhcpcanonPrivate *priv = NM_DHCP_DHCPCANON_GET_PRIVATE (self);
+	int errsv;
 
 	NM_DHCP_CLIENT_CLASS (nm_dhcp_dhcpcanon_parent_class)->stop (client, release);
 
 	if (priv->pid_file) {
-		if (remove (priv->pid_file) == -1)
-			_LOGD ("could not remove dhcp pid file \"%s\": %d (%s)", priv->pid_file, errno, g_strerror (errno));
+		if (remove (priv->pid_file) == -1) {
+			errsv = errno;
+			_LOGD ("could not remove dhcp pid file \"%s\": %d (%s)", priv->pid_file, errsv, nm_strerror_native (errsv));
+		}
 		g_free (priv->pid_file);
 		priv->pid_file = NULL;
 	}
@@ -233,7 +207,7 @@ nm_dhcp_dhcpcanon_init (NMDhcpDhcpcanon *self)
 static void
 dispose (GObject *object)
 {
-	NMDhcpDhcpcanonPrivate *priv = NM_DHCP_DHCPCANON_GET_PRIVATE ((NMDhcpDhcpcanon *) object);
+	NMDhcpDhcpcanonPrivate *priv = NM_DHCP_DHCPCANON_GET_PRIVATE (object);
 
 	if (priv->dhcp_listener) {
 		g_signal_handlers_disconnect_by_func (priv->dhcp_listener,
@@ -256,12 +230,11 @@ nm_dhcp_dhcpcanon_class_init (NMDhcpDhcpcanonClass *dhcpcanon_class)
 	object_class->dispose = dispose;
 
 	client_class->ip4_start = ip4_start;
-	client_class->ip6_start = ip6_start;
 	client_class->stop = stop;
 }
 
 const NMDhcpClientFactory _nm_dhcp_client_factory_dhcpcanon = {
-	.name = "dhcpcanon",
+	.name     = "dhcpcanon",
 	.get_type = nm_dhcp_dhcpcanon_get_type,
 	.get_path = nm_dhcp_dhcpcanon_get_path,
 };

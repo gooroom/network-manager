@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* NetworkManager
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Copyright (C) 2008–2013 Red Hat, Inc.
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2008 - 2013 Red Hat, Inc.
  */
 
 #ifndef __NETWORKMANAGER_IP6_CONFIG_H__
@@ -25,7 +10,7 @@
 
 #include "nm-setting-ip6-config.h"
 
-#include "nm-utils/nm-dedup-multi.h"
+#include "nm-glib-aux/nm-dedup-multi.h"
 #include "platform/nmp-object.h"
 
 /*****************************************************************************/
@@ -130,16 +115,23 @@ void nm_ip6_config_subtract (NMIP6Config *dst,
                              guint32 default_route_metric_penalty);
 void nm_ip6_config_intersect (NMIP6Config *dst,
                               const NMIP6Config *src,
+                              gboolean intersect_addresses,
                               gboolean intersect_routes,
                               guint32 default_route_metric_penalty);
 NMIP6Config *nm_ip6_config_intersect_alloc (const NMIP6Config *a,
                                             const NMIP6Config *b,
+                                            gboolean intersect_addresses,
                                             gboolean intersect_routes,
                                             guint32 default_route_metric_penalty);
 gboolean nm_ip6_config_replace (NMIP6Config *dst, const NMIP6Config *src, gboolean *relevant_changes);
 
 const NMPObject *nm_ip6_config_best_default_route_get (const NMIP6Config *self);
 const NMPObject *_nm_ip6_config_best_default_route_find (const NMIP6Config *self);
+
+enum _NMIPConfigFlags;
+
+void nm_ip6_config_set_config_flags (NMIP6Config *self, enum _NMIPConfigFlags flags, enum _NMIPConfigFlags mask);
+enum _NMIPConfigFlags nm_ip6_config_get_config_flags (const NMIP6Config *self);
 
 const NMDedupMultiHeadEntry *nm_ip6_config_lookup_addresses (const NMIP6Config *self);
 void nm_ip6_config_reset_addresses (NMIP6Config *self);

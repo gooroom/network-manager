@@ -1,21 +1,6 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * Copyright 2017 Red Hat, Inc.
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
 #include "nm-default.h"
@@ -34,11 +19,11 @@
  * necessary for Open vSwitch interfaces of type "patch".
  **/
 
-enum {
-	PROP_0,
+/*****************************************************************************/
+
+NM_GOBJECT_PROPERTIES_DEFINE_BASE (
 	PROP_PEER,
-	LAST_PROP
-};
+);
 
 /**
  * NMSettingOvsPatch:
@@ -96,13 +81,7 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		return FALSE;
 	}
 
-	if (   !nm_utils_ipaddr_valid (AF_INET, self->peer)
-	    && !nm_utils_ipaddr_valid (AF_INET6, self->peer)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid IP address"),
-		             self->peer);
+	if (!nm_utils_ifname_valid (self->peer, NMU_IFACE_OVS, error)) {
 		g_prefix_error (error, "%s.%s: ",
 		                NM_SETTING_OVS_PATCH_SETTING_NAME,
 		                NM_SETTING_OVS_PATCH_PEER);
@@ -194,19 +173,19 @@ nm_setting_ovs_patch_class_init (NMSettingOvsPatchClass *klass)
 	/**
 	 * NMSettingOvsPatch:peer:
 	 *
-	 * Specifies the unicast destination IP address of a remote Open vSwitch
-	 * bridge port to connect to.
+	 * Specifies the name of the interface for the other side of the patch.
+	 * The patch on the other side must also set this interface as peer.
 	 *
 	 * Since: 1.10
 	 **/
-	g_object_class_install_property
-	        (object_class, PROP_PEER,
-	         g_param_spec_string (NM_SETTING_OVS_PATCH_PEER, "", "",
-	                              NULL,
-	                              G_PARAM_READWRITE |
-	                              G_PARAM_CONSTRUCT |
-	                              NM_SETTING_PARAM_INFERRABLE |
-	                              G_PARAM_STATIC_STRINGS));
+	obj_properties[PROP_PEER] =
+	    g_param_spec_string (NM_SETTING_OVS_PATCH_PEER, "", "",
+	                         NULL,
+	                         G_PARAM_READWRITE |
+	                         NM_SETTING_PARAM_INFERRABLE |
+	                         G_PARAM_STATIC_STRINGS);
+
+	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 
 	_nm_setting_class_commit (setting_class, NM_META_SETTING_TYPE_OVS_PATCH);
 }
