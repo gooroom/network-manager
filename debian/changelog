@@ -1,3 +1,12 @@
+network-manager (1.14.6-2+deb10u1+grm2u2) stable; urgency=medium
+
+  [ boyeon.choi ]
+  * [5619f4c0] [Bug:3257/3256] Fixed wifi hotspot connection issues
+
+  [ Gooroom Autobuilder ]
+
+ -- Gooroom Autobuilder <jenkins@gooroom.kr>  Thu, 01 Apr 2021 12:44:14 +0900
+
 network-manager (1.14.6-2+deb10u1+grm2u1) stable; urgency=medium
 
   [ cjheo ]
