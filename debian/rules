@@ -2,20 +2,12 @@
 
 include /usr/share/dpkg/architecture.mk
 
-# Without that the tests fail, cannot register existing type 'NMAgentManagerError'
-LDFLAGS=$(shell echo $$LDFLAGS | sed -e 's/-Wl,-Bsymbolic-functions//')
-export LDFLAGS
-
-ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes i386)
-   BUILD_PACKAGES += -Nnetwork-manager
-endif
-
 export PYTHON=/usr/bin/python3
 
 PPPD_PLUGIN_DIR := $(shell dh_ppp --plugin-dir)
 
 %:
-	dh $@ --with gir,ppp $(BUILD_PACKAGES)
+	dh $@ --with gir,ppp
 
 autoreconf:
 	gtkdocize --copy
@@ -31,11 +23,12 @@ override_dh_auto_configure:
 		--runstatedir=/run \
 		--with-pppd-plugin-dir=$(PPPD_PLUGIN_DIR) \
 		--with-pppd=/usr/sbin/pppd \
-		--with-resolvconf=no \
+		--with-resolvconf=/sbin/resolvconf \
 		--with-dhclient=/sbin/dhclient \
 		--with-iptables=/usr/sbin/iptables \
 		--with-dnsmasq=/usr/sbin/dnsmasq \
 		--with-dnssec-trigger=/usr/lib/dnssec-trigger/dnssec-trigger-script \
+		--with-polkit-agent-helper-1=/usr/lib/policykit-1/polkit-agent-helper-1 \
 		--with-systemdsystemunitdir=/lib/systemd/system \
 		--with-udev-dir=/lib/udev \
 		--with-dbus-sys-dir=/usr/share/dbus-1/system.d \
@@ -46,7 +39,6 @@ override_dh_auto_configure:
 		--with-nmtui \
 		--with-nmcli \
 		--with-selinux \
-		--with-tests \
 		--with-libaudit \
 		--with-iwd \
 		--without-dhcpcanon \
@@ -68,18 +60,10 @@ override_dh_auto_configure:
 
 override_dh_install:
 	find debian/tmp -name '*.la' -print -delete
-	rm -vf $(CURDIR)/debian/tmp/etc/init.d/NetworkManager
 	dh_install
 
 override_dh_missing:
 	dh_missing --fail-missing
-
-	# copy powersave configuration
-	mkdir -p debian/network-manager/etc/NetworkManager/conf.d
-	cp debian/default-wifi-powersave-on.conf debian/network-manager/etc/NetworkManager/conf.d/
-
-override_dh_installinit:
-	dh_installinit --noscripts
 
 override_dh_makeshlibs:
 	dh_makeshlibs -X/usr/lib/$(DEB_HOST_MULTIARCH)/NetworkManager/ -X/usr/lib/pppd/
@@ -90,8 +74,3 @@ override_dh_installsystemd:
 
 override_dh_ppp:
 	dh_ppp --breaks
-
-override_dh_auto_test:
-ifeq (, $(filter nocheck, $(DEB_BUILD_OPTIONS)))
-	make check || ( find . -name test-suite.log -exec cat {} \;; exit 1; )
-endif

@@ -20,16 +20,9 @@ set -e
 
 case "$1" in
     configure)
-        # request a reboot (NM tears down interfaces on restart
-        # which is not the way we want to go)
-        [ -x /usr/share/update-notifier/notify-reboot-required ] && \
-            /usr/share/update-notifier/notify-reboot-required
-
-        update-rc.d -f NetworkManager remove >/dev/null
-
-        if [ -x "/etc/init.d/dbus" ]; then
-            invoke-rc.d dbus force-reload || true
-        fi
+        # Create netdev group. Members of group netdev get access to the PolicyKit action
+        # org.freedesktop.NetworkManager.settings.modify.system without prior authentication
+        addgroup --quiet --system netdev
 
         # This directory can contain sensitive data and should not be world-readable
         chmod 0700 /var/lib/NetworkManager
@@ -54,15 +47,6 @@ case "$1" in
                 ln -sf  /run/NetworkManager/resolv.conf /etc/resolv.conf
             fi
         fi
-
-	if dpkg --compare-versions "$2" le-nl "9999"; then
-		mkdir -p /etc/NetworkManager/conf.d || true
-		# for old versions, override the global config with a null config,
-		# but only if the netplan config has not been modified by an user.
-		if find /etc/netplan -name "*.yaml" | wc -l | grep -qc 0; then
-			touch /etc/NetworkManager/conf.d/10-globally-managed-devices.conf
-		fi
-	fi
 
         if dpkg --compare-versions "$2" lt-nl "1.20.4-2"; then
             if [ -f /var/lib/NetworkManager/secret_key ]; then

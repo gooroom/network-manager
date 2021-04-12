@@ -1,8 +1,7 @@
 Source: network-manager
 Section: net
 Priority: optional
-Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
-XSBC-Original-Maintainer: Utopia Maintenance Team <pkg-utopia-maintainers@lists.alioth.debian.org>
+Maintainer: Utopia Maintenance Team <pkg-utopia-maintainers@lists.alioth.debian.org>
 Uploaders: Michael Biebl <biebl@debian.org>,
  Sjoerd Simons <sjoerd@debian.org>,
  Aron Xu <aron@debian.org>
@@ -12,8 +11,6 @@ Build-Depends: debhelper-compat (= 13),
                intltool,
                libglib2.0-dev (>= 2.32),
                ppp-dev (>= 2.4.7-1+1),
-               libpolkit-gobject-1-dev,
-               libpolkit-agent-1-dev (>= 0.97),
                libselinux1-dev,
                libaudit-dev,
                libgnutls28-dev (>= 2.12),
@@ -27,8 +24,6 @@ Build-Depends: debhelper-compat (= 13),
                libpsl-dev (>= 0.1),
                libcurl4-gnutls-dev (>= 7.24.0),
                gtk-doc-tools,
-               perl,
-               libyaml-perl,
                libglib2.0-doc,
                libmm-glib-dev (>=  0.7.991),
                libndp-dev,
@@ -39,13 +34,12 @@ Build-Depends: debhelper-compat (= 13),
                libbluetooth-dev (>= 5),
                valac (>= 0.17.1.24),
                dbus <!nocheck>,
-               python3-dbus <!nocheck>
-Standards-Version: 4.5.0
+               python3-dbus <!nocheck>,
+               iproute2 <!nocheck>,
+Standards-Version: 4.5.1
 Rules-Requires-Root: no
-XS-Debian-Vcs-Git: https://salsa.debian.org/utopia-team/network-manager.git
-XS-Debian-Vcs-Browser: https://salsa.debian.org/utopia-team/network-manager
-Vcs-Git: https://git.launchpad.net/network-manager
-Vcs-Browser: https://git.launchpad.net/network-manager
+Vcs-Git: https://salsa.debian.org/utopia-team/network-manager.git
+Vcs-Browser: https://salsa.debian.org/utopia-team/network-manager
 Homepage: https://wiki.gnome.org/Projects/NetworkManager
 
 Package: network-manager
@@ -58,22 +52,20 @@ Depends: ${shlibs:Depends},
          dbus,
          udev,
          adduser,
-         libpam-systemd,
          policykit-1
 Recommends: ppp,
             dnsmasq-base,
             iptables,
             modemmanager,
-            network-manager-pptp,
-            crda,
-Suggests: avahi-autoipd,
-          libteam-utils,
+            wireless-regdb,
+            libpam-systemd,
+Suggests: libteam-utils,
           isc-dhcp-client,
 Breaks: ${misc:Breaks}
 Description: network management framework (daemon and userspace tools)
  NetworkManager is a system network service that manages your network devices
  and connections, attempting to keep active network connectivity when
- available. It manages ethernet, WiFi, mobile broadband (WWAN), and PPPoE
+ available. It manages ethernet, Wi-Fi, mobile broadband (WWAN), and PPPoE
  devices, and provides VPN integration with a variety of different VPN
  services.
  .
@@ -81,8 +73,6 @@ Description: network management framework (daemon and userspace tools)
  interact with NetworkManager.
  .
  Optional dependencies:
-  * avahi-autoipd: Used for IPv4LL, a protocol for automatic Link-Local IP
-    address configuration.
   * ppp: Required for establishing dial-up connections (e.g. via GSM).
   * dnsmasq-base/iptables: Required for creating Ad-hoc connections and
     connection sharing.
@@ -110,7 +100,7 @@ Depends: ${shlibs:Depends},
 Description: GObject-based client library for NetworkManager
  NetworkManager is a system network service that manages your network devices
  and connections, attempting to keep active network connectivity when
- available. It manages ethernet, WiFi, mobile broadband (WWAN), and PPPoE
+ available. It manages ethernet, Wi-Fi, mobile broadband (WWAN), and PPPoE
  devices, and provides VPN integration with a variety of different VPN
  services.
  .
@@ -128,7 +118,7 @@ Depends: ${misc:Depends},
 Description: GObject-based client library for NetworkManager (development files)
  NetworkManager is a system network service that manages your network devices
  and connections, attempting to keep active network connectivity when
- available. It manages ethernet, WiFi, mobile broadband (WWAN), and PPPoE
+ available. It manages ethernet, Wi-Fi, mobile broadband (WWAN), and PPPoE
  devices, and provides VPN integration with a variety of different VPN
  services.
  .
@@ -146,7 +136,7 @@ Replaces: gir1.2-networkmanager-1.0 (<< 1.8.0-2)
 Description: GObject introspection data for the libnm library
  NetworkManager is a system network service that manages your network devices
  and connections, attempting to keep active network connectivity when
- available. It manages ethernet, WiFi, mobile broadband (WWAN), and PPPoE
+ available. It manages ethernet, Wi-Fi, mobile broadband (WWAN), and PPPoE
  devices, and provides VPN integration with a variety of different VPN
  services.
  .
@@ -172,21 +162,3 @@ Description: NetworkManager configuration to enable connectivity checking
  No user data is transmitted in the connectivity checks, but merely contacting
  the Debian connectivity check servers reveals that the user is running a
  Debian(-based) operating system with NetworkManager.
-
-Package: network-manager-config-connectivity-ubuntu
-Architecture: all
-Multi-Arch: foreign
-Depends: ${misc:Depends},
-         network-manager (>= ${source:Version})
-Description: NetworkManager configuration to enable connectivity checking
- This package contains a configuration file which enables NetworkManager's
- connectivity checking functionality.
- .
- NetworkManager will try to connect to an Ubuntu server to determine the
- connection status.
- .
- This is particularly useful for captive portal detection.
- .
- No user data is transmitted in the connectivity checks, but merely contacting
- the Ubuntu connectivity check servers reveals that the user is running an
- Ubuntu(-based) operating system with NetworkManager.
