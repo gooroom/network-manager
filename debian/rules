@@ -2,6 +2,8 @@
 
 include /usr/share/dpkg/architecture.mk
 
+export PYTHON=/usr/bin/python3
+
 PPPD_PLUGIN_DIR := $(shell dh_ppp --plugin-dir)
 
 %:
@@ -23,9 +25,10 @@ override_dh_auto_configure:
 		--with-pppd=/usr/sbin/pppd \
 		--with-resolvconf=/sbin/resolvconf \
 		--with-dhclient=/sbin/dhclient \
-		--with-iptables=/sbin/iptables \
+		--with-iptables=/usr/sbin/iptables \
 		--with-dnsmasq=/usr/sbin/dnsmasq \
 		--with-dnssec-trigger=/usr/lib/dnssec-trigger/dnssec-trigger-script \
+		--with-polkit-agent-helper-1=/usr/lib/policykit-1/polkit-agent-helper-1 \
 		--with-systemdsystemunitdir=/lib/systemd/system \
 		--with-udev-dir=/lib/udev \
 		--with-dbus-sys-dir=/usr/share/dbus-1/system.d \
@@ -39,7 +42,7 @@ override_dh_auto_configure:
 		--with-libaudit \
 		--with-iwd \
 		--without-dhcpcanon \
-		--without-libnm-glib \
+		--without-nm-cloud-setup \
 		--enable-polkit \
 		--enable-polkit-agent \
 		--enable-ppp \
@@ -51,7 +54,6 @@ override_dh_auto_configure:
 		--enable-json-validation \
 		--enable-bluez5-dun \
 		--enable-vala \
-		--disable-config-plugin-ibft \
 		--disable-more-warnings \
 		--disable-modify-system \
 		--disable-ovs

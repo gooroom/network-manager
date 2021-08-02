@@ -1,34 +1,28 @@
-name = 'nm-online'
-
-deps = [
-  libnm_dep,
-  nm_core_dep
-]
-
-clients_cflags = [
-  '-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_CLIENT',
-]
-
-cflags = clients_cflags + [
-  '-DG_LOG_DOMAIN="@0@"'.format(name),
-]
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 executable(
-  name,
-  name + '.c',
-  dependencies: deps,
-  c_args: cflags,
+  'nm-online',
+  'nm-online' + '.c',
+  dependencies: [
+    libnm_dep,
+    libnm_nm_default_dep,
+    libnm_libnm_aux_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="nm-online"',
+  ],
   link_args: ldflags_linker_script_binary,
   link_depends: linker_script_binary,
-  install: true
+  install: true,
 )
 
 subdir('common')
-
-if enable_nmcli
-  subdir('cli')
-endif
+subdir('cli')
 
 if enable_nmtui
   subdir('tui')
+endif
+
+if enable_nm_cloud_setup
+  subdir('cloud-setup')
 endif

@@ -1,35 +1,341 @@
-network-manager (1.14.6-2+deb10u1+grm2u2) stable; urgency=medium
+network-manager (1.30.0-2) unstable; urgency=medium
 
-  [ boyeon.choi ]
-  * [5619f4c0] [Bug:3257/3256] Fixed wifi hotspot connection issues
+  * core: fix crash in nm_wildcard_match_check()
+    (CVE-2021-20297, Closes: #986809)
 
-  [ Gooroom Autobuilder ]
+ -- Michael Biebl <biebl@debian.org>  Mon, 12 Apr 2021 21:15:36 +0200
 
- -- Gooroom Autobuilder <jenkins@gooroom.kr>  Thu, 01 Apr 2021 12:44:14 +0900
+network-manager (1.30.0-1) unstable; urgency=medium
 
-network-manager (1.14.6-2+deb10u1+grm2u1) stable; urgency=medium
+  * New upstream version 1.30.0
+  * Rebase patches
 
-  [ cjheo ]
-  * [536037e2] Several g_prefix_error functions have been replaced for translation.
+ -- Michael Biebl <biebl@debian.org>  Thu, 18 Feb 2021 19:25:36 +0100
 
-  [ Gooroom Autobuilder ]
+network-manager (1.29.90-2) unstable; urgency=medium
 
- -- Gooroom Autobuilder <jenkins@gooroom.kr>  Tue, 07 Jul 2020 16:01:11 +0900
+  * Add iproute2 to Build-Depends.
+    Required by the test suite. Mark as <!nocheck> accordingly.
+  * Cherry-pick fixes from upstream nm-1-30 branch
+    - Fixes assertion when running the python-dbusmock test suite
+      (Closes: #982613)
+    - Replaces our custom polkit-agent-helper-1 patch
 
-network-manager (1.14.6-2+deb10u1) stable; urgency=medium
+ -- Michael Biebl <biebl@debian.org>  Tue, 16 Feb 2021 22:54:54 +0100
 
-  * core: fix file permissions for "/var/lib/NetworkManager/secret_key"
-    Patch cherry-picked from upstream.
-  * Fix permissions of /var/lib/NetworkManager/secret_key on upgrades.
-    The file mode is supposed to be 0600. (Closes: #941609)
+network-manager (1.29.90-1) unstable; urgency=medium
+
+  [ Michael Biebl ]
+  * New upstream version 1.29.90 (1.30 rc1)
+  * Rebase patches
+  * Update symbols file for libnm0
+  * Fix polkit-agent-helper-1 path
+
+  [ Helmut Grohne ]
+  * Drop unused Build-Depends (Closes: #979378)
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 11 Feb 2021 20:09:16 +0100
+
+network-manager (1.28.0-2) unstable; urgency=medium
+
+  * Demote libpam-systemd to Recommends.
+    This allows users to use and experiment with other init systems. Such a
+    setup is neither tested nor fully supported and users need to be aware
+    that some functionality might be broken. (Closes: #921012)
+  * Recommend wireless-regdb instead of crda.
+    CRDA is no longer needed as of Linux kernel v4.15. (Closes: #973241)
+  * Bump Standards-Version to 4.5.1
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 31 Dec 2020 21:38:43 +0100
+
+network-manager (1.28.0-1) unstable; urgency=medium
+
+  * New upstream version 1.28.0
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Sun, 06 Dec 2020 22:48:28 +0100
+
+network-manager (1.27.91-2) unstable; urgency=medium
+
+  * Revert "dns: change default DNS priority of VPNs to -50" (Closes: #972688)
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 25 Nov 2020 14:59:00 +0100
+
+network-manager (1.27.91-1) unstable; urgency=medium
+
+  * New upstream version 1.27.91 (1.28 rc2)
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Tue, 20 Oct 2020 22:36:31 +0200
+
+network-manager (1.27.90-3) unstable; urgency=medium
+
+  [ Thorsten Glaser ]
+  * Adjust syscall numbers for x32 vs. amd64, fixes FTBFS on x32
+
+ -- Michael Biebl <biebl@debian.org>  Fri, 09 Oct 2020 16:03:16 +0200
+
+network-manager (1.27.90-2) unstable; urgency=medium
+
+  * Cherry-pick a couple of upstream patches.
+    Hopefully fixes the build and test-suite failures on some of the more
+    exotic architectures.
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 08 Oct 2020 11:34:31 +0200
+
+network-manager (1.27.90-1) unstable; urgency=medium
+
+  * New upstream version 1.27.90 (1.28 rc1)
+    - Fix generated XML syntax in tools/generate-docs-nm-settings-docs-gir.py
+      (Closes: #971144)
+  * Rebase patches
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Mon, 05 Oct 2020 23:34:33 +0200
+
+network-manager (1.26.2-1) unstable; urgency=medium
+
+  * New upstream version 1.26.2
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 19 Aug 2020 10:30:53 +0200
+
+network-manager (1.26.0-1) unstable; urgency=medium
+
+  * New upstream version 1.26.0
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Mon, 13 Jul 2020 22:34:27 +0200
+
+network-manager (1.25.91-2) unstable; urgency=medium
+
+  [ Sebastien Bacher ]
+  * Use the correct service name in README.Debian, the compat one has been
+    removed
+
+ -- Michael Biebl <biebl@debian.org>  Tue, 07 Jul 2020 21:28:37 +0200
+
+network-manager (1.25.91-1) unstable; urgency=medium
+
+  * New upstream version 1.25.91 (1.26 rc2)
+  * Remove SysV init script
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 02 Jul 2020 01:17:08 +0200
+
+network-manager (1.25.90-1) unstable; urgency=medium
+
+  * New upstream version 1.25.90 (1.26 rc1)
+  * Rebase patches
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Sun, 28 Jun 2020 19:29:43 +0200
+
+network-manager (1.24.2-1) unstable; urgency=medium
+
+  [ Michael Biebl ]
+  * New upstream version 1.24.2
+  * Install firewalld zone for connection sharing
+
+  [ Sebastien Bacher ]
+  * The iptables binary is now installed in /usr/sbin/
+
+ -- Michael Biebl <biebl@debian.org>  Sun, 21 Jun 2020 13:44:56 +0200
+
+network-manager (1.24.0-1) unstable; urgency=medium
+
+  * New upstream version 1.24.0
+  * Rebase patches
+  * Drop Don-t-setup-Sleep-Monitor-if-not-booted-with-systemd.patch
+  * Bump debhelper-compat to 13
+
+ -- Michael Biebl <biebl@debian.org>  Sat, 09 May 2020 21:12:22 +0200
+
+network-manager (1.23.90-1) unstable; urgency=medium
+
+  * New upstream version 1.23.90 (1.24 rc1)
+  * Rebase patches
+  * Update symbols file for libnm0
+  * Add Build-Depends-Package field to libnm0.symbols
+
+ -- Michael Biebl <biebl@debian.org>  Sun, 12 Apr 2020 00:46:53 +0200
+
+network-manager (1.22.10-1) unstable; urgency=medium
+
+  * New upstream version 1.22.10
+  * Mark network-manager-dev as Architecture: all and Multi-Arch: foreign
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Fri, 13 Mar 2020 00:58:03 +0100
+
+network-manager (1.22.8-1) unstable; urgency=medium
+
+  * New upstream version 1.22.8
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 20 Feb 2020 00:27:58 +0100
+
+network-manager (1.22.6-1) unstable; urgency=medium
+
+  * New upstream version 1.22.6
+  * Bump Standards-Version to 4.5.0
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Fri, 31 Jan 2020 18:14:59 +0100
+
+network-manager (1.22.4-1) unstable; urgency=medium
+
+  * New upstream version 1.22.4
+  * Rebase patches
+  * n-dhcp4: fix integer context in n_dhcp4_client_probe_transition_nak() on
+    32 bit
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 15 Jan 2020 03:00:29 +0100
+
+network-manager (1.22.2-2) unstable; urgency=medium
+
+  * More nettools DHCP fixes (Closes: #947613)
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 09 Jan 2020 22:26:29 +0100
+
+network-manager (1.22.2-1) unstable; urgency=medium
+
+  * New upstream version 1.22.2
+  * Rebase patches
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 26 Dec 2019 07:17:58 +0100
+
+network-manager (1.22.0-2) unstable; urgency=medium
+
+  * dhcp: nettools: fix parsing of search domains option (Closes: #947003)
+
+ -- Michael Biebl <biebl@debian.org>  Mon, 23 Dec 2019 18:04:05 +0100
+
+network-manager (1.22.0-1) unstable; urgency=medium
+
+  * New upstream version 1.22.0
+  * Rebase patches
+  * Explicitly disable (experimental) nm-cloud-setup tool
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 18 Dec 2019 19:05:33 +0100
+
+network-manager (1.20.8-1) unstable; urgency=medium
+
+  * New upstream version 1.20.8
+  * Rebase patches
+  * Bump Standards Version to 4.4.1
+
+ -- Michael Biebl <biebl@debian.org>  Mon, 25 Nov 2019 19:23:25 +0100
+
+network-manager (1.20.6-1) unstable; urgency=medium
+
+  * New upstream version 1.20.6
+    - Add support for iwd 1.0. (Closes: #944259)
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 06 Nov 2019 22:32:54 +0100
+
+network-manager (1.20.4-2) unstable; urgency=medium
+
   * Install directories as created by upstream build system.
     Drop network-manager.dirs and instead use the directories created by the
     upstream build system. Fix permissions of /var/lib/NetworkManager to be
     0700 as it contains possibly sensitive data and should not be
     world-readable.
-  * d/gbp.conf: Set debian-branch to buster
+  * Fix permissions of /var/lib/NetworkManager/secret_key on upgrades.
+    The file mode is supposed to be 0600. (Closes: #941609)
 
- -- Michael Biebl <biebl@debian.org>  Fri, 04 Oct 2019 15:03:20 +0200
+ -- Michael Biebl <biebl@debian.org>  Fri, 04 Oct 2019 00:30:01 +0200
+
+network-manager (1.20.4-1) unstable; urgency=medium
+
+  [ Michael Biebl ]
+  * New upstream version 1.20.4
+
+  [ Andreas Henriksson ]
+  * Switch build-dependencies to python3.
+    The tests are designed to work with either python2 or python3.
+    We should be able to simply switch build-dependencies to python3
+    equivalents. However if something transitively pulls in python2 the
+    AM_PATH_PYTHON autoconf macro will find python(2) binary, so we
+    explicitly set PYTHON=/usr/bin/python3. (Closes: #938944)
+
+ -- Michael Biebl <biebl@debian.org>  Mon, 30 Sep 2019 16:01:19 +0200
+
+network-manager (1.20.2-1) unstable; urgency=medium
+
+  * New upstream version 1.20.2
+  * Track stable releases in watch file
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Fri, 06 Sep 2019 10:43:28 +0200
+
+network-manager (1.20.0-1) unstable; urgency=medium
+
+  * New upstream version 1.20.0
+  * Rebase patches
+
+ -- Michael Biebl <biebl@debian.org>  Tue, 06 Aug 2019 22:55:57 +0200
+
+network-manager (1.19.90-2) unstable; urgency=medium
+
+  * Demote isc-dhcp-client to Suggests.
+    The DHCP client now defaults to "internal". This default can be
+    overridden at run time by setting the main.dhcp option in the
+    configuration file. The old default was "dhclient" and required
+    isc-dhcp-client. (Closes: #933545)
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 01 Aug 2019 10:42:16 +0200
+
+network-manager (1.19.90-1) unstable; urgency=medium
+
+  * New upstream version 1.19.90 (1.20 rc1)
+  * Drop obsolete configure flags
+  * Rebase patches
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 31 Jul 2019 13:35:47 +0200
+
+network-manager (1.18.0-3) unstable; urgency=medium
+
+  * Upload to unstable
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 11 Jul 2019 00:36:17 +0200
+
+network-manager (1.18.0-2) experimental; urgency=medium
+
+  * Fix package description after avahi-autoipd removal
+  * Drop obsolete lintian overrides
+
+ -- Michael Biebl <biebl@debian.org>  Tue, 28 May 2019 22:27:17 +0200
+
+network-manager (1.18.0-1) experimental; urgency=medium
+
+  * New upstream version 1.18.0
+  * Rebase patches
+  * Update symbols file for libnm0
+
+ -- Michael Biebl <biebl@debian.org>  Sun, 21 Apr 2019 22:28:56 +0200
+
+network-manager (1.16.0-2) experimental; urgency=medium
+
+  * Drop dependency on lsb-base.
+    It is only needed when booting with sysvinit and initscripts, but
+    initscripts already Depends on lsb-base (see #864999).
+  * Drop dpkg-dev (>= 1.17.14) Build-Depends.
+    No longer needed as even the version in oldstable is new enough.
+
+ -- Michael Biebl <biebl@debian.org>  Thu, 11 Apr 2019 11:07:57 +0200
+
+network-manager (1.16.0-1) experimental; urgency=medium
+
+  * New upstream version 1.16.0
+  * Rebase patches
+  * Update symbols file for linm0
+  * Drop migration code from pre-stretch
+
+ -- Michael Biebl <biebl@debian.org>  Wed, 27 Mar 2019 00:13:49 +0100
 
 network-manager (1.14.6-2) unstable; urgency=medium
 

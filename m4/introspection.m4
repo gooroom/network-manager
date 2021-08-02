@@ -1,4 +1,3 @@
-dnl -*- mode: autoconf -*-
 dnl Copyright 2009 Johan Dahlin
 dnl
 dnl This file is free software; the author(s) gives unlimited
@@ -31,7 +30,7 @@ m4_define([_GOBJECT_INTROSPECTION_CHECK_INTERNAL],
     INTROSPECTION_GIRDIR=
     INTROSPECTION_TYPELIBDIR=
 
-    if test "x$enable_introspection" == "xno"; then
+    if test "x$enable_introspection" = "xno"; then
       found_introspection="no"
     else
        PKG_CHECK_EXISTS([gobject-introspection-1.0 >= $1], [
@@ -53,7 +52,7 @@ m4_define([_GOBJECT_INTROSPECTION_CHECK_INTERNAL],
            AC_MSG_RESULT([$found_introspection])
        ], [found_introspection="no (not installed)"])
 
-       if test "x$enable_introspection" == "xyes"; then
+       if test "x$enable_introspection" = "xyes"; then
           if test "x$found_introspection" != "xyes"; then
               AC_MSG_ERROR([introspection enabled but can't be used])
           fi

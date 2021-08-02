@@ -19,7 +19,7 @@ DOC_SOURCE_DIR= \
 	$(top_builddir)/libnm
 
 # Extra options to supply to gtkdoc-scan.
-SCAN_OPTIONS=--rebuild-types --rebuild-sections
+SCAN_OPTIONS=--rebuild-types --rebuild-sections --ignore-decorators="NM_AVAILABLE_IN_\d_\d\d?|NM_DEPRECATED_IN_\d_\d\d?"
 
 # Extra options to supply to gtkdoc-mkdb.
 MKDB_OPTIONS=--sgml-mode --output-format=xml
@@ -34,11 +34,13 @@ CFILE_GLOB=$(top_srcdir)/libnm-core/*.c $(top_srcdir)/libnm/*.c
 # Header files to ignore when scanning.
 IGNORE_HFILES= \
 	common.h \
-	nm-crypto.h \
-	nm-crypto-impl.h \
-	nm-dbus-helpers.h \
 	nm-core-internal.h \
+	nm-core-tests-enum-types.h \
 	nm-core-types-internal.h \
+	nm-crypto-impl.h \
+	nm-crypto.h \
+	nm-dbus-helpers.h \
+	nm-default-libnm-core.h \
 	nm-device-private.h \
 	nm-dhcp4-config.h \
 	nm-dhcp6-config.h \
@@ -49,13 +51,25 @@ IGNORE_HFILES= \
 	nm-object-private.h \
 	nm-property-compare.h \
 	nm-remote-connection-private.h \
-	nm-remote-settings.h \
 	nm-setting-private.h \
 	nm-utils-private.h \
-	nm-core-tests-enum-types.h \
+	\
+	test-general-enums.h \
+	\
 	nm-keyfile-internal.h \
 	nm-keyfile-utils.h \
-	test-general-enums.h
+	\
+	nm-auth-subject.h \
+	nm-common-macros.h \
+	nm-ethtool-base.h \
+	nm-libnm-core-utils.h \
+	\
+	nm-dispatcher-api.h \
+	nm-libnm-core-aux.h \
+	\
+	nm-libnm-aux.h \
+	\
+	$(NULL)
 
 # Images to copy into HTML directory.
 HTML_IMAGES = libnm.png
@@ -87,14 +101,19 @@ GTKDOC_LIBS = \
 # include common portion ...
 include $(top_srcdir)/gtk-doc.make
 
-EXTRA_DIST += version.xml.in meson.build
+EXTRA_DIST += \
+	version.xml.in \
+	meson.build \
+	$(NULL)
 
 CLEANFILES += \
-	libnm-sections.txt \
-	libnm-overrides.txt \
 	html/* \
 	tmpl/* \
-	xml/*
+	xml/* \
+	libnm-overrides.txt \
+	libnm-sections.txt \
+	libnm.actions \
+	$(NULL)
 
 if GTK_DOC_BUILD_HTML
 check-local-gtk-doc-patch:

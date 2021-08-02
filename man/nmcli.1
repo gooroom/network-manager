@@ -2,12 +2,12 @@
 .\"     Title: nmcli
 .\"    Author: 
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/23/2019
+.\"      Date: 02/18/2021
 .\"    Manual: General Commands Manual
-.\"    Source: NetworkManager 1.14.6
+.\"    Source: NetworkManager 1.30.0
 .\"  Language: English
 .\"
-.TH "NMCLI" "1" "" "NetworkManager 1\&.14\&.6" "General Commands Manual"
+.TH "NMCLI" "1" "" "NetworkManager 1\&.30\&.0" "General Commands Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,7 +39,9 @@ is a command\-line tool for controlling NetworkManager and reporting network sta
 \fBnm\-applet\fR
 or other graphical clients\&.
 \fBnmcli\fR
-is used to create, display, edit, delete, activate, and deactivate network connections, as well as control and display network device status\&.
+is used to create, display, edit, delete, activate, and deactivate network connections, as well as control and display network device status\&. See
+\fBnmcli-examples\fR(7)
+for ready to run nmcli examples\&.
 .PP
 Typical uses include:
 .sp
@@ -74,16 +76,87 @@ can be used to control NetworkManager without a GUI, including creating, editing
 .RE
 .SH "OPTIONS"
 .PP
-\fB\-t\fR | \fB\-\-terse\fR
+\fB\-a\fR | \fB\-\-ask\fR
 .RS 4
-Output is terse\&. This mode is designed and suitable for computer (script) processing\&.
+When using this option
+\fBnmcli\fR
+will stop and ask for any missing required arguments, so do not use this option for non\-interactive purposes like scripts\&. This option controls, for example, whether you will be prompted for a password if it is required for connecting to a network\&.
 .RE
 .PP
-\fB\-p\fR | \fB\-\-pretty\fR
+\fB\-c\fR | \fB\-\-colors\fR {yes | no | auto}
 .RS 4
-Output is pretty\&. This causes
+This option controls color output (using terminal escape sequences)\&.
+yes
+enables colors,
+no
+disables them,
+auto
+only produces colors when standard output is directed to a terminal\&. The default value is
+auto\&.
+.sp
+The actual colors used are configured as described in
+\fBterminal-colors.d\fR(5)\&. Please refer to the
+COLORS
+section for a list of color names supported by
+\fBnmcli\fR\&.
+.sp
+If the environment variable
+NO_COLOR
+is set (to any value), then coloring is disabled with mode "auto"\&. Explicitly enabling coloring overrides the environment variable\&.
+.RE
+.PP
+\fB\-\-complete\-args\fR
+.RS 4
+Instead of conducting the desired action,
 \fBnmcli\fR
-to produce easily readable outputs for humans, i\&.e\&. values are aligned, headers are printed, etc\&.
+will list possible completions for the last argument\&. This is useful to implement argument completion in shell\&.
+.sp
+The
+exit status
+will indicate success or return a code 65 to indicate the last argument is a file name\&.
+.sp
+NetworkManager ships with command completion support for GNU Bash\&.
+.RE
+.PP
+\fB\-e\fR | \fB\-\-escape\fR {yes | no}
+.RS 4
+Whether to escape
+:
+and
+\e
+characters in terse tabular mode\&. The escape character is
+\e\&.
+.sp
+If omitted, default is
+yes\&.
+.RE
+.PP
+\fB\-f\fR | \fB\-\-fields\fR {\fIfield1\fR,\fIfield2\fR... | all | common}
+.RS 4
+This option is used to specify what fields (column names) should be printed\&. Valid field names differ for specific commands\&. List available fields by providing an invalid value to the
+\fB\-\-fields\fR
+option\&.
+all
+is used to print all valid field values of the command\&.
+common
+is used to print common field values of the command\&.
+.sp
+If omitted, default is
+common\&.
+.RE
+.PP
+\fB\-g\fR | \fB\-\-get\-values\fR {\fIfield1\fR,\fIfield2\fR... | all | common}
+.RS 4
+This option is used to print values from specific fields\&. It is basically a shortcut for
+\-\-mode tabular \-\-terse \-\-fields
+and is a convenient way to retrieve values for particular fields\&. The values are printed one per line without headers\&.
+.sp
+If a section is specified instead of a field, the section name will be printed followed by colon separated values of the fields belonging to that section, all on the same line\&.
+.RE
+.PP
+\fB\-h\fR | \fB\-\-help\fR
+.RS 4
+Print help information\&.
 .RE
 .PP
 \fB\-m\fR | \fB\-\-mode\fR {tabular | multiline}
@@ -128,65 +201,11 @@ nmcli device show
 .RE
 .RE
 .PP
-\fB\-c\fR | \fB\-\-colors\fR {yes | no | auto}
+\fB\-p\fR | \fB\-\-pretty\fR
 .RS 4
-This option controls color output (using terminal escape sequences)\&.
-yes
-enables colors,
-no
-disables them,
-auto
-only produces colors when standard output is directed to a terminal\&. The default value is
-auto\&.
-.sp
-The actual colors used are configured as described in
-\fBterminal-colors.d\fR(5)\&. Please refer to the
-COLORS
-section for a list of color names supported by
-\fBnmcli\fR\&.
-.RE
-.PP
-\fB\-f\fR | \fB\-\-fields\fR {\fIfield1\fR,\fIfield2\fR... | all | common}
-.RS 4
-This option is used to specify what fields (column names) should be printed\&. Valid field names differ for specific commands\&. List available fields by providing an invalid value to the
-\fB\-\-fields\fR
-option\&.
-all
-is used to print all valid field values of the command\&.
-common
-is used to print common field values of the command\&.
-.sp
-If omitted, default is
-common\&.
-.RE
-.PP
-\fB\-g\fR | \fB\-\-get\-values\fR {\fIfield1\fR,\fIfield2\fR... | all | common}
-.RS 4
-This option is used to print values from specific fields\&. It is basically a shortcut for
-\-\-mode tabular \-\-terse \-\-fields
-and is a convenient way to retrieve values for particular fields\&. The values are printed one per line without headers\&.
-.sp
-If a section is specified instead of a field, the section name will be printed followed by colon separated values of the fields belonging to that section, all on the same line\&.
-.RE
-.PP
-\fB\-e\fR | \fB\-\-escape\fR {yes | no}
-.RS 4
-Whether to escape
-:
-and
-\e
-characters in terse tabular mode\&. The escape character is
-\e\&.
-.sp
-If omitted, default is
-yes\&.
-.RE
-.PP
-\fB\-a\fR | \fB\-\-ask\fR
-.RS 4
-When using this option
+Output is pretty\&. This causes
 \fBnmcli\fR
-will stop and ask for any missing required arguments, so do not use this option for non\-interactive purposes like scripts\&. This option controls, for example, whether you will be prompted for a password if it is required for connecting to a network\&.
+to produce easily readable outputs for humans, i\&.e\&. values are aligned, headers are printed, etc\&.
 .RE
 .PP
 \fB\-s\fR | \fB\-\-show\-secrets\fR
@@ -194,6 +213,18 @@ will stop and ask for any missing required arguments, so do not use this option 
 When using this option
 \fBnmcli\fR
 will display passwords and secrets that might be present in an output of an operation\&. This option also influences echoing passwords typed by user as an input\&.
+.RE
+.PP
+\fB\-t\fR | \fB\-\-terse\fR
+.RS 4
+Output is terse\&. This mode is designed and suitable for computer (script) processing\&.
+.RE
+.PP
+\fB\-v\fR | \fB\-\-version\fR
+.RS 4
+Show
+\fBnmcli\fR
+version\&.
 .RE
 .PP
 \fB\-w\fR | \fB\-\-wait\fR \fIseconds\fR
@@ -207,31 +238,6 @@ Specifying a value of
 instructs
 \fBnmcli\fR
 not to wait but to exit immediately with a status of success\&. The default value depends on the executed command\&.
-.RE
-.PP
-\fB\-\-complete\-args\fR
-.RS 4
-Instead of conducting the desired action,
-\fBnmcli\fR
-will list possible completions for the last argument\&. This is useful to implement argument completion in shell\&.
-.sp
-The
-exit status
-will indicate success or return a code 65 to indicate the last argument is a file name\&.
-.sp
-NetworkManager ships with command completion support for GNU Bash\&.
-.RE
-.PP
-\fB\-v\fR | \fB\-\-version\fR
-.RS 4
-Show
-\fBnmcli\fR
-version\&.
-.RE
-.PP
-\fB\-h\fR | \fB\-\-help\fR
-.RS 4
-Print help information\&.
 .RE
 .SH "GENERAL COMMANDS"
 .HP \w'\fBnmcli\ general\fR\ 'u
@@ -449,7 +455,7 @@ only shows active connection data (when the profile is active)\&.
 .RE
 .sp
 You can also specify particular fields\&. For static configuration, use setting and property names as described in
-\fBnm-settings\fR(5)
+\fBnm-settings-nmcli\fR(5)
 manual page\&. For active data use GENERAL, IP4, DHCP4, IP6, DHCP6, VPN\&.
 .sp
 When no command is given to the
@@ -558,7 +564,7 @@ was not passed, NetworkManager can ask another secret agent that may be running 
 .RS 4
 Deactivate a connection from a device without preventing the device from further auto\-activation\&. Multiple connections can be passed to the command\&.
 .sp
-Be aware that this command deactivates the specified active connection, but the device on which the connection was active, is still ready to connect and will perform auto\-activation by looking for a suitable connection that has the \*(Aqautoconnect\*(Aq flag set\&. This includes the just deactivated connection\&. So if the connection is set to auto\-connect, it will be automatically started on the disconnected device again\&.
+Be aware that this command deactivates the specified active connection, but the device on which the connection was active, is still ready to connect and will perform auto\-activation by looking for a suitable connection that has the \*(Aqautoconnect\*(Aq flag set\&. Note that the deactivating connection profile is internally blocked from autoconnecting again\&. Hence it will not autoconnect until reboot or until the user performs an action that unblocks autoconnect, like modifying the profile or explicitly activating it\&.
 .sp
 In most cases you may want to use
 \fBdevice disconnect\fR
@@ -588,33 +594,31 @@ option is not specified, the default timeout will be 10 seconds\&.
 .RS 4
 Add, modify or remove properties in the connection profile\&.
 .sp
-To set the property just specify the property name followed by the value\&. An empty value ("") removes the property value\&.
-.sp
-In addition to the properties, you can also use short names for some of the properties\&. Consult the
-PROPERTY ALIASES
-section for details\&.
-.sp
-If you want to append an item to the existing value, use
-+
-prefix for the property name\&. If you want to remove just one item from container\-type property, use
-\-
-prefix for the property name and specify a value or an zero\-based index of the item to remove (or option name for properties with named options) as
-\fIvalue\fR\&. The
-+
-and
-\-
-modifies only have a real effect for multi\-value (container) properties like
-ipv4\&.dns,
-ipv4\&.addresses,
-bond\&.options, etc\&.
+To set the property just specify the property name followed by the value\&. An empty value ("") resets the property value to the default\&.
 .sp
 See
-\fBnm-settings\fR(5)
+\fBnm-settings-nmcli\fR(5)
 for complete reference of setting and property names, their descriptions and default values\&. The
 \fIsetting\fR
 and
 \fIproperty\fR
 can be abbreviated provided they are unique\&.
+.sp
+If you want to append an item or a flag to the existing value, use
++
+prefix for the property name or alias\&. If you want to remove items from a container\-type or flag property, use
+\-
+prefix\&. For certain properties you can also remove elements by specifying the zero\-based index(es)\&. The
++
+and
+\-
+modifiers only have a real effect for properties that support them\&. These are for example multi\-value (container) properties or flags like
+ipv4\&.dns,
+ip4,
+ipv4\&.addresses,
+bond\&.options,
+802\-1x\&.phase1\-auth\-flags
+etc\&.
 .sp
 The connection is identified by its name, UUID or D\-Bus path\&. If
 \fIID\fR
@@ -626,15 +630,18 @@ or
 can be used\&.
 .RE
 .PP
+\fBmodify\fR [\fB\-\-temporary\fR] [\fBid\fR | \fBuuid\fR | \fBpath\fR] \fIID\fR \fBremove\fR\ \fIsetting\fR
+.RS 4
+Removes a setting from the connection profile\&.
+.RE
+.PP
 \fBadd\fR [\fBsave\fR\ {yes\ |\ no}] {\fIoption\fR\ \fIvalue\fR\ |\ [+|\-]\fIsetting\fR\&.\fIproperty\fR\ \fIvalue\fR}...
 .RS 4
 Create a new connection using specified properties\&.
 .sp
 You need to describe the newly created connections with the property and value pairs\&. See
-\fBnm-settings\fR(5)
-for the complete reference\&. You can also use the aliases described in
-PROPERTY ALIASES
-section\&. The syntax is the same as of the
+\fBnm-settings-nmcli\fR(5)
+for the complete reference\&. The syntax is the same as of the
 \fBnmcli connection modify\fR
 command\&.
 .sp
@@ -652,7 +659,7 @@ alias) to one of known NetworkManager connection types:
 .sp -1
 .IP \(bu 2.3
 .\}
-ethernet
+6lowpan
 .RE
 .sp
 .RS 4
@@ -663,7 +670,9 @@ ethernet
 .sp -1
 .IP \(bu 2.3
 .\}
-wifi
+802\-11\-olpc\-mesh
+(alias
+olpc\-mesh)
 .RE
 .sp
 .RS 4
@@ -674,7 +683,9 @@ wifi
 .sp -1
 .IP \(bu 2.3
 .\}
-wimax
+802\-11\-wireless
+(alias
+wifi)
 .RE
 .sp
 .RS 4
@@ -685,7 +696,9 @@ wimax
 .sp -1
 .IP \(bu 2.3
 .\}
-pppoe
+802\-3\-ethernet
+(alias
+ethernet)
 .RE
 .sp
 .RS 4
@@ -696,29 +709,7 @@ pppoe
 .sp -1
 .IP \(bu 2.3
 .\}
-gsm
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-cdma
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-infiniband
+adsl
 .RE
 .sp
 .RS 4
@@ -730,17 +721,6 @@ infiniband
 .IP \(bu 2.3
 .\}
 bluetooth
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-vlan
 .RE
 .sp
 .RS 4
@@ -763,28 +743,7 @@ bond
 .IP \(bu 2.3
 .\}
 bond\-slave
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-team
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-team\-slave
+(deprecated for ethernet with master)
 .RE
 .sp
 .RS 4
@@ -807,6 +766,7 @@ bridge
 .IP \(bu 2.3
 .\}
 bridge\-slave
+(deprecated for ethernet with master)
 .RE
 .sp
 .RS 4
@@ -817,7 +777,7 @@ bridge\-slave
 .sp -1
 .IP \(bu 2.3
 .\}
-vpn
+cdma
 .RE
 .sp
 .RS 4
@@ -828,7 +788,7 @@ vpn
 .sp -1
 .IP \(bu 2.3
 .\}
-olpc\-mesh
+dummy
 .RE
 .sp
 .RS 4
@@ -839,7 +799,7 @@ olpc\-mesh
 .sp -1
 .IP \(bu 2.3
 .\}
-adsl
+generic
 .RE
 .sp
 .RS 4
@@ -850,7 +810,18 @@ adsl
 .sp -1
 .IP \(bu 2.3
 .\}
-tun
+gsm
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+infiniband
 .RE
 .sp
 .RS 4
@@ -872,7 +843,173 @@ ip\-tunnel
 .sp -1
 .IP \(bu 2.3
 .\}
+macsec
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 macvlan
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+olpc\-mesh
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+ovs\-bridge
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+ovs\-dpdk
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+ovs\-interface
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+ovs\-patch
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+ovs\-port
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+pppoe
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+team
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+team\-slave
+(deprecated for ethernet with master)
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+tun
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+veth
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+vlan
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+vpn
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+vrf
 .RE
 .sp
 .RS 4
@@ -894,7 +1031,40 @@ vxlan
 .sp -1
 .IP \(bu 2.3
 .\}
-dummy
+wifi\-p2p
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+wimax
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+wireguard
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+wpan
 .RE
 .sp
 The most typical uses are described in the
@@ -952,7 +1122,7 @@ name for the new connection\&. It can be changed later in the editor\&.
 .RE
 .sp
 See also
-\fBnm-settings\fR(5)
+\fBnm-settings-nmcli\fR(5)
 for all NetworkManager settings and property names, and their descriptions; and
 \fBnmcli-examples\fR(7)
 for sample editor sessions\&.
@@ -1019,8 +1189,7 @@ command\&.
 .PP
 \fBreload\fR
 .RS 4
-Reload all connection files from disk\&. NetworkManager does not monitor changes to connection files by default\&. So you need to use this command in order to tell NetworkManager to re\-read the connection profiles from disk when a change was made to them\&. However, the auto\-loading feature can be enabled and then NetworkManager will reload connection files any time they change (monitor\-connection\-files=true in
-\fBNetworkManager.conf\fR(5))\&.
+Reload all connection files from disk\&. NetworkManager does not monitor changes to connection\&. So you need to use this command in order to tell NetworkManager to re\-read the connection profiles from disk when a change was made to them\&.
 .RE
 .PP
 \fBload\fR \fIfilename\fR...
@@ -1108,14 +1277,8 @@ Modify the settings currently active on the device\&.
 This command lets you do temporary changes to a configuration active on a particular device\&. The changes are not preserved in the connection profile\&.
 .sp
 See
-\fBnm-settings\fR(5)
+\fBnm-settings-nmcli\fR(5)
 for the list of available properties\&. Please note that some properties can\*(Aqt be changed on an already connected device\&.
-.sp
-You can also use the aliases described in
-PROPERTY ALIASES
-section\&. The syntax is the same as of the
-\fBnmcli connection modify\fR
-command\&.
 .RE
 .PP
 \fBdisconnect\fR \fIifname\fR...
@@ -1162,8 +1325,8 @@ can be used to either force or disable the scan regardless of how fresh the acce
 .PP
 \fBwifi\fR \fBconnect\fR \fI(B)SSID\fR [\fBpassword\fR\ \fIpassword\fR] [\fBwep\-key\-type\fR\ {key\ |\ phrase}] [\fBifname\fR\ \fIifname\fR] [\fBbssid\fR\ \fIBSSID\fR] [\fBname\fR\ \fIname\fR] [\fBprivate\fR\ {yes\ |\ no}] [\fBhidden\fR\ {yes\ |\ no}]
 .RS 4
-Connect to a Wi\-Fi network specified by SSID or BSSID\&. The command creates a new connection and then activates it on a device\&. This is a command\-line counterpart of clicking an SSID in a GUI client\&. The command always creates a new connection and thus it is mainly useful for connecting to new Wi\-Fi networks\&. If a connection for the network already exists, it is better to bring up (activate) the existing connection as follows:
-\fBnmcli con up id \fR\fB\fIname\fR\fR\&. Note that only open, WEP and WPA\-PSK networks are supported at the moment\&. It is also supposed that IP configuration is obtained via DHCP\&.
+Connect to a Wi\-Fi network specified by SSID or BSSID\&. The command finds a matching connection or creates one and then activates it on a device\&. This is a command\-line counterpart of clicking an SSID in a GUI client\&. If a connection for the network already exists, it is possible to bring up (activate) the existing profile as follows:
+\fBnmcli con up id \fR\fB\fIname\fR\fR\&. Note that only open, WEP and WPA\-PSK networks are supported if no previous connection exists\&. It is also assumed that IP configuration is obtained via DHCP\&.
 .sp
 If
 \fB\-\-wait\fR
@@ -1203,14 +1366,14 @@ if specified, the connection will use the name (else NM creates a name itself)\&
 \fBprivate\fR
 .RS 4
 if set to
-yes, the connection will only be visible to the user who created it\&. Otherwise the connection is system\-wide, which is the default\&.
+yes, the connection will only be visible to the user who created it\&. Otherwise, the connection is system\-wide, which is the default\&.
 .RE
 .PP
 \fBhidden\fR
 .RS 4
 set to
 yes
-when connecting for the first time to an AP not broadcasting its SSID\&. Otherwise the SSID would not be found and the connection attempt would fail\&.
+when connecting for the first time to an AP not broadcasting its SSID\&. Otherwise, the SSID would not be found and the connection attempt would fail\&.
 .RE
 .RE
 .PP
@@ -1273,6 +1436,11 @@ This command does not show the APs, use
 for that\&.
 .RE
 .PP
+\fBwifi\fR \fBshow\-password\fR [\fBifname\fR\ \fIifname\fR]
+.RS 4
+Show the details of the active Wi\-Fi networks, including the secrets\&.
+.RE
+.PP
 \fBlldp\fR [\fBlist\fR\ [\fBifname\fR\ \fIifname\fR]]
 .RS 4
 Display information about neighboring devices learned through the Link Layer Discovery Protocol (LLDP)\&. The
@@ -1291,7 +1459,7 @@ as a NetworkManager secret agent, or polkit agent\&.
 .RS 4
 Register
 \fBnmcli\fR
-as a NetworkManager secret agent and listen for secret requests\&. You do usually not need this command, because
+as a NetworkManager secret agent and listen for secret requests\&. You usually do not need this command, because
 \fBnmcli\fR
 can handle secrets when connecting to networks\&. However, you may find the command useful when you use another tool for activating connections and you do not have a secret agent available (like nm\-applet)\&.
 .RE
@@ -1314,1165 +1482,6 @@ Runs
 \fBnmcli\fR
 as both NetworkManager secret and a polkit agent\&.
 .RE
-.SH "PROPERTY ALIASES"
-.PP
-Apart from the property\-value pairs,
-\fBconnection add\fR,
-\fBconnection modify\fR
-and
-\fBdevice modify\fR
-also accept short forms of some properties\&. They exist for convenience\&. Some aliases can affect multiple connection properties at once\&.
-.PP
-The overview of the aliases is below\&. An actual connection type is used to disambiguate these options from the options of the same name that are valid for multiple connection types (such as
-\fBmtu\fR)\&.
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&1.\ \&Options for all connections
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l lt
-l l lt
-l l l
-l l lt
-l l lt
-l l l.
-T{
-type
-T}:T{
-connection\&.type
-T}:T{
-This alias also accepts values of \fBbond\-slave\fR,
-\fBteam\-slave\fR and \fBbridge\-slave\fR\&. They create
-\fBethernet\fR connection profiles\&. Their use is discouraged in
-favor of using a specific type with \fBmaster\fR option\&.
-T}
-T{
-con\-name
-T}:T{
-connection\&.id
-T}:T{
-When not provided a default name is generated: <type>[\-<ifname>][\-<num>])\&.
-T}
-T{
-autoconnect
-T}:T{
-connection\&.autoconnect
-T}:T{
-\ \&
-T}
-T{
-ifname
-T}:T{
-connection\&.interface\-name
-T}:T{
-A value of * will be interpreted as
-no value, making the connection profile interface\-independent\&.
-Note: use quotes around * to suppress shell expansion\&.
-For bond, team and bridge connections a default name will be generated if not set\&.
-T}
-T{
-master
-T}:T{
-connection\&.master
-T}:T{
-Value specified here will be canonicalized\&.
-It can be prefixed with ifname/, uuid/
-or id/ to disambiguate it\&.
-T}
-T{
-slave\-type
-T}:T{
-connection\&.slave\-type
-T}:T{
-\ \&
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&2.\ \&PPPoE options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l.
-T{
-username
-T}:T{
-pppoe\&.username
-T}
-T{
-password
-T}:T{
-pppoe\&.password
-T}
-T{
-service
-T}:T{
-pppoe\&.service
-T}
-T{
-parent
-T}:T{
-pppoe\&.parent
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&3.\ \&Wired Ethernet options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l.
-T{
-mtu
-T}:T{
-wired\&.mtu
-T}
-T{
-mac
-T}:T{
-wired\&.mac\-address
-T}
-T{
-cloned\-mac
-T}:T{
-wired\&.cloned\-mac\-address
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&4.\ \&Infiniband options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l.
-T{
-mtu
-T}:T{
-infiniband\&.mtu
-T}
-T{
-mac
-T}:T{
-infiniband\&.mac\-address
-T}
-T{
-transport\-mode
-T}:T{
-infiniband\&.transport\-mode
-T}
-T{
-parent
-T}:T{
-infiniband\&.parent
-T}
-T{
-p\-key
-T}:T{
-infiniband\&.p\-key
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&5.\ \&Wi\-Fi options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l.
-T{
-ssid
-T}:T{
-wireless\&.ssid
-T}
-T{
-mode
-T}:T{
-wireless\&.mode
-T}
-T{
-mtu
-T}:T{
-wireless\&.mtu
-T}
-T{
-mac
-T}:T{
-wireless\&.mac\-address
-T}
-T{
-cloned\-mac
-T}:T{
-wireless\&.cloned\-mac\-address
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&6.\ \&WiMax options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l.
-T{
-nsp
-T}:T{
-wimax\&.network\-name
-T}
-T{
-mac
-T}:T{
-wimax\&.mac\-address
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&7.\ \&GSM options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l.
-T{
-apn
-T}:T{
-gsm\&.apn
-T}
-T{
-user
-T}:T{
-gsm\&.username
-T}
-T{
-password
-T}:T{
-gsm\&.password
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&8.\ \&CDMA options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l.
-T{
-user
-T}:T{
-cdma\&.username
-T}
-T{
-password
-T}:T{
-cdma\&.password
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&9.\ \&Bluetooth options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l l
-l l lt.
-T{
-addr
-T}:T{
-bluetooth\&.bdaddr
-T}:T{
-\ \&
-T}
-T{
-bt\-type
-T}:T{
-bluetooth\&.type
-T}:T{
-Apart from the usual panu,
-nap and dun options, the values of
-dun\-gsm and dun\-cdma can be used for compatibility
-with older versions\&. They are equivalent to using dun and setting
-appropriate gsm\&.* or cdma\&.* properties\&.
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&10.\ \&VLAN options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l.
-T{
-dev
-T}:T{
-vlan\&.parent
-T}
-T{
-id
-T}:T{
-vlan\&.id
-T}
-T{
-flags
-T}:T{
-vlan\&.flags
-T}
-T{
-ingress
-T}:T{
-vlan\&.ingress\-priority\-map
-T}
-T{
-egress
-T}:T{
-vlan\&.egress\-priority\-map
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&11.\ \&Bonding options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l lt
-l ^ ^
-l ^ ^
-l ^ ^
-l ^ ^
-l ^ ^
-l ^ ^
-l ^ ^.
-T{
-mode
-T}:T{
-bond\&.options
-T}:T{
-Setting each of these adds the option to bond\&.options property\&.
-It\*(Aqs equivalent to the +bond\&.options \*(Aqoption=value\*(Aq syntax\&.
-T}
-T{
-primary
-T}::
-T{
-miimon
-T}::
-T{
-downdelay
-T}::
-T{
-updelay
-T}::
-T{
-arp\-interval
-T}::
-T{
-arp\-ip\-target
-T}::
-T{
-lacp\-rate
-T}::
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&12.\ \&Team options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l l.
-T{
-config
-T}:T{
-team\&.config
-T}:T{
-Either a filename or a team configuration in JSON format\&. To enforce one or the other, the value can be prefixed with "file://" or "json://"\&.
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&13.\ \&Team port options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l l.
-T{
-config
-T}:T{
-team\-port\&.config
-T}:T{
-Either a filename or a team configuration in JSON format\&. To enforce one or the other, the value can be prefixed with "file://" or "json://"\&.
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&14.\ \&Bridge options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l
-l l
-l l
-l l
-l l
-l l
-l l
-l l.
-T{
-stp
-T}:T{
-bridge\&.stp
-T}
-T{
-priority
-T}:T{
-bridge\&.priority
-T}
-T{
-forward\-delay
-T}:T{
-bridge\&.forward\-delay
-T}
-T{
-hello\-time
-T}:T{
-bridge\&.hello\-time
-T}
-T{
-max\-age
-T}:T{
-bridge\&.max\-age
-T}
-T{
-ageing\-time
-T}:T{
-bridge\&.ageing\-time
-T}
-T{
-group\-forward\-mask
-T}:T{
-bridge\&.group\-forward\-mask
-T}
-T{
-multicast\-snooping
-T}:T{
-bridge\&.multicast\-snooping
-T}
-T{
-mac
-T}:T{
-bridge\&.mac\-address
-T}
-T{
-priority
-T}:T{
-bridge\-port\&.priority
-T}
-T{
-path\-cost
-T}:T{
-bridge\-port\&.path\-cost
-T}
-T{
-hairpin
-T}:T{
-bridge\-port\&.hairpin\-mode
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&15.\ \&VPN options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l.
-T{
-vpn\-type
-T}:T{
-vpn\&.service\-type
-T}
-T{
-user
-T}:T{
-vpn\&.user\-name
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&16.\ \&OLPC Mesh options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l.
-T{
-ssid
-T}:T{
-olpc\-mesh\&.ssid
-T}
-T{
-channel
-T}:T{
-olpc\-mesh\&.channel
-T}
-T{
-dhcp\-anycast
-T}:T{
-olpc\-mesh\&.dhcp\-anycast\-address
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&17.\ \&ADSL options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l.
-T{
-username
-T}:T{
-adsl\&.username
-T}
-T{
-protocol
-T}:T{
-adsl\&.protocol
-T}
-T{
-password
-T}:T{
-adsl\&.password
-T}
-T{
-encapsulation
-T}:T{
-adsl\&.encapsulation
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&18.\ \&MACVLAN options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l.
-T{
-dev
-T}:T{
-macvlan\&.parent
-T}
-T{
-mode
-T}:T{
-macvlan\&.mode
-T}
-T{
-tap
-T}:T{
-macvlan\&.tap
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&19.\ \&MACsec options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l
-l l.
-T{
-dev
-T}:T{
-macsec\&.parent
-T}
-T{
-mode
-T}:T{
-macsec\&.mode
-T}
-T{
-encrypt
-T}:T{
-macsec\&.encrypt
-T}
-T{
-cak
-T}:T{
-macsec\&.cak
-T}
-T{
-ckn
-T}:T{
-macsec\&.ckn
-T}
-T{
-port
-T}:T{
-macsec\&.port
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&20.\ \&VxLAN options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l
-l l
-l l.
-T{
-id
-T}:T{
-vxlan\&.id
-T}
-T{
-remote
-T}:T{
-vxlan\&.remote
-T}
-T{
-dev
-T}:T{
-vxlan\&.parent
-T}
-T{
-local
-T}:T{
-vxlan\&.local
-T}
-T{
-source\-port\-min
-T}:T{
-vxlan\&.source\-port\-min
-T}
-T{
-source\-port\-max
-T}:T{
-vxlan\&.source\-port\-max
-T}
-T{
-destination\-port
-T}:T{
-vxlan\&.destination\-port
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&21.\ \&Tun options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l
-l l
-l l.
-T{
-mode
-T}:T{
-tun\&.mode
-T}
-T{
-owner
-T}:T{
-tun\&.owner
-T}
-T{
-group
-T}:T{
-tun\&.group
-T}
-T{
-pi
-T}:T{
-tun\&.pi
-T}
-T{
-vnet\-hdr
-T}:T{
-tun\&.vnet\-hdr
-T}
-T{
-multi\-queue
-T}:T{
-tun\&.multi\-queue
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&22.\ \&IP tunneling options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l
-l l.
-T{
-mode
-T}:T{
-ip\-tunnel\&.mode
-T}
-T{
-local
-T}:T{
-ip\-tunnel\&.local
-T}
-T{
-remote
-T}:T{
-ip\-tunnel\&.remote
-T}
-T{
-dev
-T}:T{
-ip\-tunnel\&.parent
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&23.\ \&WPAN options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l
-l l
-l l.
-T{
-mac
-T}:T{
-wpan\&.mac
-T}
-T{
-short\-addr
-T}:T{
-wpan\&.short\-addr
-T}
-T{
-pan\-id
-T}:T{
-wpan\&.pan\-id
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&24.\ \&6LoWPAN options
-.TS
-allbox tab(:);
-lB lB.
-T{
-Alias
-T}:T{
-Property
-T}
-.T&
-l l.
-T{
-dev
-T}:T{
-6lowpan\&.parent
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&25.\ \&IPv4 options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l lt
-l l l.
-T{
-ip4
-T}:T{
-ipv4\&.addresses ipv4\&.method
-T}:T{
-The alias is equivalent to the +ipv4\&.addresses syntax and also sets ipv4\&.method to manual\&. It can be specified multiple times\&.
-T}
-T{
-gw4
-T}:T{
-ipv4\&.gateway
-T}:T{
-\ \&
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&26.\ \&IPv6 options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l lt
-l l l.
-T{
-ip6
-T}:T{
-ipv6\&.addresses ipv6\&.method
-T}:T{
-The alias is equivalent to the +ipv6\&.addresses syntax and also sets ipv6\&.method to manual\&. It can be specified multiple times\&.
-T}
-T{
-gw6
-T}:T{
-ipv6\&.gateway
-T}:T{
-\ \&
-T}
-.TE
-.sp 1
-.sp
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.B Table\ \&27.\ \&Proxy options
-.TS
-allbox tab(:);
-lB lB lB.
-T{
-Alias
-T}:T{
-Property
-T}:T{
-Note
-T}
-.T&
-l l l
-l l l
-l l l
-l l lt.
-T{
-method
-T}:T{
-proxy\&.method
-T}:T{
-\ \&
-T}
-T{
-browser\-only
-T}:T{
-proxy\&.browser\-only
-T}:T{
-\ \&
-T}
-T{
-pac\-url
-T}:T{
-proxy\&.pac\-url
-T}:T{
-\ \&
-T}
-T{
-pac\-script
-T}:T{
-proxy\&.pac\-script
-T}:T{
-Read the JavaScript PAC (proxy auto\-config) script from file or pass it directly on the command line\&. Prefix the value with "file://" or "js://" to force one or the other\&.
-T}
-.TE
-.sp 1
 .SH "COLORS"
 .PP
 Implicit coloring can be disabled by an empty file
@@ -2506,27 +1515,27 @@ Connection whose details is the user not permitted to see\&.
 .PP
 \fBconnectivity\-full\fR
 .RS 4
-Conectivity state when Internet is reachable\&.
+Connectivity state when Internet is reachable\&.
 .RE
 .PP
 \fBconnectivity\-limited\fR
 .RS 4
-Conectivity state when only a local network reachable\&.
+Connectivity state when only a local network reachable\&.
 .RE
 .PP
 \fBconnectivity\-none\fR
 .RS 4
-Conectivity state when the network is disconnected\&.
+Connectivity state when the network is disconnected\&.
 .RE
 .PP
 \fBconnectivity\-portal\fR
 .RS 4
-Conectivity state when a captive portal hijacked the connection\&.
+Connectivity state when a captive portal hijacked the connection\&.
 .RE
 .PP
 \fBconnectivity\-unknown\fR
 .RS 4
-Conectivity state when a connectivity check didn\*(Aqt run\&.
+Connectivity state when a connectivity check didn\*(Aqt run\&.
 .RE
 .PP
 \fBdevice\-activated\fR
@@ -2557,6 +1566,11 @@ Warning of a missing device plugin\&.
 \fBdevice\-unavailable\fR
 .RS 4
 Device that is not available for activation\&.
+.RE
+.PP
+\fBdevice\-disabled\fR
+.RS 4
+Device is disabled by software or hardware kill switch\&.
 .RE
 .PP
 \fBmanager\-running\fR
@@ -2818,9 +1832,9 @@ shows all connection profile names and their auto\-connect property\&.
 shows details for "My default em1" connection profile\&.
 .RE
 .PP
-\fBnmcli \-\-show\-secrets connection show "My Home WiFi"\fR
+\fBnmcli \-\-show\-secrets connection show "My Home Wi\-Fi"\fR
 .RS 4
-shows details for "My Home WiFi" connection profile with all passwords\&. Without
+shows details for "My Home Wi\-Fi" connection profile with all passwords\&. Without
 \fB\-\-show\-secrets\fR
 option, secrets would not be displayed\&.
 .RE
@@ -2961,15 +1975,15 @@ exports NetworkManager VPN profile corp\-vpnc as standard Cisco (vpnc) configura
 accepts abbreviations, as long as they are a unique prefix in the set of possible options\&. As new options get added, these abbreviations are not guaranteed to stay unique\&. For scripting and long term compatibility it is therefore strongly advised to spell out the full option names\&.
 .SH "BUGS"
 .PP
-There are probably some bugs\&. If you find a bug, please report it to https://bugzilla\&.gnome\&.org/ \(em product
-NetworkManager\&.
+There are probably some bugs\&. If you find a bug, please report it to your distribution or upstream at
+https://gitlab\&.freedesktop\&.org/NetworkManager/NetworkManager\&.
 .SH "SEE ALSO"
 .PP
 \fBnmcli-examples\fR(7),
+\fBnm-settings-nmcli\fR(5),
 \fBnm-online\fR(1),
 \fBNetworkManager\fR(8),
 \fBNetworkManager.conf\fR(5),
-\fBnm-settings\fR(5),
 \fBnm-applet\fR(1),
 \fBnm-connection-editor\fR(1),
 \fBterminal-colors.d\fR(5)\&.

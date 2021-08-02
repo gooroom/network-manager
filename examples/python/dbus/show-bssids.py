@@ -1,33 +1,26 @@
 #!/usr/bin/env python
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Copyright (C) 2010 Red Hat, Inc.
 #
 
-
-# This example prints out all the AP BSSIDs that all WiFi devices on the
+# This example prints out all the AP BSSIDs that all Wi-Fi devices on the
 # machine can see.  Useful for location-based services like Skyhook that
 # can geolocate you based on the APs you can see.
+#
+# Note that with NetworkManager clients are required to request scanning.
+# If you don't do that, the scan list may be outdated. That means, you would
+# check the LastScan property, and if necessary call RequestScan() first.
+# After RequestScan(), you wait until the LastScan property gets bumped again.
 
 import dbus
 
 bus = dbus.SystemBus()
 
 # Get a proxy for the base NetworkManager object
-proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+proxy = bus.get_object(
+    "org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager"
+)
 manager = dbus.Interface(proxy, "org.freedesktop.NetworkManager")
 
 all_aps = []
@@ -42,26 +35,32 @@ for d in devices:
 
     # Make sure the device is enabled before we try to use it
     state = prop_iface.Get("org.freedesktop.NetworkManager.Device", "State")
-    if state <= 2:
+    if state <= 20:  # NM_DEVICE_STATE_UNAVAILABLE
         continue
 
     # Get device's type; we only want wifi devices
     iface = prop_iface.Get("org.freedesktop.NetworkManager.Device", "Interface")
     dtype = prop_iface.Get("org.freedesktop.NetworkManager.Device", "DeviceType")
-    if dtype == 2:   # WiFi
+    if dtype == 2:  # WiFi
         # Get a proxy for the wifi interface
-        wifi_iface = dbus.Interface(dev_proxy, "org.freedesktop.NetworkManager.Device.Wireless")
+        wifi_iface = dbus.Interface(
+            dev_proxy, "org.freedesktop.NetworkManager.Device.Wireless"
+        )
         wifi_prop_iface = dbus.Interface(dev_proxy, "org.freedesktop.DBus.Properties")
 
         # Get the associated AP's object path
-        connected_path = wifi_prop_iface.Get("org.freedesktop.NetworkManager.Device.Wireless", "ActiveAccessPoint")
+        connected_path = wifi_prop_iface.Get(
+            "org.freedesktop.NetworkManager.Device.Wireless", "ActiveAccessPoint"
+        )
 
         # Get all APs the card can see
         aps = wifi_iface.GetAccessPoints()
         for path in aps:
             ap_proxy = bus.get_object("org.freedesktop.NetworkManager", path)
             ap_prop_iface = dbus.Interface(ap_proxy, "org.freedesktop.DBus.Properties")
-            bssid = ap_prop_iface.Get("org.freedesktop.NetworkManager.AccessPoint", "HwAddress")
+            bssid = ap_prop_iface.Get(
+                "org.freedesktop.NetworkManager.AccessPoint", "HwAddress"
+            )
 
             # Cache the BSSID
             if not bssid in all_aps:
@@ -75,4 +74,3 @@ for d in devices:
 print("\nFound APs:")
 for bssid in all_aps:
     print(bssid)
-

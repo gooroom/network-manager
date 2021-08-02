@@ -8,7 +8,7 @@
 <link rel="up" href="ch03.html" title="Connection and Setting API Reference">
 <link rel="prev" href="NMSetting.html" title="NMSetting">
 <link rel="next" href="NMSetting6Lowpan.html" title="NMSetting6Lowpan">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -37,8 +37,8 @@
 <a name="NMSettingConnection.functions"></a><h2>Functions</h2>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
-<col width="150px" class="functions_return">
-<col class="functions_name">
+<col width="150px" class="functions_proto_type">
+<col class="functions_proto_name">
 </colgroup>
 <tbody>
 <tr>
@@ -304,6 +304,21 @@
 <a class="link" href="NMSettingConnection.html#nm-setting-connection-get-llmnr" title="nm_setting_connection_get_llmnr ()">nm_setting_connection_get_llmnr</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
+<tr>
+<td class="function_type">
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint32"><span class="returnvalue">gint32</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="NMSettingConnection.html#nm-setting-connection-get-wait-device-timeout" title="nm_setting_connection_get_wait_device_timeout ()">nm_setting_connection_get_wait_device_timeout</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">const <span class="returnvalue">char</span> *
+</td>
+<td class="function_name">
+<a class="link" href="NMSettingConnection.html#nm-setting-connection-get-mud-url" title="nm_setting_connection_get_mud_url ()">nm_setting_connection_get_mud_url</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
 </tbody>
 </table></div>
 </div>
@@ -317,65 +332,65 @@
 </colgroup>
 <tbody>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--auth-retries" title="The “auth-retries” property">auth-retries</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--autoconnect" title="The “autoconnect” property">autoconnect</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--autoconnect-priority" title="The “autoconnect-priority” property">autoconnect-priority</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--autoconnect-retries" title="The “autoconnect-retries” property">autoconnect-retries</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type"><a class="link" href="NMSettingConnection.html#NMSettingConnectionAutoconnectSlaves" title="enum NMSettingConnectionAutoconnectSlaves"><span class="type">NMSettingConnectionAutoconnectSlaves</span></a></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--autoconnect-slaves" title="The “autoconnect-slaves” property">autoconnect-slaves</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--gateway-ping-timeout" title="The “gateway-ping-timeout” property">gateway-ping-timeout</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--id" title="The “id” property">id</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--interface-name" title="The “interface-name” property">interface-name</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--lldp" title="The “lldp” property">lldp</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--llmnr" title="The “llmnr” property">llmnr</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--master" title="The “master” property">master</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--mdns" title="The “mdns” property">mdns</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
@@ -385,7 +400,13 @@
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type">
+<span class="type">char</span> *</td>
+<td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--mud-url" title="The “mud-url” property">mud-url</a></td>
+<td class="property_flags">Read / Write</td>
+</tr>
+<tr>
+<td class="property_type"><span class="type">int</span></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--multi-connect" title="The “multi-connect” property">multi-connect</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
@@ -397,7 +418,7 @@
 <tr>
 <td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--read-only" title="The “read-only” property">read-only</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-String-Utility-Functions.html#GStrv"><span class="type">GStrv</span></a></td>
@@ -406,38 +427,43 @@
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--slave-type" title="The “slave-type” property">slave-type</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--stable-id" title="The “stable-id” property">stable-id</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint64"><span class="type">guint64</span></a></td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--timestamp" title="The “timestamp” property">timestamp</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--type" title="The “type” property">type</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--uuid" title="The “uuid” property">uuid</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
+<td class="property_type"><span class="type">int</span></td>
+<td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--wait-device-timeout" title="The “wait-device-timeout” property">wait-device-timeout</a></td>
+<td class="property_flags">Read / Write</td>
+</tr>
+<tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="NMSettingConnection.html#NMSettingConnection--zone" title="The “zone” property">zone</a></td>
-<td class="property_flags">Read / Write / Construct</td>
+<td class="property_flags">Read / Write</td>
 </tr>
 </tbody>
 </table></div>
@@ -446,8 +472,8 @@
 <a name="NMSettingConnection.other"></a><h2>Types and Values</h2>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
-<col width="150px" class="name">
-<col class="description">
+<col width="150px" class="other_proto_type">
+<col class="other_proto_name">
 </colgroup>
 <tbody>
 <tr>
@@ -557,6 +583,14 @@
 <tr>
 <td class="define_keyword">#define</td>
 <td class="function_name"><a class="link" href="NMSettingConnection.html#NM-SETTING-CONNECTION-LLMNR:CAPS" title="NM_SETTING_CONNECTION_LLMNR">NM_SETTING_CONNECTION_LLMNR</a></td>
+</tr>
+<tr>
+<td class="define_keyword">#define</td>
+<td class="function_name"><a class="link" href="NMSettingConnection.html#NM-SETTING-CONNECTION-WAIT-DEVICE-TIMEOUT:CAPS" title="NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT">NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT</a></td>
+</tr>
+<tr>
+<td class="define_keyword">#define</td>
+<td class="function_name"><a class="link" href="NMSettingConnection.html#NM-SETTING-CONNECTION-MUD-URL:CAPS" title="NM_SETTING_CONNECTION_MUD_URL">NM_SETTING_CONNECTION_MUD_URL</a></td>
 </tr>
 <tr>
 <td class="datatype_keyword">enum</td>
@@ -967,12 +1001,13 @@ of this setting.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>out_ptype</p></td>
-<td class="parameter_description"><p>on return, the permission type (at this time, always "user")</p></td>
+<td class="parameter_description"><p>on return, the permission type. This is currently always "user",
+unless the entry is invalid, in which case it returns "invalid".</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>out_pitem</p></td>
-<td class="parameter_description"><p>on return, the permission item (formatted accoring to <em class="parameter"><code>ptype</code></em>
+<td class="parameter_description"><p>on return, the permission item (formatted according to <em class="parameter"><code>ptype</code></em>
 , see
 <a class="link" href="NMSettingConnection.html#NMSettingConnection--permissions" title="The “permissions” property"><span class="type">“permissions”</span></a> for more detail</p></td>
 <td class="parameter_annotations"> </td>
@@ -1103,8 +1138,10 @@ the "user" permission type is supported, and <em class="parameter"><code>pitem</
 <p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the permission was unique and was successfully added to the
 list, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if <em class="parameter"><code>ptype</code></em>
 or <em class="parameter"><code>pitem</code></em>
-was invalid or it the permission was already
-present in the list</p>
+was invalid.
+If the permission was already present in the list, it will not be added
+a second time but <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> will be returned. Note that before 1.28, in this
+case <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> would be returned.</p>
 </div>
 </div>
 <hr>
@@ -1374,7 +1411,7 @@ nm_setting_connection_get_secondary (<em class="parameter"><code><a class="link"
 <pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 nm_setting_connection_add_secondary (<em class="parameter"><code><a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a> *setting</code></em>,
                                      <em class="parameter"><code>const <span class="type">char</span> *sec_uuid</code></em>);</pre>
-<p>Adds a new secondary connetion UUID to the setting.</p>
+<p>Adds a new secondary connection UUID to the setting.</p>
 <div class="refsect3">
 <a name="nm-setting-connection-add-secondary.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -1410,7 +1447,7 @@ was already present</p>
 nm_setting_connection_remove_secondary
                                (<em class="parameter"><code><a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a> *setting</code></em>,
                                 <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint32"><span class="type">guint32</span></a> idx</code></em>);</pre>
-<p>Removes the secondary coonnection UUID at index <em class="parameter"><code>idx</code></em>
+<p>Removes the secondary connection UUID at index <em class="parameter"><code>idx</code></em>
 .</p>
 <div class="refsect3">
 <a name="nm-setting-connection-remove-secondary.parameters"></a><h4>Parameters</h4>
@@ -1442,7 +1479,7 @@ nm_setting_connection_remove_secondary
 nm_setting_connection_remove_secondary_by_value
                                (<em class="parameter"><code><a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a> *setting</code></em>,
                                 <em class="parameter"><code>const <span class="type">char</span> *sec_uuid</code></em>);</pre>
-<p>Removes the secondary coonnection UUID <em class="parameter"><code>sec_uuid</code></em>
+<p>Removes the secondary connection UUID <em class="parameter"><code>sec_uuid</code></em>
 .</p>
 <div class="refsect3">
 <a name="nm-setting-connection-remove-secondary-by-value.parameters"></a><h4>Parameters</h4>
@@ -1633,6 +1670,58 @@ nm_setting_connection_get_llmnr (<em class="parameter"><code><a class="link" hre
 </div>
 <p class="since">Since: 1.14</p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="nm-setting-connection-get-wait-device-timeout"></a><h3>nm_setting_connection_get_wait_device_timeout ()</h3>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint32"><span class="returnvalue">gint32</span></a>
+nm_setting_connection_get_wait_device_timeout
+                               (<em class="parameter"><code><a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a> *setting</code></em>);</pre>
+<div class="refsect3">
+<a name="nm-setting-connection-get-wait-device-timeout.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>setting</p></td>
+<td class="parameter_description"><p>the <a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="nm-setting-connection-get-wait-device-timeout.returns"></a><h4>Returns</h4>
+<p> the <a class="link" href="NMSettingConnection.html#NM-SETTING-CONNECTION-WAIT-DEVICE-TIMEOUT:CAPS" title="NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT"><code class="literal">NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT</code></a> property with
+the timeout in milliseconds. -1 is the default.</p>
+</div>
+<p class="since">Since: 1.20</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="nm-setting-connection-get-mud-url"></a><h3>nm_setting_connection_get_mud_url ()</h3>
+<pre class="programlisting">const <span class="returnvalue">char</span> *
+nm_setting_connection_get_mud_url (<em class="parameter"><code><a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a> *setting</code></em>);</pre>
+<p>Returns the value contained in the <a class="link" href="NMSettingConnection.html#NMSettingConnection--mud-url" title="The “mud-url” property"><span class="type">“mud-url”</span></a>
+property.</p>
+<div class="refsect3">
+<a name="nm-setting-connection-get-mud-url.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>setting</p></td>
+<td class="parameter_description"><p>the <a class="link" href="NMSettingConnection.html" title="NMSettingConnection"><span class="type">NMSettingConnection</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<p class="since">Since: 1.26</p>
+</div>
 </div>
 <div class="refsect1">
 <a name="NMSettingConnection.other_details"></a><h2>Types and Values</h2>
@@ -1644,13 +1733,13 @@ nm_setting_connection_get_llmnr (<em class="parameter"><code><a class="link" hre
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-AUTOCONNECT-PRIORITY-MIN:CAPS"></a><h3>NM_SETTING_CONNECTION_AUTOCONNECT_PRIORITY_MIN</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_PRIORITY_MIN -999
+<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_PRIORITY_MIN     -999
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-AUTOCONNECT-PRIORITY-MAX:CAPS"></a><h3>NM_SETTING_CONNECTION_AUTOCONNECT_PRIORITY_MAX</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_PRIORITY_MAX 999
+<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_PRIORITY_MAX     999
 </pre>
 </div>
 <hr>
@@ -1662,37 +1751,37 @@ nm_setting_connection_get_llmnr (<em class="parameter"><code><a class="link" hre
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-ID:CAPS"></a><h3>NM_SETTING_CONNECTION_ID</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_ID             "id"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_ID                   "id"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-UUID:CAPS"></a><h3>NM_SETTING_CONNECTION_UUID</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_UUID           "uuid"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_UUID                 "uuid"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-STABLE-ID:CAPS"></a><h3>NM_SETTING_CONNECTION_STABLE_ID</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_STABLE_ID      "stable-id"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_STABLE_ID            "stable-id"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-INTERFACE-NAME:CAPS"></a><h3>NM_SETTING_CONNECTION_INTERFACE_NAME</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_INTERFACE_NAME "interface-name"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_INTERFACE_NAME       "interface-name"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-TYPE:CAPS"></a><h3>NM_SETTING_CONNECTION_TYPE</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_TYPE           "type"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_TYPE                 "type"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-AUTOCONNECT:CAPS"></a><h3>NM_SETTING_CONNECTION_AUTOCONNECT</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT    "autoconnect"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT          "autoconnect"
 </pre>
 </div>
 <hr>
@@ -1704,61 +1793,61 @@ nm_setting_connection_get_llmnr (<em class="parameter"><code><a class="link" hre
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-AUTOCONNECT-RETRIES:CAPS"></a><h3>NM_SETTING_CONNECTION_AUTOCONNECT_RETRIES</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_RETRIES "autoconnect-retries"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_RETRIES  "autoconnect-retries"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-MULTI-CONNECT:CAPS"></a><h3>NM_SETTING_CONNECTION_MULTI_CONNECT</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_MULTI_CONNECT  "multi-connect"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_MULTI_CONNECT        "multi-connect"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-TIMESTAMP:CAPS"></a><h3>NM_SETTING_CONNECTION_TIMESTAMP</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_TIMESTAMP      "timestamp"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_TIMESTAMP            "timestamp"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-READ-ONLY:CAPS"></a><h3>NM_SETTING_CONNECTION_READ_ONLY</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_READ_ONLY      "read-only"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_READ_ONLY            "read-only"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-PERMISSIONS:CAPS"></a><h3>NM_SETTING_CONNECTION_PERMISSIONS</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_PERMISSIONS    "permissions"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_PERMISSIONS          "permissions"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-ZONE:CAPS"></a><h3>NM_SETTING_CONNECTION_ZONE</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_ZONE           "zone"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_ZONE                 "zone"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-MASTER:CAPS"></a><h3>NM_SETTING_CONNECTION_MASTER</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_MASTER         "master"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_MASTER               "master"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-SLAVE-TYPE:CAPS"></a><h3>NM_SETTING_CONNECTION_SLAVE_TYPE</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_SLAVE_TYPE     "slave-type"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_SLAVE_TYPE           "slave-type"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-AUTOCONNECT-SLAVES:CAPS"></a><h3>NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES "autoconnect-slaves"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES   "autoconnect-slaves"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-SECONDARIES:CAPS"></a><h3>NM_SETTING_CONNECTION_SECONDARIES</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_SECONDARIES    "secondaries"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_SECONDARIES          "secondaries"
 </pre>
 </div>
 <hr>
@@ -1770,31 +1859,43 @@ nm_setting_connection_get_llmnr (<em class="parameter"><code><a class="link" hre
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-METERED:CAPS"></a><h3>NM_SETTING_CONNECTION_METERED</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_METERED        "metered"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_METERED              "metered"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-LLDP:CAPS"></a><h3>NM_SETTING_CONNECTION_LLDP</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_LLDP           "lldp"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_LLDP                 "lldp"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-AUTH-RETRIES:CAPS"></a><h3>NM_SETTING_CONNECTION_AUTH_RETRIES</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTH_RETRIES   "auth-retries"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_AUTH_RETRIES         "auth-retries"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-MDNS:CAPS"></a><h3>NM_SETTING_CONNECTION_MDNS</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_MDNS           "mdns"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_MDNS                 "mdns"
 </pre>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NM-SETTING-CONNECTION-LLMNR:CAPS"></a><h3>NM_SETTING_CONNECTION_LLMNR</h3>
-<pre class="programlisting">#define NM_SETTING_CONNECTION_LLMNR          "llmnr"
+<pre class="programlisting">#define NM_SETTING_CONNECTION_LLMNR                "llmnr"
+</pre>
+</div>
+<hr>
+<div class="refsect2">
+<a name="NM-SETTING-CONNECTION-WAIT-DEVICE-TIMEOUT:CAPS"></a><h3>NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT</h3>
+<pre class="programlisting">#define NM_SETTING_CONNECTION_WAIT_DEVICE_TIMEOUT  "wait-device-timeout"
+</pre>
+</div>
+<hr>
+<div class="refsect2">
+<a name="NM-SETTING-CONNECTION-MUD-URL:CAPS"></a><h3>NM_SETTING_CONNECTION_MUD_URL</h3>
+<pre class="programlisting">#define NM_SETTING_CONNECTION_MUD_URL              "mud-url"
 </pre>
 </div>
 <hr>
@@ -1822,7 +1923,7 @@ should be activated when master is activated.</p>
 <td class="enum_member_name"><p><a name="NM-SETTING-CONNECTION-AUTOCONNECT-SLAVES-NO:CAPS"></a>NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES_NO</p></td>
 <td class="enum_member_description">
 <p>slaves are not brought up when
-  master is activated</p>
+master is activated</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
@@ -1830,7 +1931,7 @@ should be activated when master is activated.</p>
 <td class="enum_member_name"><p><a name="NM-SETTING-CONNECTION-AUTOCONNECT-SLAVES-YES:CAPS"></a>NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES_YES</p></td>
 <td class="enum_member_description">
 <p>slaves are brought up when
-  master is activated</p>
+master is activated</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
@@ -1979,12 +2080,13 @@ should be activated when master is activated.</p>
 <a name="NMSettingConnection.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="NMSettingConnection--auth-retries"></a><h3>The <code class="literal">“auth-retries”</code> property</h3>
-<pre class="programlisting">  “auth-retries”             <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “auth-retries”             <span class="type">int</span></pre>
 <p>The number of retries for the authentication. Zero means to try indefinitely; -1 means
 to use a global default. If the global default is not set, the authentication
 retries for 3 times before failing the connection.</p>
-<p>Currently this only applies to 802-1x authentication.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Currently, this only applies to 802-1x authentication.</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Allowed values: &gt;= -1</p>
 <p>Default value: -1</p>
 <p class="since">Since: 1.10</p>
@@ -2000,30 +2102,33 @@ intervention to activate the connection.</p>
 <p>Note that autoconnect is not implemented for VPN profiles. See
 <a class="link" href="NMSettingConnection.html#NMSettingConnection--secondaries" title="The “secondaries” property"><span class="type">“secondaries”</span></a> as an alternative to automatically
 connect VPN profiles.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Default value: TRUE</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--autoconnect-priority"></a><h3>The <code class="literal">“autoconnect-priority”</code> property</h3>
-<pre class="programlisting">  “autoconnect-priority”     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “autoconnect-priority”     <span class="type">int</span></pre>
 <p>The autoconnect priority. If the connection is set to autoconnect,
 connections with higher priority will be preferred. Defaults to 0.
 The higher number means higher priority.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Allowed values: [-999,999]</p>
 <p>Default value: 0</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--autoconnect-retries"></a><h3>The <code class="literal">“autoconnect-retries”</code> property</h3>
-<pre class="programlisting">  “autoconnect-retries”      <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “autoconnect-retries”      <span class="type">int</span></pre>
 <p>The number of times a connection should be tried when autoactivating before
 giving up. Zero means forever, -1 means the global default (4 times if not
 overridden). Setting this to 1 means to try activation only once before
 blocking autoconnect. Note that after a timeout, NetworkManager will try
 to autoconnect again.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Allowed values: &gt;= -1</p>
 <p>Default value: -1</p>
 </div>
@@ -2040,7 +2145,8 @@ The permitted values are: 0: leave slave connections untouched,
 1: activate all the slave connections with this connection, -1: default.
 If -1 (default) is set, global connection.autoconnect-slaves is read to
 determine the real value. If it is default as well, this fallbacks to 0.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Default value: NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES_DEFAULT</p>
 <p class="since">Since: 1.2</p>
 </div>
@@ -2050,23 +2156,25 @@ determine the real value. If it is default as well, this fallbacks to 0.</p>
 <pre class="programlisting">  “gateway-ping-timeout”     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
 <p>If greater than zero, delay success of IP addressing until either the
 timeout is reached, or an IP gateway replies to a ping.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Allowed values: &lt;= 600</p>
 <p>Default value: 0</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--id"></a><h3>The <code class="literal">“id”</code> property</h3>
-<pre class="programlisting">  “id”                       <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “id”                       <span class="type">char</span> *</pre>
 <p>A human readable unique identifier for the connection, like "Work Wi-Fi"
 or "T-Mobile 3G".</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--interface-name"></a><h3>The <code class="literal">“interface-name”</code> property</h3>
-<pre class="programlisting">  “interface-name”           <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “interface-name”           <span class="type">char</span> *</pre>
 <p>The name of the network interface this connection is bound to. If not
 set, then the connection can be attached to any interface of the
 appropriate type (subject to restrictions imposed by other settings).</p>
@@ -2076,31 +2184,36 @@ persistent (e.g. mobile broadband or USB Ethernet), this property should
 not be used. Setting this property restricts the interfaces a connection
 can be used with, and if interface names change or are reordered the
 connection may be applied to the wrong interface.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--lldp"></a><h3>The <code class="literal">“lldp”</code> property</h3>
-<pre class="programlisting">  “lldp”                     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “lldp”                     <span class="type">int</span></pre>
 <p>Whether LLDP is enabled for the connection.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Default value: -1</p>
 <p class="since">Since: 1.2</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--llmnr"></a><h3>The <code class="literal">“llmnr”</code> property</h3>
-<pre class="programlisting">  “llmnr”                    <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “llmnr”                    <span class="type">int</span></pre>
 <p>Whether Link-Local Multicast Name Resolution (LLMNR) is enabled
 for the connection. LLMNR is a protocol based on the Domain Name
 System (DNS) packet format that allows both IPv4 and IPv6 hosts
 to perform name resolution for hosts on the same local link.</p>
-<p>The permitted values are: yes: register hostname and resolving
-for the connection, no: disable LLMNR for the interface, resolve:
-do not register hostname but allow resolving of LLMNR host names.</p>
-<p>This feature requires a plugin which supports LLMNR. One such
-plugin is dns-systemd-resolved.</p>
+<p>The permitted values are: "yes" (2) register hostname and resolving
+for the connection, "no" (0) disable LLMNR for the interface, "resolve"
+(1) do not register hostname but allow resolving of LLMNR host names
+If unspecified, "default" ultimately depends on the DNS plugin (which
+for systemd-resolved currently means "yes").</p>
+<p>This feature requires a plugin which supports LLMNR. Otherwise, the
+setting has no effect. One such plugin is dns-systemd-resolved.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: -1</p>
 <p class="since">Since: 1.14</p>
@@ -2108,21 +2221,26 @@ plugin is dns-systemd-resolved.</p>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--master"></a><h3>The <code class="literal">“master”</code> property</h3>
-<pre class="programlisting">  “master”                   <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “master”                   <span class="type">char</span> *</pre>
 <p>Interface name of the master device or UUID of the master connection.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--mdns"></a><h3>The <code class="literal">“mdns”</code> property</h3>
-<pre class="programlisting">  “mdns”                     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “mdns”                     <span class="type">int</span></pre>
 <p>Whether mDNS is enabled for the connection.</p>
-<p>The permitted values are: yes: register hostname and resolving
-for the connection, no: disable mDNS for the interface, resolve:
-do not register hostname but allow resolving of mDNS host names.</p>
-<p>This feature requires a plugin which supports mDNS. One such
-plugin is dns-systemd-resolved.</p>
+<p>The permitted values are: "yes" (2) register hostname and resolving
+for the connection, "no" (0) disable mDNS for the interface, "resolve"
+(1) do not register hostname but allow resolving of mDNS host names
+and "default" (-1) to allow lookup of a global default in NetworkManager.conf.
+If unspecified, "default" ultimately depends on the DNS plugin (which
+for systemd-resolved currently means "no").</p>
+<p>This feature requires a plugin which supports mDNS. Otherwise, the
+setting has no effect. One such plugin is dns-systemd-resolved.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: -1</p>
 <p class="since">Since: 1.12</p>
@@ -2134,16 +2252,33 @@ plugin is dns-systemd-resolved.</p>
 <p>Whether the connection is metered.</p>
 <p>When updating this property on a currently activated connection,
 the change takes effect immediately.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NM_METERED_UNKNOWN</p>
 <p class="since">Since: 1.2</p>
 </div>
 <hr>
 <div class="refsect2">
+<a name="NMSettingConnection--mud-url"></a><h3>The <code class="literal">“mud-url”</code> property</h3>
+<pre class="programlisting">  “mud-url”                  <span class="type">char</span> *</pre>
+<p>If configured, set to a Manufacturer Usage Description (MUD) URL that points
+to manufacturer-recommended network policies for IoT devices. It is transmitted
+as a DHCPv4 or DHCPv6 option. The value must be a valid URL starting with "https://".</p>
+<p>The special value "none" is allowed to indicate that no MUD URL is used.</p>
+<p>If the per-profile value is unspecified (the default), a global connection default gets
+consulted. If still unspecified, the ultimate default is "none".</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
+<p>Default value: NULL</p>
+<p class="since">Since: 1.26</p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="NMSettingConnection--multi-connect"></a><h3>The <code class="literal">“multi-connect”</code> property</h3>
-<pre class="programlisting">  “multi-connect”            <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “multi-connect”            <span class="type">int</span></pre>
 <p>Specifies whether the profile can be active multiple times at a particular
 moment. The value is of type <a class="link" href="libnm-nm-dbus-interface.html#NMConnectionMultiConnect" title="enum NMConnectionMultiConnect"><span class="type">NMConnectionMultiConnect</span></a>.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: 0</p>
 <p class="since">Since: 1.14</p>
@@ -2163,6 +2298,7 @@ ignored and reserved for future use.  [id] is the username that this
 permission refers to, which may not contain the ":" character. Any
 [reserved] information present must be ignored and is reserved for future
 use.  All of [type], [id], and [reserved] must be valid UTF-8.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 </div>
 <hr>
@@ -2172,7 +2308,8 @@ use.  All of [type], [id], and [reserved] must be valid UTF-8.</p>
 <p><a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if the connection can be modified using the provided settings
 service's D-Bus interface with the right privileges, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the
 connection is read-only and cannot be modified.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Default value: FALSE</p>
 </div>
 <hr>
@@ -2180,24 +2317,26 @@ connection is read-only and cannot be modified.</p>
 <a name="NMSettingConnection--secondaries"></a><h3>The <code class="literal">“secondaries”</code> property</h3>
 <pre class="programlisting">  “secondaries”              <a href="https://developer.gnome.org/glib/unstable/glib-String-Utility-Functions.html#GStrv"><span class="type">GStrv</span></a></pre>
 <p>List of connection UUIDs that should be activated when the base
-connection itself is activated. Currently only VPN connections are
+connection itself is activated. Currently, only VPN connections are
 supported.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--slave-type"></a><h3>The <code class="literal">“slave-type”</code> property</h3>
-<pre class="programlisting">  “slave-type”               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “slave-type”               <span class="type">char</span> *</pre>
 <p>Setting name of the device type of this slave's master connection (eg,
 <a class="link" href="NMSettingBond.html#NM-SETTING-BOND-SETTING-NAME:CAPS" title="NM_SETTING_BOND_SETTING_NAME"><code class="literal">NM_SETTING_BOND_SETTING_NAME</code></a>), or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if this connection is not a
 slave.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--stable-id"></a><h3>The <code class="literal">“stable-id”</code> property</h3>
-<pre class="programlisting">  “stable-id”                <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “stable-id”                <span class="type">char</span> *</pre>
 <p>This represents the identity of the connection used for various purposes.
 It allows to configure multiple profiles to share the identity. Also,
 the stable-id can contain placeholders that are substituted dynamically and
@@ -2212,12 +2351,13 @@ DUID with ipv6.dhcp-duid=stable-[llt,ll,uuid].</p>
 also seeded into the generation algorithm. For example, a per-host key
 is commonly also included, so that different systems end up generating
 different IDs. Or with ipv6.addr-gen-mode=stable-privacy, also the device's
-name is included, so that different interfaces yield different addresses.</p>
+name is included, so that different interfaces yield different addresses.
+The per-host key is the identity of your machine and stored in /var/lib/NetworkManager/secret-key.</p>
 <p>The '$' character is treated special to perform dynamic substitutions
-at runtime. Currently supported are "${CONNECTION}", "${DEVICE}", "${MAC}",
+at runtime. Currently, supported are "${CONNECTION}", "${DEVICE}", "${MAC}",
 "${BOOT}", "${RANDOM}".
 These effectively create unique IDs per-connection, per-device, per-boot,
-or every time. Note that "${DEVICE}" corresponds the the interface name of the
+or every time. Note that "${DEVICE}" corresponds to the interface name of the
 device and "${MAC}" is the permanent MAC address of the device.
 Any unrecognized patterns following '$' are treated verbatim, however
 are reserved for future use. You are thus advised to avoid '$' or
@@ -2228,6 +2368,7 @@ interface where the profile activates.</p>
 <p>If the value is unset, a global connection default is consulted. If the
 value is still unset, the default is similar to "${CONNECTION}" and uses
 a unique, fixed ID for the connection.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 <p class="since">Since: 1.4</p>
@@ -2242,25 +2383,27 @@ _successfully_ fully activated.</p>
 connection is active to ensure that an active connection has the latest
 timestamp. The property is only meant for reading (changes to this
 property will not be preserved).</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Default value: 0</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--type"></a><h3>The <code class="literal">“type”</code> property</h3>
-<pre class="programlisting">  “type”                     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “type”                     <span class="type">char</span> *</pre>
 <p>Base type of the connection. For hardware-dependent connections, should
 contain the setting name of the hardware-type specific setting (ie,
 "802-3-ethernet" or "802-11-wireless" or "bluetooth", etc), and for
 non-hardware dependent connections like VPN or otherwise, should contain
 the setting name of that setting type (ie, "vpn" or "bridge", etc).</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="NMSettingConnection--uuid"></a><h3>The <code class="literal">“uuid”</code> property</h3>
-<pre class="programlisting">  “uuid”                     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “uuid”                     <span class="type">char</span> *</pre>
 <p>A universally unique identifier for the connection, for example generated
 with libuuid.  It should be assigned when the connection is created, and
 never changed as long as the connection still applies to the same
@@ -2272,25 +2415,45 @@ provider, or <a class="link" href="NMSettingConnection.html#NMSettingConnection-
 (ie, contains only hexadecimal characters and "-").  A suitable UUID may
 be generated by <a class="link" href="libnm-nm-utils.html#nm-utils-uuid-generate" title="nm_utils_uuid_generate ()"><code class="function">nm_utils_uuid_generate()</code></a> or
 <a href="/usr/share/gtk-doc/html/libnm-util/libnm-util-nm-utils.html#nm-utils-uuid-generate-from-string"><code class="function">nm_utils_uuid_generate_from_string()</code></a>.</p>
+<p>Owner: NMSettingConnection</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 <hr>
 <div class="refsect2">
+<a name="NMSettingConnection--wait-device-timeout"></a><h3>The <code class="literal">“wait-device-timeout”</code> property</h3>
+<pre class="programlisting">  “wait-device-timeout”      <span class="type">int</span></pre>
+<p>Timeout in milliseconds to wait for device at startup.
+During boot, devices may take a while to be detected by the driver.
+This property will cause to delay NetworkManager-wait-online.service
+and nm-online to give the device a chance to appear. This works by
+waiting for the given timeout until a compatible device for the
+profile is available and managed.</p>
+<p>The value 0 means no wait time. The default value is -1, which
+currently has the same meaning as no wait time.</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
+<p>Allowed values: &gt;= -1</p>
+<p>Default value: -1</p>
+<p class="since">Since: 1.20</p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="NMSettingConnection--zone"></a><h3>The <code class="literal">“zone”</code> property</h3>
-<pre class="programlisting">  “zone”                     <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “zone”                     <span class="type">char</span> *</pre>
 <p>The trust level of a the connection.  Free form case-insensitive string
 (for example "Home", "Work", "Public").  <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> or unspecified zone means
 the connection will be placed in the default zone as defined by the
 firewall.</p>
 <p>When updating this property on a currently activated connection,
 the change takes effect immediately.</p>
-<p>Flags: Read / Write / Construct</p>
+<p>Owner: NMSettingConnection</p>
+<p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

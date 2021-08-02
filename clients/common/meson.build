@@ -1,70 +1,89 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
 common_inc = include_directories('.')
-
-nm_polkit_listener = files('nm-polkit-listener.c')
-
-deps = [
-  libnm_dep,
-  nm_core_dep
-]
-
-cflags = clients_cflags + [
-  '-DG_LOG_DOMAIN="libnmc"',
-]
 
 libnmc_base = static_library(
   'nmc-base',
-  sources: shared_files_clients_common + files(
+  sources: files(
     'nm-client-utils.c',
     'nm-secret-agent-simple.c',
     'nm-vpn-helpers.c',
+    'nm-polkit-listener.c',
   ),
-  dependencies: deps,
-  c_args: cflags
+  dependencies: [
+    libnm_dep,
+    libnm_nm_default_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="libnmc"',
+  ],
 )
 
 libnmc_base_dep = declare_dependency(
   include_directories: common_inc,
-  link_with: libnmc_base
+  dependencies: [
+    libnm_dep,
+    libnm_nm_default_dep,
+  ],
+  link_with: libnmc_base,
 )
 
-settings_docs = 'settings-docs.h'
-
-if enable_introspection
+if enable_docs
   settings_docs_source = custom_target(
-    settings_docs,
-    input: nm_property_docs,
-    output: settings_docs,
-    command: [xsltproc, '--output', '@OUTPUT@', join_paths(meson.current_source_dir(), 'settings-docs.xsl'), '@INPUT@']
+    'settings-docs.h',
+    input: nm_settings_docs_xml_gir,
+    output: 'settings-docs.h',
+    command: [
+      xsltproc,
+      '--output',
+      '@OUTPUT@',
+      join_paths(meson.current_source_dir(), 'settings-docs.xsl'),
+      '@INPUT@',
+    ],
   )
 
   test(
     'check-settings-docs',
-    find_program(join_paths(meson.source_root(), 'tools', 'check-settings-docs.sh')),
-    args: [meson.source_root(), meson.build_root(), 'clients/common/' + settings_docs]
+    find_program(join_paths(source_root, 'tools', 'check-compare-generated.sh')),
+    args: [
+      source_root,
+      build_root,
+      'clients/common/settings-docs.h',
+    ],
   )
 else
   settings_docs_source = configure_file(
-    input: settings_docs + '.in',
-    output: settings_docs,
-    configuration: configuration_data()
+    input: 'settings-docs.h.in',
+    output: '@BASENAME@',
+    configuration: configuration_data(),
   )
 endif
 
 libnmc = static_library(
   'nmc',
-  sources: files(
+  sources: [settings_docs_source] + files(
     'nm-meta-setting-access.c',
-    'nm-meta-setting-desc.c'
-  ) + shared_nm_meta_setting_c + shared_nm_ethtool_utils_c + [settings_docs_source],
-  dependencies: deps,
-  c_args: cflags,
-  link_with: libnmc_base,
-  link_depends: settings_docs_source
+    'nm-meta-setting-base-impl.c',
+    'nm-meta-setting-desc.c',
+  ),
+  dependencies: [
+    libnm_dep,
+    libnm_nm_default_dep,
+    libnm_libnm_core_aux_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="libnmc"',
+  ],
+  link_depends: settings_docs_source,
 )
 
 libnmc_dep = declare_dependency(
   include_directories: common_inc,
-  link_with: libnmc
+  dependencies: [
+    libnm_dep,
+    libnm_nm_default_dep,
+  ],
+  link_with: libnmc,
 )
 
 if (enable_introspection or enable_nmtui) and enable_tests

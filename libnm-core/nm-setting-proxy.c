@@ -1,27 +1,12 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
- *
- * (C) Copyright 2016 Atul Anand <atulhjp@gmail.com>.
+ * Copyright (C) 2016 Atul Anand <atulhjp@gmail.com>.
  */
 
-#include "nm-default.h"
+#include "libnm-core/nm-default-libnm-core.h"
 
 #include "nm-setting-proxy.h"
+
 #include "nm-utils.h"
 #include "nm-setting-private.h"
 
@@ -39,41 +24,23 @@
  * to fulfill client queries.
  **/
 
-G_DEFINE_TYPE (NMSettingProxy, nm_setting_proxy, NM_TYPE_SETTING)
+/*****************************************************************************/
 
-#define NM_SETTING_PROXY_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_SETTING_PROXY, NMSettingProxyPrivate))
+NM_GOBJECT_PROPERTIES_DEFINE_BASE(PROP_METHOD, PROP_BROWSER_ONLY, PROP_PAC_URL, PROP_PAC_SCRIPT, );
 
 typedef struct {
-	NMSettingProxyMethod method;
-	gboolean browser_only;
-	char *pac_url;
-	char *pac_script;
+    char *pac_url;
+    char *pac_script;
+    int   method;
+    bool  browser_only : 1;
 } NMSettingProxyPrivate;
 
-enum {
-	PROP_0,
-	PROP_METHOD,
-	PROP_BROWSER_ONLY,
-	PROP_PAC_URL,
-	PROP_PAC_SCRIPT,
+G_DEFINE_TYPE(NMSettingProxy, nm_setting_proxy, NM_TYPE_SETTING)
 
-	LAST_PROP
-};
+#define NM_SETTING_PROXY_GET_PRIVATE(o) \
+    (G_TYPE_INSTANCE_GET_PRIVATE((o), NM_TYPE_SETTING_PROXY, NMSettingProxyPrivate))
 
-/**
- * nm_setting_proxy_new:
- *
- * Creates a new #NMSettingProxy object.
- *
- * Returns: the new empty #NMSettingProxy object
- *
- * Since: 1.6
- **/
-NMSetting *
-nm_setting_proxy_new (void)
-{
-	return (NMSetting *) g_object_new (NM_TYPE_SETTING_PROXY, NULL);
-}
+/*****************************************************************************/
 
 /**
  * nm_setting_proxy_get_method:
@@ -88,11 +55,11 @@ nm_setting_proxy_new (void)
  * Since: 1.6
  **/
 NMSettingProxyMethod
-nm_setting_proxy_get_method (NMSettingProxy *setting)
+nm_setting_proxy_get_method(NMSettingProxy *setting)
 {
-	g_return_val_if_fail (NM_IS_SETTING_PROXY (setting), NM_SETTING_PROXY_METHOD_NONE);
+    g_return_val_if_fail(NM_IS_SETTING_PROXY(setting), NM_SETTING_PROXY_METHOD_NONE);
 
-	return NM_SETTING_PROXY_GET_PRIVATE (setting)->method;
+    return NM_SETTING_PROXY_GET_PRIVATE(setting)->method;
 }
 
 /**
@@ -105,11 +72,11 @@ nm_setting_proxy_get_method (NMSettingProxy *setting)
  * Since: 1.6
  **/
 gboolean
-nm_setting_proxy_get_browser_only (NMSettingProxy *setting)
+nm_setting_proxy_get_browser_only(NMSettingProxy *setting)
 {
-	g_return_val_if_fail (NM_IS_SETTING_PROXY (setting), FALSE);
+    g_return_val_if_fail(NM_IS_SETTING_PROXY(setting), FALSE);
 
-	return NM_SETTING_PROXY_GET_PRIVATE (setting)->browser_only;
+    return NM_SETTING_PROXY_GET_PRIVATE(setting)->browser_only;
 }
 
 /**
@@ -121,11 +88,11 @@ nm_setting_proxy_get_browser_only (NMSettingProxy *setting)
  * Since: 1.6
  **/
 const char *
-nm_setting_proxy_get_pac_url (NMSettingProxy *setting)
+nm_setting_proxy_get_pac_url(NMSettingProxy *setting)
 {
-	g_return_val_if_fail (NM_IS_SETTING_PROXY (setting), NULL);
+    g_return_val_if_fail(NM_IS_SETTING_PROXY(setting), NULL);
 
-	return NM_SETTING_PROXY_GET_PRIVATE (setting)->pac_url;
+    return NM_SETTING_PROXY_GET_PRIVATE(setting)->pac_url;
 }
 
 /**
@@ -137,251 +104,280 @@ nm_setting_proxy_get_pac_url (NMSettingProxy *setting)
  * Since: 1.6
  **/
 const char *
-nm_setting_proxy_get_pac_script (NMSettingProxy *setting)
+nm_setting_proxy_get_pac_script(NMSettingProxy *setting)
 {
-	g_return_val_if_fail (NM_IS_SETTING_PROXY (setting), NULL);
+    g_return_val_if_fail(NM_IS_SETTING_PROXY(setting), NULL);
 
-	return NM_SETTING_PROXY_GET_PRIVATE (setting)->pac_script;
+    return NM_SETTING_PROXY_GET_PRIVATE(setting)->pac_script;
 }
 
 static gboolean
-verify (NMSetting *setting, NMConnection *connection, GError **error)
+verify(NMSetting *setting, NMConnection *connection, GError **error)
 {
-	NMSettingProxyPrivate *priv = NM_SETTING_PROXY_GET_PRIVATE (setting);
-	NMSettingProxyMethod method;
+    NMSettingProxyPrivate *priv = NM_SETTING_PROXY_GET_PRIVATE(setting);
 
-	method = priv->method;
+    if (!NM_IN_SET(priv->method, NM_SETTING_PROXY_METHOD_NONE, NM_SETTING_PROXY_METHOD_AUTO)) {
+        g_set_error(error,
+                    NM_CONNECTION_ERROR,
+                    NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                    _("invalid proxy method"));
+        g_prefix_error(error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_URL);
+        return FALSE;
+    }
 
-	if (!NM_IN_SET (method,
-	                NM_SETTING_PROXY_METHOD_NONE,
-	                NM_SETTING_PROXY_METHOD_AUTO)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("invalid proxy method"));
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_URL);
-		return FALSE;
-	}
+    if (priv->method != NM_SETTING_PROXY_METHOD_AUTO) {
+        if (priv->pac_url) {
+            g_set_error(error,
+                        NM_CONNECTION_ERROR,
+                        NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                        _("this property is not allowed for method none"));
+            g_prefix_error(error,
+                           "%s.%s: ",
+                           NM_SETTING_PROXY_SETTING_NAME,
+                           NM_SETTING_PROXY_PAC_URL);
+            return FALSE;
+        }
 
-	if (method != NM_SETTING_PROXY_METHOD_AUTO) {
-		if (priv->pac_url) {
-			g_set_error (error,
-			             NM_CONNECTION_ERROR,
-			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("this property is not allowed for method none"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_URL);
-			return FALSE;
-		}
+        if (priv->pac_script) {
+            g_set_error(error,
+                        NM_CONNECTION_ERROR,
+                        NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                        _("this property is not allowed for method none"));
+            g_prefix_error(error,
+                           "%s.%s: ",
+                           NM_SETTING_PROXY_SETTING_NAME,
+                           NM_SETTING_PROXY_PAC_SCRIPT);
+            return FALSE;
+        }
+    }
 
-		if (priv->pac_script) {
-			g_set_error (error,
-			             NM_CONNECTION_ERROR,
-			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("this property is not allowed for method none"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_SCRIPT);
-			return FALSE;
-		}
-	}
+    if (priv->pac_script) {
+        if (strlen(priv->pac_script) > 1 * 1024 * 1024) {
+            g_set_error(error,
+                        NM_CONNECTION_ERROR,
+                        NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                        _("the script is too large"));
+            g_prefix_error(error,
+                           "%s.%s: ",
+                           NM_SETTING_PROXY_SETTING_NAME,
+                           NM_SETTING_PROXY_PAC_SCRIPT);
+            return FALSE;
+        }
+        if (!g_utf8_validate(priv->pac_script, -1, NULL)) {
+            g_set_error(error,
+                        NM_CONNECTION_ERROR,
+                        NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                        _("the script is not valid utf8"));
+            g_prefix_error(error,
+                           "%s.%s: ",
+                           NM_SETTING_PROXY_SETTING_NAME,
+                           NM_SETTING_PROXY_PAC_SCRIPT);
+            return FALSE;
+        }
+        if (!strstr(priv->pac_script, "FindProxyForURL")) {
+            g_set_error(error,
+                        NM_CONNECTION_ERROR,
+                        NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                        _("the script lacks FindProxyForURL function"));
+            g_prefix_error(error,
+                           "%s.%s: ",
+                           NM_SETTING_PROXY_SETTING_NAME,
+                           NM_SETTING_PROXY_PAC_SCRIPT);
+            return FALSE;
+        }
+    }
 
-	if (priv->pac_script) {
-		if (strlen (priv->pac_script) > 1*1024*1024) {
-			g_set_error (error,
-			             NM_CONNECTION_ERROR,
-			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("the script is too large"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_SCRIPT);
-			return FALSE;
-		}
-		if (!g_utf8_validate (priv->pac_script, -1, NULL)) {
-			g_set_error (error,
-			             NM_CONNECTION_ERROR,
-			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("the script is not valid utf8"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_SCRIPT);
-			return FALSE;
-		}
-		if (!strstr (priv->pac_script, "FindProxyForURL")) {
-			g_set_error (error,
-			             NM_CONNECTION_ERROR,
-			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("the script lacks FindProxyForURL function"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_PROXY_SETTING_NAME, NM_SETTING_PROXY_PAC_SCRIPT);
-			return FALSE;
-		}
-	}
+    return TRUE;
+}
 
-	return TRUE;
+/*****************************************************************************/
+
+static void
+get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
+{
+    NMSettingProxy *setting = NM_SETTING_PROXY(object);
+
+    switch (prop_id) {
+    case PROP_METHOD:
+        g_value_set_int(value, nm_setting_proxy_get_method(setting));
+        break;
+    case PROP_BROWSER_ONLY:
+        g_value_set_boolean(value, nm_setting_proxy_get_browser_only(setting));
+        break;
+    case PROP_PAC_URL:
+        g_value_set_string(value, nm_setting_proxy_get_pac_url(setting));
+        break;
+    case PROP_PAC_SCRIPT:
+        g_value_set_string(value, nm_setting_proxy_get_pac_script(setting));
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
+    }
 }
 
 static void
-nm_setting_proxy_init (NMSettingProxy *setting)
+set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
+    NMSettingProxyPrivate *priv = NM_SETTING_PROXY_GET_PRIVATE(object);
+
+    switch (prop_id) {
+    case PROP_METHOD:
+        priv->method = g_value_get_int(value);
+        break;
+    case PROP_BROWSER_ONLY:
+        priv->browser_only = g_value_get_boolean(value);
+        break;
+    case PROP_PAC_URL:
+        g_free(priv->pac_url);
+        priv->pac_url = g_value_dup_string(value);
+        break;
+    case PROP_PAC_SCRIPT:
+        g_free(priv->pac_script);
+        priv->pac_script = g_value_dup_string(value);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
+    }
+}
+
+/*****************************************************************************/
+
+static void
+nm_setting_proxy_init(NMSettingProxy *self)
+{
+    nm_assert(NM_SETTING_PROXY_GET_PRIVATE(self)->method == NM_SETTING_PROXY_METHOD_NONE);
+}
+
+/**
+ * nm_setting_proxy_new:
+ *
+ * Creates a new #NMSettingProxy object.
+ *
+ * Returns: the new empty #NMSettingProxy object
+ *
+ * Since: 1.6
+ **/
+NMSetting *
+nm_setting_proxy_new(void)
+{
+    return g_object_new(NM_TYPE_SETTING_PROXY, NULL);
 }
 
 static void
-finalize (GObject *object)
+finalize(GObject *object)
 {
-	NMSettingProxy *self = NM_SETTING_PROXY (object);
-	NMSettingProxyPrivate *priv = NM_SETTING_PROXY_GET_PRIVATE (self);
+    NMSettingProxy *       self = NM_SETTING_PROXY(object);
+    NMSettingProxyPrivate *priv = NM_SETTING_PROXY_GET_PRIVATE(self);
 
-	g_free (priv->pac_url);
-	g_free (priv->pac_script);
+    g_free(priv->pac_url);
+    g_free(priv->pac_script);
 
-	G_OBJECT_CLASS (nm_setting_proxy_parent_class)->finalize (object);
+    G_OBJECT_CLASS(nm_setting_proxy_parent_class)->finalize(object);
 }
 
 static void
-get_property (GObject *object, guint prop_id,
-              GValue *value, GParamSpec *pspec)
+nm_setting_proxy_class_init(NMSettingProxyClass *klass)
 {
-	NMSettingProxy *setting = NM_SETTING_PROXY (object);
+    GObjectClass *  object_class  = G_OBJECT_CLASS(klass);
+    NMSettingClass *setting_class = NM_SETTING_CLASS(klass);
 
-	switch (prop_id) {
-	case PROP_METHOD:
-		g_value_set_int (value, nm_setting_proxy_get_method (setting));
-		break;
-	case PROP_BROWSER_ONLY:
-		g_value_set_boolean (value, nm_setting_proxy_get_browser_only (setting));
-		break;
-	case PROP_PAC_URL:
-		g_value_set_string (value, nm_setting_proxy_get_pac_url (setting));
-		break;
-	case PROP_PAC_SCRIPT:
-		g_value_set_string (value, nm_setting_proxy_get_pac_script (setting));
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
-}
+    g_type_class_add_private(klass, sizeof(NMSettingProxyPrivate));
 
-static void
-set_property (GObject *object, guint prop_id,
-              const GValue *value, GParamSpec *pspec)
-{
-	NMSettingProxyPrivate *priv = NM_SETTING_PROXY_GET_PRIVATE (object);
+    object_class->get_property = get_property;
+    object_class->set_property = set_property;
+    object_class->finalize     = finalize;
 
-	switch (prop_id) {
-	case PROP_METHOD:
-		priv->method = g_value_get_int (value);
-		break;
-	case PROP_BROWSER_ONLY:
-		priv->browser_only = g_value_get_boolean (value);
-		break;
-	case PROP_PAC_URL:
-		g_free (priv->pac_url);
-		priv->pac_url = g_value_dup_string (value);
-		break;
-	case PROP_PAC_SCRIPT:
-		g_free (priv->pac_script);
-		priv->pac_script = g_value_dup_string (value);
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
-}
+    setting_class->verify = verify;
 
-static void
-nm_setting_proxy_class_init (NMSettingProxyClass *klass)
-{
-	GObjectClass *object_class = G_OBJECT_CLASS (klass);
-	NMSettingClass *setting_class = NM_SETTING_CLASS (klass);
+    /**
+     * NMSettingProxy:method:
+     *
+     * Method for proxy configuration, Default is %NM_SETTING_PROXY_METHOD_NONE
+     *
+     * Since: 1.6
+     **/
+    /* ---ifcfg-rh---
+     * property: method
+     * variable: PROXY_METHOD(+)
+     * default: none
+     * description: Method for proxy configuration. For "auto", WPAD is used for
+     *   proxy configuration, or set the PAC file via PAC_URL or PAC_SCRIPT.
+     * values: none, auto
+     * ---end---
+     */
+    obj_properties[PROP_METHOD] = g_param_spec_int(NM_SETTING_PROXY_METHOD,
+                                                   "",
+                                                   "",
+                                                   G_MININT32,
+                                                   G_MAXINT32,
+                                                   NM_SETTING_PROXY_METHOD_NONE,
+                                                   G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
-	g_type_class_add_private (klass, sizeof (NMSettingProxyPrivate));
+    /**
+     * NMSettingProxy:browser-only:
+     *
+     * Whether the proxy configuration is for browser only.
+     *
+     * Since: 1.6
+     **/
+    /* ---ifcfg-rh---
+     * property: browser-only
+     * variable: BROWSER_ONLY(+)
+     * default: no
+     * description: Whether the proxy configuration is for browser only.
+     * ---end---
+     */
+    obj_properties[PROP_BROWSER_ONLY] =
+        g_param_spec_boolean(NM_SETTING_PROXY_BROWSER_ONLY,
+                             "",
+                             "",
+                             FALSE,
+                             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
-	object_class->set_property = set_property;
-	object_class->get_property = get_property;
-	object_class->finalize     = finalize;
+    /**
+     * NMSettingProxy:pac-url:
+     *
+     * PAC URL for obtaining PAC file.
+     *
+     * Since: 1.6
+     **/
+    /* ---ifcfg-rh---
+     * property: pac-url
+     * variable: PAC_URL(+)
+     * description: URL for PAC file.
+     * example: PAC_URL=http://wpad.mycompany.com/wpad.dat
+     * ---end---
+     */
+    obj_properties[PROP_PAC_URL] = g_param_spec_string(NM_SETTING_PROXY_PAC_URL,
+                                                       "",
+                                                       "",
+                                                       NULL,
+                                                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
-	setting_class->verify = verify;
+    /**
+     * NMSettingProxy:pac-script:
+     *
+     * PAC script for the connection.
+     *
+     * Since: 1.6
+     **/
+    /* ---ifcfg-rh---
+     * property: pac-script
+     * variable: PAC_SCRIPT(+)
+     * description: Path of the PAC script.
+     * example: PAC_SCRIPT=/home/joe/proxy.pac
+     * ---end---
+     */
+    obj_properties[PROP_PAC_SCRIPT] =
+        g_param_spec_string(NM_SETTING_PROXY_PAC_SCRIPT,
+                            "",
+                            "",
+                            NULL,
+                            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
-	/**
-	 * NMSettingProxy:method:
-	 *
-	 * Method for proxy configuration, Default is %NM_SETTING_PROXY_METHOD_NONE
-	 *
-	 * Since: 1.6
-	 **/
-	/* ---ifcfg-rh---
-	 * property: method
-	 * variable: PROXY_METHOD(+)
-	 * default: none
-	 * description: Method for proxy configuration. For "auto", WPAD is used for
-	 *   proxy configuration, or set the PAC file via PAC_URL or PAC_SCRIPT.
-	 * values: none, auto
-	 * ---end---
-	 */
-	g_object_class_install_property
-	    (object_class, PROP_METHOD,
-	     g_param_spec_int (NM_SETTING_PROXY_METHOD, "", "",
-	                       G_MININT32, G_MAXINT32, NM_SETTING_PROXY_METHOD_NONE,
-	                       G_PARAM_READWRITE |
-	                       G_PARAM_CONSTRUCT |
-	                       G_PARAM_STATIC_STRINGS));
+    g_object_class_install_properties(object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 
-	/**
-	 * NMSettingProxy:browser-only:
-	 *
-	 * Whether the proxy configuration is for browser only.
-	 *
-	 * Since: 1.6
-	 **/
-	/* ---ifcfg-rh---
-	 * property: browser-only
-	 * variable: BROWSER_ONLY(+)
-	 * default: no
-	 * description: Whether the proxy configuration is for browser only.
-	 * ---end---
-	 */
-	g_object_class_install_property
-	    (object_class, PROP_BROWSER_ONLY,
-	     g_param_spec_boolean (NM_SETTING_PROXY_BROWSER_ONLY, "", "",
-	                           FALSE,
-	                           G_PARAM_READWRITE |
-	                           G_PARAM_STATIC_STRINGS));
-
-	/**
-	 * NMSettingProxy:pac-url:
-	 *
-	 * PAC URL for obtaining PAC file.
-	 *
-	 * Since: 1.6
-	 **/
-	/* ---ifcfg-rh---
-	 * property: pac-url
-	 * variable: PAC_URL(+)
-	 * description: URL for PAC file.
-	 * example: PAC_URL=http://wpad.mycompany.com/wpad.dat
-	 * ---end---
-	 */
-	g_object_class_install_property
-	    (object_class, PROP_PAC_URL,
-	     g_param_spec_string (NM_SETTING_PROXY_PAC_URL, "", "",
-	                          NULL,
-	                          G_PARAM_READWRITE |
-	                          G_PARAM_STATIC_STRINGS));
-
-	/**
-	 * NMSettingProxy:pac-script:
-	 *
-	 * PAC script for the connection.
-	 *
-	 * Since: 1.6
-	 **/
-	/* ---ifcfg-rh---
-	 * property: pac-script
-	 * variable: PAC_SCRIPT(+)
-	 * description: Path of the PAC script.
-	 * example: PAC_SCRIPT=/home/joe/proxy.pac
-	 * ---end---
-	 */
-	g_object_class_install_property
-	    (object_class, PROP_PAC_SCRIPT,
-	     g_param_spec_string (NM_SETTING_PROXY_PAC_SCRIPT, "", "",
-	                          NULL,
-	                          G_PARAM_READWRITE |
-	                          G_PARAM_STATIC_STRINGS));
-
-	_nm_setting_class_commit (setting_class, NM_META_SETTING_TYPE_PROXY);
+    _nm_setting_class_commit(setting_class, NM_META_SETTING_TYPE_PROXY);
 }

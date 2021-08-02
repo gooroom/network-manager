@@ -80,12 +80,12 @@ GetAllAccessPoints (OUT ao access_points);
 <programlisting>
 RequestScan (IN  a{sv} options);
 </programlisting>
-<para>        Request the device to scan
+<para>        Request the device to scan. To know when the scan is finished, use the "PropertiesChanged" signal from "org.freedesktop.DBus.Properties" to listen to changes to the "LastScan" property.
 </para>
 <variablelist role="params">
 <varlistentry>
   <term><literal>IN a{sv} <parameter>options</parameter></literal>:</term>
-  <listitem><para>Options of scan. Currently 'ssids' option with value of "aay" type is supported.</para></listitem>
+  <listitem><para>Options of scan. Currently, 'ssids' option with value of "aay" type is supported.</para></listitem>
 </varlistentry>
 </variablelist>
 </refsect2>
@@ -147,6 +147,7 @@ AccessPointRemoved (o access_point);
 HwAddress  readable   s
 </programlisting>
 <para>        The active hardware address of the device.
+</para><para>        DEPRECATED. Use the "HwAddress" property in "org.freedesktop.NetworkManager.Device" instead which exists since version NetworkManager 1.24.0.
 </para>
 </refsect2>
 <refsect2 role="property" id="gdbus-property-org-freedesktop-NetworkManager-Device-Wireless.PermHwAddress">

@@ -8,7 +8,7 @@
 <link rel="up" href="manpages.html" title="Part I. Manual Pages">
 <link rel="prev" href="nm-settings-keyfile.html" title="nm-settings-keyfile">
 <link rel="next" href="nm-online.html" title="nm-online">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -67,8 +67,7 @@
           Users can create or modify the <span class="emphasis"><em>ifcfg-rh</em></span> connection files
           manually, even if that is not the recommended way of managing the profiles.
           However, if they choose to do that, they must inform NetworkManager about
-          their changes (see <span class="emphasis"><em>monitor-connection-file</em></span> in
-          <span class="citerefentry"><span class="refentrytitle">nm-settings</span>(5)</span>, and <span class="emphasis"><em>nmcli con (re)load</em></span>).
+          their changes (for example via <span class="emphasis"><em>nmcli con (re)load</em></span>).
         </p>
 <p><b>Some <span class="emphasis"><em>ifcfg-rh</em></span> configuration examples: </b></p>
 <pre class="programlisting"><span class="bold"><strong>Simple DHCP ethernet configuration:</strong></span>
@@ -222,7 +221,7 @@ DEVICETYPE=TeamPort
                     nameservers to resolv.conf".</p></li>
 <li class="listitem"><p><code class="literal">ONBOOT</code> -
                     initscripts use ONBOOT=yes to mark the devices that are to be activated
-                    during boot. NetworkManager extents this to also mean that this profile
+                    during boot. NetworkManager extends this to also mean that this profile
                     can be used for auto-connecting at any time.</p></li>
 <li class="listitem"><p><code class="literal">BOOTPROTO</code> -
                     NetworkManager supports traditional values <span class="emphasis"><em>none</em></span> (static),
@@ -252,7 +251,7 @@ DEVICETYPE=TeamPort
           are NetworkManager specific extensions not understood by traditional initscripts.
         </p>
 <div class="table">
-<a name="id-1.2.9.7.3"></a><p class="title"><b>Table 37. 6lowpan setting</b></p>
+<a name="id-1.2.10.7.3"></a><p class="title"><b>Table 11. 6lowpan setting</b></p>
 <div class="table-contents"><table class="table" summary="6lowpan setting" border="1">
 <colgroup>
 <col>
@@ -270,7 +269,7 @@ DEVICETYPE=TeamPort
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.4"></a><p class="title"><b>Table 38. 802-1x setting</b></p>
+<a name="id-1.2.10.7.4"></a><p class="title"><b>Table 12. 802-1x setting</b></p>
 <div class="table-contents"><table class="table" summary="802-1x setting" border="1">
 <colgroup>
 <col>
@@ -332,9 +331,10 @@ Example: </strong></span>IEEE_8021X_CA_CERT=/home/joe/cacert.crt</td>
 </tr>
 <tr>
 <td align="left">ca-path</td>
-<td align="left">(none)</td>
+<td align="left">IEEE_8021X_CA_PATH<span class="emphasis"><em>(+)</em></span>
+</td>
 <td align="left"> </td>
-<td align="left">The property is not handled by ifcfg-rh plugin.</td>
+<td align="left">The search path for the certificate.</td>
 </tr>
 <tr>
 <td align="left">subject-match</td>
@@ -360,6 +360,13 @@ Example: </strong></span>IEEE_8021X_ALTSUBJECT_MATCHES="s1.domain.cc"</td>
 </td>
 <td align="left"> </td>
 <td align="left">Suffix to match domain of server certificate against.</td>
+</tr>
+<tr>
+<td align="left">domain-match</td>
+<td align="left">IEEE_8021X_DOMAIN_MATCH<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">Value to match domain of server certificate against.</td>
 </tr>
 <tr>
 <td align="left">client-cert</td>
@@ -415,7 +422,7 @@ Allowed values: </strong></span>space-separated list of authentication flags nam
 <td align="left">IEEE_8021X_INNER_AUTH_METHODS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Inner non-EAP authentication methods. IEEE_8021X_INNER_AUTH_METHODS can contain values both for 'phase2-auth' and 'phase2-autheap' properties.<span class="bold"><strong>
+<td align="left">Inner non-EAP authentication methods for TTLS or the inner EAP authentication method for PEAP. IEEE_8021X_INNER_AUTH_METHODS can contain values both for 'phase2-auth' and 'phase2-autheap' properties.<span class="bold"><strong>
 
 Example: </strong></span>IEEE_8021X_INNER_AUTH_METHODS=PAP<span class="bold"><strong>
 
@@ -431,6 +438,13 @@ Allowed values: </strong></span>"PAP", "CHAP", "MSCHAP", "MSCHAPV2", "GTC", "OTP
 Example: </strong></span>IEEE_8021X_INNER_AUTH_METHODS="MSCHAPV2 EAP-TLS"<span class="bold"><strong>
 
 Allowed values: </strong></span>"EAP-MD5", "EAP-MSCHAPV2", "EAP-GTC", "EAP-OTP" and "EAP-TLS"</td>
+</tr>
+<tr>
+<td align="left">phase2-ca-path</td>
+<td align="left">IEEE_8021X_PHASE2_CA_PATH<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">The search path for the certificate.</td>
 </tr>
 <tr>
 <td align="left">phase2-subject-match</td>
@@ -456,6 +470,13 @@ Example: </strong></span>IEEE_8021X_PHASE2_SUBJECT_MATCH="Red Hat"</td>
 <td align="left">Suffix to match domain of server certificate for phase 2 against.</td>
 </tr>
 <tr>
+<td align="left">phase2-domain-match</td>
+<td align="left">IEEE_8021X_PHASE2_DOMAIN_MATCH<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">Value to match domain of server certificate for phase 2 against.</td>
+</tr>
+<tr>
 <td align="left">phase2-client-cert</td>
 <td align="left">IEEE_8021X_INNER_CLIENT_CERT<span class="emphasis"><em>(+)</em></span>
 </td>
@@ -476,7 +497,7 @@ Example: </strong></span>IEEE_8021X_INNER_CLIENT_CERT=/home/joe/mycert.crt</td>
 <td align="left">IEEE_8021X_PASSWORD_FLAGS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Password flags for IEEE_8021X_PASSWORD password. (see <a class="xref" href="nm-settings.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
+<td align="left">Password flags for IEEE_8021X_PASSWORD password. (see <a class="xref" href="nm-settings-dbus.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
 </tr>
 <tr>
 <td align="left">password-raw</td>
@@ -489,9 +510,10 @@ Example: </strong></span>IEEE_8021X_PASSWORD_RAW=041c8320083aa4bf</td>
 </tr>
 <tr>
 <td align="left">password-raw-flags</td>
-<td align="left">(none)</td>
+<td align="left">IEEE_8021X_PASSWORD_RAW_FLAGS<span class="emphasis"><em>(+)</em></span>
+</td>
 <td align="left"> </td>
-<td align="left">The property is not handled by ifcfg-rh plugin.</td>
+<td align="left">The secret flags for password-raw.</td>
 </tr>
 <tr>
 <td align="left">private-key</td>
@@ -514,7 +536,7 @@ Example: </strong></span>IEEE_8021X_PRIVATE_KEY=/home/joe/mykey.p12</td>
 <td align="left">IEEE_8021X_PRIVATE_KEY_PASSWORD_FLAGS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Password flags for IEEE_8021X_PRIVATE_KEY_PASSWORD password. (see <a class="xref" href="nm-settings.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
+<td align="left">Password flags for IEEE_8021X_PRIVATE_KEY_PASSWORD password. (see <a class="xref" href="nm-settings-dbus.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
 </tr>
 <tr>
 <td align="left">phase2-private-key</td>
@@ -535,25 +557,28 @@ Example: </strong></span>IEEE_8021X_PRIVATE_KEY=/home/joe/mykey.p12</td>
 <td align="left">IEEE_8021X_INNER_PRIVATE_KEY_PASSWORD_FLAGS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Password flags for IEEE_8021X_INNER_PRIVATE_KEY_PASSWORD password. (see <a class="xref" href="nm-settings.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
+<td align="left">Password flags for IEEE_8021X_INNER_PRIVATE_KEY_PASSWORD password. (see <a class="xref" href="nm-settings-dbus.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
 </tr>
 <tr>
 <td align="left">pin</td>
-<td align="left">(none)</td>
+<td align="left">IEEE_8021X_PIN<span class="emphasis"><em>(+)</em></span>
+</td>
 <td align="left"> </td>
-<td align="left">The property is not handled by ifcfg-rh plugin.</td>
+<td align="left">The pin secret used for EAP authentication methods.</td>
 </tr>
 <tr>
 <td align="left">pin-flags</td>
-<td align="left">(none)</td>
+<td align="left">IEEE_8021X_PIN_FLAGS<span class="emphasis"><em>(+)</em></span>
+</td>
 <td align="left"> </td>
-<td align="left">The property is not handled by ifcfg-rh plugin.</td>
+<td align="left">The secret flags for the pin property.</td>
 </tr>
 <tr>
 <td align="left">system-ca-certs</td>
-<td align="left">(none)</td>
+<td align="left">IEEE_8021X_SYSTEM_CA_CERTS<span class="emphasis"><em>(+)</em></span>
+</td>
 <td align="left"> </td>
-<td align="left">The property is not handled by ifcfg-rh plugin.</td>
+<td align="left">a boolean value.</td>
 </tr>
 <tr>
 <td align="left">auth-timeout</td>
@@ -562,11 +587,17 @@ Example: </strong></span>IEEE_8021X_PRIVATE_KEY=/home/joe/mykey.p12</td>
 <td align="left">0</td>
 <td align="left">Timeout in seconds for the 802.1X authentication. Zero means the global default or 25.</td>
 </tr>
+<tr>
+<td align="left">optional</td>
+<td align="left">IEEE_8021X_OPTIONAL<span class="emphasis"><em>(+)</em></span> default=no</td>
+<td align="left"> </td>
+<td align="left">whether the 802.1X authentication is optional</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.5"></a><p class="title"><b>Table 39. bond setting</b></p>
+<a name="id-1.2.10.7.5"></a><p class="title"><b>Table 13. bond setting</b></p>
 <div class="table-contents"><table class="table" summary="bond setting" border="1">
 <colgroup>
 <col>
@@ -591,7 +622,7 @@ Example: </strong></span>BONDING_OPTS="miimon=100 mode=broadcast"</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.6"></a><p class="title"><b>Table 40. bridge-port setting</b></p>
+<a name="id-1.2.10.7.6"></a><p class="title"><b>Table 14. bridge-port setting</b></p>
 <div class="table-contents"><table class="table" summary="bridge-port setting" border="1">
 <colgroup>
 <col>
@@ -628,11 +659,19 @@ Allowed values: </strong></span>1 - 65535</td>
 <td align="left">yes</td>
 <td align="left">Hairpin mode of the bridge port.</td>
 </tr>
+<tr>
+<td align="left">vlans</td>
+<td align="left">BRIDGE_PORT_VLANS</td>
+<td align="left"> </td>
+<td align="left">List of VLANs on the bridge port<span class="bold"><strong>
+
+Example: </strong></span>BRIDGE_PORT_VLANS="1 pvid untagged,20,300-400 untagged"</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.7"></a><p class="title"><b>Table 41. bridge setting</b></p>
+<a name="id-1.2.10.7.7"></a><p class="title"><b>Table 15. bridge setting</b></p>
 <div class="table-contents"><table class="table" summary="bridge setting" border="1">
 <colgroup>
 <col>
@@ -708,11 +747,170 @@ Allowed values: </strong></span>0 - 1000000</td>
 
 Allowed values: </strong></span>0 or 1</td>
 </tr>
+<tr>
+<td align="left">vlan-filtering</td>
+<td align="left">BRIDGING_OPTS: vlan_filtering=</td>
+<td align="left">0</td>
+<td align="left">VLAN filtering support.<span class="bold"><strong>
+
+Allowed values: </strong></span>0 or 1</td>
+</tr>
+<tr>
+<td align="left">vlan-default-pvid</td>
+<td align="left">BRIDGING_OPTS: default_pvid=</td>
+<td align="left">1</td>
+<td align="left">default VLAN PVID.<span class="bold"><strong>
+
+Allowed values: </strong></span>0 - 4094</td>
+</tr>
+<tr>
+<td align="left">vlans</td>
+<td align="left">BRIDGE_VLANS</td>
+<td align="left"> </td>
+<td align="left">List of VLANs on the bridge<span class="bold"><strong>
+
+Example: </strong></span>BRIDGE_VLANS="1 pvid untagged,20,300-400 untagged"</td>
+</tr>
+<tr>
+<td align="left">group-address</td>
+<td align="left">BRIDGING_OPTS: group_address=</td>
+<td align="left"> </td>
+<td align="left">STP group address.<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="group_address=01:80:C2:00:00:0A"</td>
+</tr>
+<tr>
+<td align="left">vlan-protocol</td>
+<td align="left">BRIDGING_OPTS: vlan_protocol=</td>
+<td align="left"> </td>
+<td align="left">VLAN filtering protocol.<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="vlan_protocol=802.1Q"</td>
+</tr>
+<tr>
+<td align="left">vlan-stats-enabled</td>
+<td align="left">BRIDGING_OPTS: vlan_stats_enabled=</td>
+<td align="left">0</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="vlan_stats_enabled=1"</td>
+</tr>
+<tr>
+<td align="left">multicast-router</td>
+<td align="left">BRIDGING_OPTS: multicast_router=</td>
+<td align="left">auto</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_router=enabled"<span class="bold"><strong>
+
+Allowed values: </strong></span>auto, enabled, disabled</td>
+</tr>
+<tr>
+<td align="left">multicast-query-use-ifaddr</td>
+<td align="left">BRIDGING_OPTS: multicast_query_use_ifaddr=</td>
+<td align="left">0</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_query-use_ifaddr=1"</td>
+</tr>
+<tr>
+<td align="left">multicast-querier</td>
+<td align="left">BRIDGING_OPTS: multicast_querier=</td>
+<td align="left">0</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_querier=1"</td>
+</tr>
+<tr>
+<td align="left">multicast-hash-max</td>
+<td align="left">BRIDGING_OPTS: multicast_hash_max=</td>
+<td align="left">4096</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_hash_max=8192"</td>
+</tr>
+<tr>
+<td align="left">multicast-last-member-count</td>
+<td align="left">BRIDGING_OPTS: multicast_last_member_count=</td>
+<td align="left">2</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_last_member_count=4"</td>
+</tr>
+<tr>
+<td align="left">multicast-last-member-interval</td>
+<td align="left">BRIDGING_OPTS: multicast_last_member_interval=</td>
+<td align="left">100</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_last_member_interval=200"</td>
+</tr>
+<tr>
+<td align="left">multicast-membership-interval</td>
+<td align="left">BRIDGING_OPTS: multicast_membership_interval=</td>
+<td align="left">26000</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_membership_interval=16000"</td>
+</tr>
+<tr>
+<td align="left">multicast-querier-interval</td>
+<td align="left">BRIDGING_OPTS: multicast_querier_interval=</td>
+<td align="left">25500</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_querier_interval=20000"</td>
+</tr>
+<tr>
+<td align="left">multicast-query-interval</td>
+<td align="left">BRIDGING_OPTS: multicast_query_interval=</td>
+<td align="left">12500</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_query_interval=22500"</td>
+</tr>
+<tr>
+<td align="left">multicast-query-response-interval</td>
+<td align="left">BRIDGING_OPTS: multicast_query_response_interval=</td>
+<td align="left">1000</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_query_response_interval=2000"</td>
+</tr>
+<tr>
+<td align="left">multicast-startup-query-count</td>
+<td align="left">BRIDGING_OPTS: multicast_startup_query_count=</td>
+<td align="left">2</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_startup_query_count=4"</td>
+</tr>
+<tr>
+<td align="left">multicast-startup-query-interval</td>
+<td align="left">BRIDGING_OPTS: multicast_startup_query_interval=</td>
+<td align="left">3125</td>
+<td align="left">
+<span class="bold"><strong>
+
+Example: </strong></span>BRIDGING_OPTS="multicast_startup_query_interval=4000"</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.8"></a><p class="title"><b>Table 42. connection setting</b></p>
+<a name="id-1.2.10.7.8"></a><p class="title"><b>Table 16. connection setting</b></p>
 <div class="table-contents"><table class="table" summary="connection setting" border="1">
 <colgroup>
 <col>
@@ -808,7 +1006,7 @@ Allowed values: </strong></span>-1 (use global default), 0 (forever) or a positi
 <td align="left"> </td>
 <td align="left">whether the profile can be active on multiple devices at a given moment. The values are numbers corresponding to #NMConnectionMultiConnect enum.<span class="bold"><strong>
 
-Example: </strong></span>ZONE=3</td>
+Example: </strong></span>MULTI_CONNECT=3</td>
 </tr>
 <tr>
 <td align="left">zone</td>
@@ -905,11 +1103,32 @@ Example: </strong></span>LLMNR=yes<span class="bold"><strong>
 
 Allowed values: </strong></span>yes,no,resolve</td>
 </tr>
+<tr>
+<td align="left">wait-device-timeout</td>
+<td align="left">DEVTIMEOUT<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">for initscripts compatibility, this variable must be a whole integer. If necessary, NetworkManager stores also a fractional component for the milliseconds.<span class="bold"><strong>
+
+Example: </strong></span>DEVTIMEOUT=5<span class="bold"><strong>
+
+Allowed values: </strong></span>timeout in seconds.</td>
+</tr>
+<tr>
+<td align="left">mud-url</td>
+<td align="left">MUD_URL</td>
+<td align="left"> </td>
+<td align="left">MUD_URL to be sent by device (See RFC 8520).<span class="bold"><strong>
+
+Example: </strong></span>https://yourdevice.example.com/model.json<span class="bold"><strong>
+
+Allowed values: </strong></span>a valid URL that points to recommended policy for this device</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.9"></a><p class="title"><b>Table 43. dcb setting</b></p>
+<a name="id-1.2.10.7.9"></a><p class="title"><b>Table 17. dcb setting</b></p>
 <div class="table-contents"><table class="table" summary="dcb setting" border="1">
 <colgroup>
 <col>
@@ -1032,7 +1251,7 @@ Example: </strong></span>DCB_PG_STRICT=01101110</td>
 <td align="left">priority-traffic-class</td>
 <td align="left">DCB_PG_UP2TC</td>
 <td align="left"> </td>
-<td align="left">Priority values. String of eight trafic class values (0 - 7).<span class="bold"><strong>
+<td align="left">Priority values. String of eight traffic class values (0 - 7).<span class="bold"><strong>
 
 Example: </strong></span>DCB_PG_UP2TC=01623701</td>
 </tr>
@@ -1044,7 +1263,7 @@ Example: </strong></span>DCB_PG_UP2TC=01623701</td>
           used explicitly to enable DCB so that the rest of the DCB_* variables can apply.
         </p>
 <div class="table">
-<a name="id-1.2.9.7.11"></a><p class="title"><b>Table 44. ethtool setting</b></p>
+<a name="id-1.2.10.7.11"></a><p class="title"><b>Table 18. ethtool setting</b></p>
 <div class="table-contents"><table class="table" summary="ethtool setting" border="1">
 <colgroup>
 <col>
@@ -1062,7 +1281,62 @@ Example: </strong></span>DCB_PG_UP2TC=01623701</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.12"></a><p class="title"><b>Table 45. infiniband setting</b></p>
+<a name="id-1.2.10.7.12"></a><p class="title"><b>Table 19. hostname setting</b></p>
+<div class="table-contents"><table class="table" summary="hostname setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody>
+<tr>
+<td align="left">priority</td>
+<td align="left">HOSTNAME_PRIORITY<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left">missing variable means global value or 100</td>
+<td align="left">hostname priority<span class="bold"><strong>
+
+Example: </strong></span>HOSTNAME_PRIORITY=50</td>
+</tr>
+<tr>
+<td align="left">from-dhcp</td>
+<td align="left">HOSTNAME_FROM_DHCP<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left">missing variable means global default or 1</td>
+<td align="left">whether the system hostname can be determined from DHCP<span class="bold"><strong>
+
+Example: </strong></span>HOSTNAME_FROM_DHCP=0,1</td>
+</tr>
+<tr>
+<td align="left">from-dhcp</td>
+<td align="left">HOSTNAME_FROM_DNS_LOOKUP<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left">missing variable means global default or 1</td>
+<td align="left">whether the system hostname can be determined from reverse DNS lookup<span class="bold"><strong>
+
+Example: </strong></span>HOSTNAME_FROM_DNS_LOOKUP=0,1</td>
+</tr>
+<tr>
+<td align="left">only-best-device</td>
+<td align="left">HOSTNAME_ONLY_FROM_DEFAULT<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left">missing variable means global default or 1</td>
+<td align="left">whether the hostname can be determined only from devices with the default route<span class="bold"><strong>
+
+Example: </strong></span>HOSTNAME_ONLY_FROM_DEFAULT=0,1</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.13"></a><p class="title"><b>Table 20. infiniband setting</b></p>
 <div class="table-contents"><table class="table" summary="infiniband setting" border="1">
 <colgroup>
 <col>
@@ -1117,7 +1391,7 @@ Example: </strong></span>PHYSDEV=ib0</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.13"></a><p class="title"><b>Table 46. ipv4 setting</b></p>
+<a name="id-1.2.10.7.14"></a><p class="title"><b>Table 21. ipv4 setting</b></p>
 <div class="table-contents"><table class="table" summary="ipv4 setting" border="1">
 <colgroup>
 <col>
@@ -1156,7 +1430,7 @@ Example: </strong></span>DNS1=1.2.3.4 DNS2=10.0.0.254 DNS3=8.8.8.8</td>
 </tr>
 <tr>
 <td align="left">addresses</td>
-<td align="left">IPADDR, PREFIX, IPADDR1, PREFIX1, ...</td>
+<td align="left">IPADDR, PREFIX (NETMASK), IPADDR1, PREFIX1 (NETMASK1), ...</td>
 <td align="left"> </td>
 <td align="left">List of static IP addresses.<span class="bold"><strong>
 
@@ -1281,11 +1555,20 @@ Example: </strong></span>IPV4_DHCP_TIMEOUT=10</td>
 
 Example: </strong></span>DHCP_FQDN=foo.bar.com</td>
 </tr>
+<tr>
+<td align="left">dhcp-vendor-class-identifier</td>
+<td align="left">DHCP_VENDOR_CLASS_IDENTIFIER<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">The Vendor Class Identifier DHCP option (60).<span class="bold"><strong>
+
+Example: </strong></span>DHCP_VENDOR_CLASS_IDENTIFIER=foo</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.14"></a><p class="title"><b>Table 47. ipv6 setting</b></p>
+<a name="id-1.2.10.7.15"></a><p class="title"><b>Table 22. ipv6 setting</b></p>
 <div class="table-contents"><table class="table" summary="ipv6 setting" border="1">
 <colgroup>
 <col>
@@ -1302,9 +1585,9 @@ Example: </strong></span>DHCP_FQDN=foo.bar.com</td>
 <tbody>
 <tr>
 <td align="left">method</td>
-<td align="left">IPV6INIT, IPV6FORWARDING, IPV6_AUTOCONF, DHCPV6C</td>
+<td align="left">IPV6INIT, IPV6FORWARDING, IPV6_AUTOCONF, DHCPV6C, IPV6_DISABLED</td>
 <td align="left">IPV6INIT=yes; IPV6FORWARDING=no; IPV6_AUTOCONF=!IPV6FORWARDING, DHCPV6=no</td>
-<td align="left">Method used for IPv6 protocol configuration. ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes</td>
+<td align="left">Method used for IPv6 protocol configuration. ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes; disabled ~ IPV6_DISABLED=yes</td>
 </tr>
 <tr>
 <td align="left">dns</td>
@@ -1357,15 +1640,26 @@ Example: </strong></span>IPV6_DEFAULTGW=abbe::1</td>
 </tr>
 <tr>
 <td align="left">dhcp-hostname</td>
-<td align="left">DHCP_HOSTNAME</td>
+<td align="left">DHCPV6_HOSTNAME</td>
 <td align="left"> </td>
 <td align="left">Hostname to send the DHCP server.</td>
+</tr>
+<tr>
+<td align="left">dhcp-timeout</td>
+<td align="left">IPV6_DHCP_TIMEOUT<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">A timeout after which the DHCP transaction fails in case of no response.<span class="bold"><strong>
+
+Example: </strong></span>IPV6_DHCP_TIMEOUT=10</td>
 </tr>
 <tr>
 <td align="left">never-default</td>
 <td align="left">IPV6_DEFROUTE<span class="emphasis"><em>(+)</em></span>, (and IPV6_DEFAULTGW, IPV6_DEFAULTDEV in /etc/sysconfig/network)</td>
 <td align="left">IPV6_DEFROUTE=yes (when no variable specified)</td>
-<td align="left">IPV6_DEFROUTE=no tells NetworkManager that this connection should not be assigned the default IPv6 route. IPV6_DEFROUTE has the opposite meaning as 'never-default' property.</td>
+<td align="left">IPV6_DEFROUTE=no tells NetworkManager that this connection should not be assigned the default IPv6 route. IPV6_DEFROUTE has the opposite meaning as 'never-default' property.<span class="bold"><strong>
+
+Example: </strong></span>DHCPV6_HOSTNAME_FLAGS=5 */ </td>
 </tr>
 <tr>
 <td align="left">may-fail</td>
@@ -1436,6 +1730,15 @@ Allowed values: </strong></span>IPV6_ADDR_GEN_MODE: eui64, stable-privacy</td>
 Example: </strong></span>IPV6_TOKEN=::53</td>
 </tr>
 <tr>
+<td align="left">dhcp-timeout</td>
+<td align="left">IPV6_RA_TIMEOUT<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left"> </td>
+<td align="left">A timeout for waiting Router Advertisements in seconds.<span class="bold"><strong>
+
+Example: </strong></span>IPV6_RA_TIMEOUT=10</td>
+</tr>
+<tr>
 <td align="left">dhcp-duid</td>
 <td align="left">DHCPV6_DUID<span class="emphasis"><em>(+)</em></span>
 </td>
@@ -1448,7 +1751,7 @@ Example: </strong></span>DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DU
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.15"></a><p class="title"><b>Table 48. match setting</b></p>
+<a name="id-1.2.10.7.16"></a><p class="title"><b>Table 23. match setting</b></p>
 <div class="table-contents"><table class="table" summary="match setting" border="1">
 <colgroup>
 <col>
@@ -1462,11 +1765,18 @@ Example: </strong></span>DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DU
 <th>Default</th>
 <th>Description</th>
 </tr></thead>
-<tbody></tbody>
+<tbody><tr>
+<td align="left">path</td>
+<td align="left">MATCH_PATH</td>
+<td align="left"> </td>
+<td align="left">space-separated list of paths to match against the udev property ID_PATHS of devices<span class="bold"><strong>
+
+Example: </strong></span>MATCH_PATH="pci-0000:01:00.0 pci-0000:0c:00.0"</td>
+</tr></tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.16"></a><p class="title"><b>Table 49. ovs-bridge setting</b></p>
+<a name="id-1.2.10.7.17"></a><p class="title"><b>Table 24. ovs-bridge setting</b></p>
 <div class="table-contents"><table class="table" summary="ovs-bridge setting" border="1">
 <colgroup>
 <col>
@@ -1484,7 +1794,43 @@ Example: </strong></span>DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DU
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.17"></a><p class="title"><b>Table 50. ovs-interface setting</b></p>
+<a name="id-1.2.10.7.18"></a><p class="title"><b>Table 25. ovs-dpdk setting</b></p>
+<div class="table-contents"><table class="table" summary="ovs-dpdk setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.19"></a><p class="title"><b>Table 26. ovs-external-ids setting</b></p>
+<div class="table-contents"><table class="table" summary="ovs-external-ids setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.20"></a><p class="title"><b>Table 27. ovs-interface setting</b></p>
 <div class="table-contents"><table class="table" summary="ovs-interface setting" border="1">
 <colgroup>
 <col>
@@ -1502,7 +1848,7 @@ Example: </strong></span>DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DU
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.18"></a><p class="title"><b>Table 51. ovs-patch setting</b></p>
+<a name="id-1.2.10.7.21"></a><p class="title"><b>Table 28. ovs-patch setting</b></p>
 <div class="table-contents"><table class="table" summary="ovs-patch setting" border="1">
 <colgroup>
 <col>
@@ -1520,7 +1866,7 @@ Example: </strong></span>DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DU
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.19"></a><p class="title"><b>Table 52. ovs-port setting</b></p>
+<a name="id-1.2.10.7.22"></a><p class="title"><b>Table 29. ovs-port setting</b></p>
 <div class="table-contents"><table class="table" summary="ovs-port setting" border="1">
 <colgroup>
 <col>
@@ -1538,7 +1884,7 @@ Example: </strong></span>DHCPV6_DUID=LL; DHCPV6_DUID=0301deadbeef0001; DHCPV6_DU
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.20"></a><p class="title"><b>Table 53. proxy setting</b></p>
+<a name="id-1.2.10.7.23"></a><p class="title"><b>Table 30. proxy setting</b></p>
 <div class="table-contents"><table class="table" summary="proxy setting" border="1">
 <colgroup>
 <col>
@@ -1591,7 +1937,7 @@ Example: </strong></span>PAC_SCRIPT=/home/joe/proxy.pac</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.21"></a><p class="title"><b>Table 54. sriov setting</b></p>
+<a name="id-1.2.10.7.24"></a><p class="title"><b>Table 31. sriov setting</b></p>
 <div class="table-contents"><table class="table" summary="sriov setting" border="1">
 <colgroup>
 <col>
@@ -1636,7 +1982,7 @@ Example: </strong></span>SRIOV_AUTOPROBE_DRIVERS=0,1</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.22"></a><p class="title"><b>Table 55. tc setting</b></p>
+<a name="id-1.2.10.7.25"></a><p class="title"><b>Table 32. tc setting</b></p>
 <div class="table-contents"><table class="table" summary="tc setting" border="1">
 <colgroup>
 <col>
@@ -1671,7 +2017,7 @@ Example: </strong></span>FILTER1="parent ffff: matchall action simple sdata Inpu
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.23"></a><p class="title"><b>Table 56. team-port setting</b></p>
+<a name="id-1.2.10.7.26"></a><p class="title"><b>Table 33. team-port setting</b></p>
 <div class="table-contents"><table class="table" summary="team-port setting" border="1">
 <colgroup>
 <col>
@@ -1694,7 +2040,7 @@ Example: </strong></span>FILTER1="parent ffff: matchall action simple sdata Inpu
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.24"></a><p class="title"><b>Table 57. team setting</b></p>
+<a name="id-1.2.10.7.27"></a><p class="title"><b>Table 34. team setting</b></p>
 <div class="table-contents"><table class="table" summary="team setting" border="1">
 <colgroup>
 <col>
@@ -1717,7 +2063,7 @@ Example: </strong></span>FILTER1="parent ffff: matchall action simple sdata Inpu
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.25"></a><p class="title"><b>Table 58. user setting</b></p>
+<a name="id-1.2.10.7.28"></a><p class="title"><b>Table 35. user setting</b></p>
 <div class="table-contents"><table class="table" summary="user setting" border="1">
 <colgroup>
 <col>
@@ -1742,7 +2088,25 @@ Example: </strong></span>NM_USER_FOO__BAR=something</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.26"></a><p class="title"><b>Table 59. vlan setting</b></p>
+<a name="id-1.2.10.7.29"></a><p class="title"><b>Table 36. veth setting</b></p>
+<div class="table-contents"><table class="table" summary="veth setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.30"></a><p class="title"><b>Table 37. vlan setting</b></p>
 <div class="table-contents"><table class="table" summary="vlan setting" border="1">
 <colgroup>
 <col>
@@ -1805,7 +2169,43 @@ Example: </strong></span>PHYSDEV=eth0, VLAN_ID=12; or DEVICE=eth0.12</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.27"></a><p class="title"><b>Table 60. 802-3-ethernet setting</b></p>
+<a name="id-1.2.10.7.31"></a><p class="title"><b>Table 38. vrf setting</b></p>
+<div class="table-contents"><table class="table" summary="vrf setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.32"></a><p class="title"><b>Table 39. wifi-p2p setting</b></p>
+<div class="table-contents"><table class="table" summary="wifi-p2p setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.33"></a><p class="title"><b>Table 40. 802-3-ethernet setting</b></p>
 <div class="table-contents"><table class="table" summary="802-3-ethernet setting" border="1">
 <colgroup>
 <col>
@@ -1906,7 +2306,25 @@ Allowed values: </strong></span>"qeth", "lcs" or "ctc"</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.28"></a><p class="title"><b>Table 61. 802-11-wireless-security setting</b></p>
+<a name="id-1.2.10.7.34"></a><p class="title"><b>Table 41. wireguard setting</b></p>
+<div class="table-contents"><table class="table" summary="wireguard setting" border="1">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>Property</th>
+<th>Ifcfg-rh Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="table">
+<a name="id-1.2.10.7.35"></a><p class="title"><b>Table 42. 802-11-wireless-security setting</b></p>
 <div class="table-contents"><table class="table" summary="802-11-wireless-security setting" border="1">
 <colgroup>
 <col>
@@ -1928,7 +2346,7 @@ Allowed values: </strong></span>"qeth", "lcs" or "ctc"</td>
 <td align="left"> </td>
 <td align="left">Key management menthod.<span class="bold"><strong>
 
-Allowed values: </strong></span>IEEE8021X, WPA-PSK, WPA-EAP</td>
+Allowed values: </strong></span>IEEE8021X, WPA-PSK, WPA-EAP, WPA-EAP-SUITE-B-192</td>
 </tr>
 <tr>
 <td align="left">wep-tx-keyidx</td>
@@ -2025,7 +2443,7 @@ Allowed values: </strong></span>default, disable, optional, required</td>
 <td align="left">WEP_KEY_FLAGS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Password flags for KEY&lt;i&gt;, KEY_PASSPHRASE&lt;i&gt; password. (see <a class="xref" href="nm-settings.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
+<td align="left">Password flags for KEY&lt;i&gt;, KEY_PASSPHRASE&lt;i&gt; password. (see <a class="xref" href="nm-settings-dbus.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
 </tr>
 <tr>
 <td align="left">psk</td>
@@ -2038,7 +2456,7 @@ Allowed values: </strong></span>default, disable, optional, required</td>
 <td align="left">WPA_PSK_FLAGS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Password flags for WPA_PSK_FLAGS. (see <a class="xref" href="nm-settings.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)<span class="bold"><strong>
+<td align="left">Password flags for WPA_PSK_FLAGS. (see <a class="xref" href="nm-settings-dbus.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)<span class="bold"><strong>
 
 Example: </strong></span>WPA_PSK_FLAGS=user</td>
 </tr>
@@ -2054,7 +2472,7 @@ Example: </strong></span>WPA_PSK_FLAGS=user</td>
 <td align="left">IEEE_8021X_PASSWORD_FLAGS<span class="emphasis"><em>(+)</em></span>
 </td>
 <td align="left"> </td>
-<td align="left">Password flags for IEEE_8021X_PASSWORD_FLAGS. (see <a class="xref" href="nm-settings.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
+<td align="left">Password flags for IEEE_8021X_PASSWORD_FLAGS. (see <a class="xref" href="nm-settings-dbus.html#secrets-flags" title="Secret flag types:">the section called “Secret flag types:”</a> for _FLAGS values)</td>
 </tr>
 <tr>
 <td align="left">wep-key-type</td>
@@ -2088,7 +2506,7 @@ Allowed values: </strong></span>default, disable, optional, required</td>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.29"></a><p class="title"><b>Table 62. 802-11-wireless setting</b></p>
+<a name="id-1.2.10.7.36"></a><p class="title"><b>Table 43. 802-11-wireless setting</b></p>
 <div class="table-contents"><table class="table" summary="802-11-wireless setting" border="1">
 <colgroup>
 <col>
@@ -2232,11 +2650,20 @@ Allowed values: </strong></span>default, never, always</td>
 <td align="left"> </td>
 <td align="left">This property is deprecated and not handled by ifcfg-rh-plugin.</td>
 </tr>
+<tr>
+<td align="left">ap-isolation</td>
+<td align="left">AP_ISOLATION<span class="emphasis"><em>(+)</em></span>
+</td>
+<td align="left">missing variable means global default</td>
+<td align="left">Whether AP isolation is enabled<span class="bold"><strong>
+
+Allowed values: </strong></span>"yes", "no"</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <br class="table-break"><div class="table">
-<a name="id-1.2.9.7.30"></a><p class="title"><b>Table 63. wpan setting</b></p>
+<a name="id-1.2.10.7.37"></a><p class="title"><b>Table 44. wpan setting</b></p>
 <div class="table-contents"><table class="table" summary="wpan setting" border="1">
 <colgroup>
 <col>
@@ -2286,7 +2713,7 @@ Allowed values: </strong></span>default, never, always</td>
 </div>
 <div class="refsect1">
 <a name="see_also"></a><h2>See Also</h2>
-<p><a class="link" href="nm-settings.html" title="nm-settings"><span class="citerefentry"><span class="refentrytitle">nm-settings</span>(5)</span></a>,
+<p><span class="citerefentry"><span class="refentrytitle">nm-settings</span>(5)</span>,
         <a class="link" href="nm-settings-keyfile.html" title="nm-settings-keyfile"><span class="citerefentry"><span class="refentrytitle">nm-settings-keyfile</span>(5)</span></a>,
         <a class="link" href="NetworkManager.html" title="NetworkManager"><span class="citerefentry"><span class="refentrytitle">NetworkManager</span>(8)</span></a>,
         <a class="link" href="NetworkManager.conf.html" title="NetworkManager.conf"><span class="citerefentry"><span class="refentrytitle">NetworkManager.conf</span>(5)</span></a>,
@@ -2295,6 +2722,6 @@ Allowed values: </strong></span>default, never, always</td>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

@@ -1,4 +1,5 @@
 libnm.so.0 libnm0 #MINVER#
+* Build-Depends-Package: libnm-dev
  libnm_1_0_0@libnm_1_0_0 1.0.0
  libnm_1_0_4@libnm_1_0_4 1.0.4
  libnm_1_0_6@libnm_1_0_6 1.0.6
@@ -8,8 +9,21 @@ libnm.so.0 libnm0 #MINVER#
  libnm_1_12_0@libnm_1_12_0 1.11.3
  libnm_1_12_2@libnm_1_12_2 1.12.2
  libnm_1_14_0@libnm_1_14_0 1.13.90
+ libnm_1_14_8@libnm_1_14_8 1.19.90
+ libnm_1_16_0@libnm_1_16_0 1.16.0
+ libnm_1_18_0@libnm_1_18_0 1.18.0
+ libnm_1_20_0@libnm_1_20_0 1.19.90
+ libnm_1_20_6@libnm_1_20_6 1.20.6
+ libnm_1_22_0@libnm_1_22_0 1.22.0
+ libnm_1_22_2@libnm_1_22_2 1.22.2
+ libnm_1_22_8@libnm_1_22_8 1.22.8
+ libnm_1_24_0@libnm_1_24_0 1.23.90
+ libnm_1_26_0@libnm_1_26_0 1.25.90
+ libnm_1_26_4@libnm_1_26_4 1.27.90
+ libnm_1_28_0@libnm_1_28_0 1.27.90
  libnm_1_2_0@libnm_1_2_0 1.1.90
  libnm_1_2_4@libnm_1_2_4 1.2.4
+ libnm_1_30_0@libnm_1_30_0 1.29.90
  libnm_1_4_0@libnm_1_4_0 1.4.0
  libnm_1_6_0@libnm_1_6_0 1.5.90
  libnm_1_8_0@libnm_1_8_0 1.8.0
@@ -54,6 +68,21 @@ libnm.so.0 libnm0 #MINVER#
  nm_agent_manager_error_get_type@libnm_1_0_0 1.0.0
  nm_agent_manager_error_quark@libnm_1_0_0 1.0.0
  nm_bluetooth_capabilities_get_type@libnm_1_0_0 1.0.0
+ nm_bridge_vlan_cmp@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_from_str@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_get_type@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_get_vid_range@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_is_pvid@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_is_sealed@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_is_untagged@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_new@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_new_clone@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_ref@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_seal@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_set_pvid@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_set_untagged@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_to_str@libnm_1_18_0 1.18.0
+ nm_bridge_vlan_unref@libnm_1_18_0 1.18.0
  nm_capability_get_type@libnm_1_6_0 1.5.90
  nm_checkpoint_create_flags_get_type@libnm_1_12_0 1.11.3
  nm_checkpoint_get_created@libnm_1_12_0 1.11.3
@@ -62,8 +91,12 @@ libnm.so.0 libnm0 #MINVER#
  nm_checkpoint_get_type@libnm_1_12_0 1.11.3
  nm_client_activate_connection_async@libnm_1_0_0 1.0.0
  nm_client_activate_connection_finish@libnm_1_0_0 1.0.0
+ nm_client_add_and_activate_connection2@libnm_1_16_0 1.16.0
+ nm_client_add_and_activate_connection2_finish@libnm_1_16_0 1.16.0
  nm_client_add_and_activate_connection_async@libnm_1_0_0 1.0.0
  nm_client_add_and_activate_connection_finish@libnm_1_0_0 1.0.0
+ nm_client_add_connection2@libnm_1_20_0 1.19.90
+ nm_client_add_connection2_finish@libnm_1_20_0 1.19.90
  nm_client_add_connection_async@libnm_1_0_0 1.0.0
  nm_client_add_connection_finish@libnm_1_0_0 1.0.0
  nm_client_check_connectivity@libnm_1_0_0 1.0.0
@@ -79,7 +112,12 @@ libnm.so.0 libnm0 #MINVER#
  nm_client_checkpoint_rollback_finish@libnm_1_12_0 1.11.3
  nm_client_connectivity_check_get_available@libnm_1_10_0 1.9.90
  nm_client_connectivity_check_get_enabled@libnm_1_10_0 1.9.90
+ nm_client_connectivity_check_get_uri@libnm_1_20_0 1.19.90
  nm_client_connectivity_check_set_enabled@libnm_1_10_0 1.9.90
+ nm_client_dbus_call@libnm_1_24_0 1.23.90
+ nm_client_dbus_call_finish@libnm_1_24_0 1.23.90
+ nm_client_dbus_set_property@libnm_1_24_0 1.23.90
+ nm_client_dbus_set_property_finish@libnm_1_24_0 1.23.90
  nm_client_deactivate_connection@libnm_1_0_0 1.0.0
  nm_client_deactivate_connection_async@libnm_1_0_0 1.0.0
  nm_client_deactivate_connection_finish@libnm_1_0_0 1.0.0
@@ -88,26 +126,36 @@ libnm.so.0 libnm0 #MINVER#
  nm_client_get_activating_connection@libnm_1_0_0 1.0.0
  nm_client_get_active_connections@libnm_1_0_0 1.0.0
  nm_client_get_all_devices@libnm_1_2_0 1.1.90
+ nm_client_get_capabilities@libnm_1_22_2 1.22.2
  nm_client_get_checkpoints@libnm_1_12_0 1.11.3
  nm_client_get_connection_by_id@libnm_1_0_0 1.0.0
  nm_client_get_connection_by_path@libnm_1_0_0 1.0.0
  nm_client_get_connection_by_uuid@libnm_1_0_0 1.0.0
  nm_client_get_connections@libnm_1_0_0 1.0.0
  nm_client_get_connectivity@libnm_1_0_0 1.0.0
+ nm_client_get_context_busy_watcher@libnm_1_22_0 1.22.0
+ nm_client_get_dbus_connection@libnm_1_22_0 1.22.0
+ nm_client_get_dbus_name_owner@libnm_1_22_0 1.22.0
  nm_client_get_device_by_iface@libnm_1_0_0 1.0.0
  nm_client_get_device_by_path@libnm_1_0_0 1.0.0
  nm_client_get_devices@libnm_1_0_0 1.0.0
  nm_client_get_dns_configuration@libnm_1_6_0 1.5.90
  nm_client_get_dns_mode@libnm_1_6_0 1.5.90
  nm_client_get_dns_rc_manager@libnm_1_6_0 1.5.90
+ nm_client_get_instance_flags@libnm_1_24_0 1.23.90
  nm_client_get_logging@libnm_1_0_0 1.0.0
+ nm_client_get_main_context@libnm_1_22_0 1.22.0
+ nm_client_get_metered@libnm_1_22_0 1.22.0
  nm_client_get_nm_running@libnm_1_0_0 1.0.0
+ nm_client_get_object_by_path@libnm_1_24_0 1.23.90
  nm_client_get_permission_result@libnm_1_0_0 1.0.0
+ nm_client_get_permissions_state@libnm_1_24_0 1.23.90
  nm_client_get_primary_connection@libnm_1_0_0 1.0.0
  nm_client_get_startup@libnm_1_0_0 1.0.0
  nm_client_get_state@libnm_1_0_0 1.0.0
  nm_client_get_type@libnm_1_0_0 1.0.0
  nm_client_get_version@libnm_1_0_0 1.0.0
+ nm_client_instance_flags_get_type@libnm_1_24_0 1.23.90
  nm_client_load_connections@libnm_1_0_0 1.0.0
  nm_client_load_connections_async@libnm_1_0_0 1.0.0
  nm_client_load_connections_finish@libnm_1_0_0 1.0.0
@@ -118,9 +166,11 @@ libnm.so.0 libnm0 #MINVER#
  nm_client_new_finish@libnm_1_0_0 1.0.0
  nm_client_permission_get_type@libnm_1_0_0 1.0.0
  nm_client_permission_result_get_type@libnm_1_0_0 1.0.0
+ nm_client_reload@libnm_1_22_0 1.22.0
  nm_client_reload_connections@libnm_1_0_0 1.0.0
  nm_client_reload_connections_async@libnm_1_0_0 1.0.0
  nm_client_reload_connections_finish@libnm_1_0_0 1.0.0
+ nm_client_reload_finish@libnm_1_22_0 1.22.0
  nm_client_save_hostname@libnm_1_0_0 1.0.0
  nm_client_save_hostname_async@libnm_1_0_0 1.0.0
  nm_client_save_hostname_finish@libnm_1_0_0 1.0.0
@@ -254,6 +304,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_get_autoconnect@libnm_1_0_0 1.0.0
  nm_device_get_available_connections@libnm_1_0_0 1.0.0
  nm_device_get_capabilities@libnm_1_0_0 1.0.0
+ nm_device_get_connectivity@libnm_1_16_0 1.16.0
  nm_device_get_description@libnm_1_0_0 1.0.0
  nm_device_get_device_type@libnm_1_0_0 1.0.0
  nm_device_get_dhcp4_config@libnm_1_0_0 1.0.0
@@ -264,6 +315,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_get_firmware_version@libnm_1_0_0 1.0.0
  nm_device_get_hw_address@libnm_1_0_0 1.0.0
  nm_device_get_iface@libnm_1_0_0 1.0.0
+ nm_device_get_interface_flags@libnm_1_22_0 1.22.0
  nm_device_get_ip4_config@libnm_1_0_0 1.0.0
  nm_device_get_ip6_config@libnm_1_0_0 1.0.0
  nm_device_get_ip_iface@libnm_1_0_0 1.0.0
@@ -273,6 +325,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_get_metered@libnm_1_2_0 1.1.90
  nm_device_get_mtu@libnm_1_0_0 1.0.0
  nm_device_get_nm_plugin_missing@libnm_1_2_0 1.1.90
+ nm_device_get_path@libnm_1_26_0 1.25.90
  nm_device_get_physical_port_id@libnm_1_0_0 1.0.0
  nm_device_get_product@libnm_1_0_0 1.0.0
  nm_device_get_setting_type@libnm_1_0_0 1.0.0
@@ -285,6 +338,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_infiniband_get_carrier@libnm_1_0_0 1.0.0
  nm_device_infiniband_get_hw_address@libnm_1_0_0 1.0.0
  nm_device_infiniband_get_type@libnm_1_0_0 1.0.0
+ nm_device_interface_flags_get_type@libnm_1_22_0 1.22.0
  nm_device_ip_tunnel_get_encapsulation_limit@libnm_1_2_0 1.1.90
  nm_device_ip_tunnel_get_flags@libnm_1_12_0 1.11.3
  nm_device_ip_tunnel_get_flow_label@libnm_1_2_0 1.1.90
@@ -321,8 +375,11 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_macvlan_get_tap@libnm_1_2_0 1.1.90
  nm_device_macvlan_get_type@libnm_1_2_0 1.1.90
  nm_device_modem_capabilities_get_type@libnm_1_0_0 1.0.0
+ nm_device_modem_get_apn@libnm_1_20_0 1.19.90
  nm_device_modem_get_current_capabilities@libnm_1_0_0 1.0.0
+ nm_device_modem_get_device_id@libnm_1_20_0 1.19.90
  nm_device_modem_get_modem_capabilities@libnm_1_0_0 1.0.0
+ nm_device_modem_get_operator_code@libnm_1_20_0 1.19.90
  nm_device_modem_get_type@libnm_1_0_0 1.0.0
  nm_device_olpc_mesh_get_active_channel@libnm_1_0_0 1.0.0
  nm_device_olpc_mesh_get_companion@libnm_1_0_0 1.0.0
@@ -355,11 +412,14 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_tun_get_type@libnm_1_2_0 1.1.90
  nm_device_tun_get_vnet_hdr@libnm_1_2_0 1.1.90
  nm_device_type_get_type@libnm_1_0_0 1.0.0
+ nm_device_veth_get_type@libnm_1_30_0 1.29.90
  nm_device_vlan_get_carrier@libnm_1_0_0 1.0.0
  nm_device_vlan_get_hw_address@libnm_1_0_0 1.0.0
  nm_device_vlan_get_parent@libnm_1_0_0 1.0.0
  nm_device_vlan_get_type@libnm_1_0_0 1.0.0
  nm_device_vlan_get_vlan_id@libnm_1_0_0 1.0.0
+ nm_device_vrf_get_table@libnm_1_24_0 1.23.90
+ nm_device_vrf_get_type@libnm_1_24_0 1.23.90
  nm_device_vxlan_get_ageing@libnm_1_2_0 1.1.90
  nm_device_vxlan_get_dst_port@libnm_1_2_0 1.1.90
  nm_device_vxlan_get_group@libnm_1_2_0 1.1.90
@@ -388,6 +448,13 @@ libnm.so.0 libnm0 #MINVER#
  nm_device_wifi_get_mode@libnm_1_0_0 1.0.0
  nm_device_wifi_get_permanent_hw_address@libnm_1_0_0 1.0.0
  nm_device_wifi_get_type@libnm_1_0_0 1.0.0
+ nm_device_wifi_p2p_get_hw_address@libnm_1_16_0 1.16.0
+ nm_device_wifi_p2p_get_peers@libnm_1_16_0 1.16.0
+ nm_device_wifi_p2p_get_type@libnm_1_16_0 1.16.0
+ nm_device_wifi_p2p_start_find@libnm_1_16_0 1.16.0
+ nm_device_wifi_p2p_start_find_finish@libnm_1_16_0 1.16.0
+ nm_device_wifi_p2p_stop_find@libnm_1_16_0 1.16.0
+ nm_device_wifi_p2p_stop_find_finish@libnm_1_16_0 1.16.0
  nm_device_wifi_request_scan@libnm_1_0_0 1.0.0
  nm_device_wifi_request_scan_async@libnm_1_0_0 1.0.0
  nm_device_wifi_request_scan_finish@libnm_1_0_0 1.0.0
@@ -414,6 +481,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_dhcp_config_get_one_option@libnm_1_0_0 1.0.0
  nm_dhcp_config_get_options@libnm_1_0_0 1.0.0
  nm_dhcp_config_get_type@libnm_1_0_0 1.0.0
+ nm_dhcp_hostname_flags_get_type@libnm_1_22_0 1.22.0
  nm_dns_entry_get_domains@libnm_1_6_0 1.5.90
  nm_dns_entry_get_interface@libnm_1_6_0 1.5.90
  nm_dns_entry_get_nameservers@libnm_1_6_0 1.5.90
@@ -421,6 +489,11 @@ libnm.so.0 libnm0 #MINVER#
  nm_dns_entry_get_type@libnm_1_6_0 1.5.90
  nm_dns_entry_get_vpn@libnm_1_6_0 1.5.90
  nm_dns_entry_unref@libnm_1_6_0 1.5.90
+ nm_ethtool_optname_is_coalesce@libnm_1_26_0 1.25.90
+ nm_ethtool_optname_is_feature@libnm_1_14_8 1.19.90
+ nm_ethtool_optname_is_ring@libnm_1_26_0 1.25.90
+ nm_ip_address_cmp_flags_get_type@libnm_1_22_0 1.22.0
+ nm_ip_address_cmp_full@libnm_1_22_0 1.22.0
  nm_ip_address_equal@libnm_1_0_0 1.0.0
  nm_ip_address_get_address@libnm_1_0_0 1.0.0
  nm_ip_address_get_address_binary@libnm_1_0_0 1.0.0
@@ -471,20 +544,77 @@ libnm.so.0 libnm0 #MINVER#
  nm_ip_route_set_next_hop_binary@libnm_1_0_0 1.0.0
  nm_ip_route_set_prefix@libnm_1_0_0 1.0.0
  nm_ip_route_unref@libnm_1_0_0 1.0.0
+ nm_ip_routing_rule_as_string_flags_get_type@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_cmp@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_from_string@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_action@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_addr_family@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_destination_port_end@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_destination_port_start@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_from@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_from_len@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_fwmark@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_fwmask@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_iifname@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_invert@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_ipproto@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_oifname@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_priority@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_source_port_end@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_source_port_start@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_suppress_prefixlength@libnm_1_20_0 1.19.90
+ nm_ip_routing_rule_get_table@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_to@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_to_len@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_tos@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_get_type@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_is_sealed@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_new@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_new_clone@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_ref@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_seal@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_action@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_destination_port@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_from@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_fwmark@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_iifname@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_invert@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_ipproto@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_oifname@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_priority@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_source_port@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_suppress_prefixlength@libnm_1_20_0 1.19.90
+ nm_ip_routing_rule_set_table@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_to@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_set_tos@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_to_string@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_unref@libnm_1_18_0 1.18.0
+ nm_ip_routing_rule_validate@libnm_1_18_0 1.18.0
  nm_ip_tunnel_flags_get_type@libnm_1_12_0 1.11.3
  nm_ip_tunnel_mode_get_type@libnm_1_2_0 1.1.90
+ nm_keyfile_handler_data_fail_with_error@libnm_1_30_0 1.29.90
+ nm_keyfile_handler_data_get_context@libnm_1_30_0 1.29.90
+ nm_keyfile_handler_data_warn_get@libnm_1_30_0 1.29.90
+ nm_keyfile_handler_flags_get_type@libnm_1_30_0 1.29.90
+ nm_keyfile_handler_type_get_type@libnm_1_30_0 1.29.90
+ nm_keyfile_read@libnm_1_30_0 1.29.90
+ nm_keyfile_warn_severity_get_type@libnm_1_30_0 1.29.90
+ nm_keyfile_write@libnm_1_30_0 1.29.90
  nm_lldp_neighbor_get_attr_names@libnm_1_2_0 1.1.90
  nm_lldp_neighbor_get_attr_string_value@libnm_1_2_0 1.1.90
  nm_lldp_neighbor_get_attr_type@libnm_1_2_0 1.1.90
  nm_lldp_neighbor_get_attr_uint_value@libnm_1_2_0 1.1.90
+ nm_lldp_neighbor_get_attr_value@libnm_1_18_0 1.18.0
  nm_lldp_neighbor_get_type@libnm_1_2_0 1.1.90
  nm_lldp_neighbor_new@libnm_1_2_0 1.1.90
  nm_lldp_neighbor_ref@libnm_1_2_0 1.1.90
  nm_lldp_neighbor_unref@libnm_1_2_0 1.1.90
  nm_manager_error_get_type@libnm_1_0_0 1.0.0
  nm_manager_error_quark@libnm_1_0_0 1.0.0
+ nm_manager_reload_flags_get_type@libnm_1_22_0 1.22.0
  nm_metered_get_type@libnm_1_0_6 1.0.6
  nm_metered_get_type@libnm_1_2_0 1.1.90
+ nm_object_get_client@libnm_1_24_0 1.23.90
  nm_object_get_path@libnm_1_0_0 1.0.0
  nm_object_get_type@libnm_1_0_0 1.0.0
  nm_remote_connection_commit_changes@libnm_1_0_0 1.0.0
@@ -511,6 +641,12 @@ libnm.so.0 libnm0 #MINVER#
  nm_secret_agent_error_quark@libnm_1_0_0 1.0.0
  nm_secret_agent_get_secrets_flags_get_type@libnm_1_0_0 1.0.0
  nm_secret_agent_old_delete_secrets@libnm_1_0_0 1.0.0
+ nm_secret_agent_old_destroy@libnm_1_24_0 1.23.90
+ nm_secret_agent_old_enable@libnm_1_24_0 1.23.90
+ nm_secret_agent_old_get_context_busy_watcher@libnm_1_24_0 1.23.90
+ nm_secret_agent_old_get_dbus_connection@libnm_1_24_0 1.23.90
+ nm_secret_agent_old_get_dbus_name_owner@libnm_1_24_0 1.23.90
+ nm_secret_agent_old_get_main_context@libnm_1_24_0 1.23.90
  nm_secret_agent_old_get_registered@libnm_1_0_0 1.0.0
  nm_secret_agent_old_get_secrets@libnm_1_0_0 1.0.0
  nm_secret_agent_old_get_type@libnm_1_0_0 1.0.0
@@ -548,12 +684,14 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_802_1x_get_client_cert_path@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_client_cert_scheme@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_client_cert_uri@libnm_1_6_0 1.5.90
+ nm_setting_802_1x_get_domain_match@libnm_1_24_0 1.23.90
  nm_setting_802_1x_get_domain_suffix_match@libnm_1_2_0 1.1.92
  nm_setting_802_1x_get_eap_method@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_identity@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_num_altsubject_matches@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_num_eap_methods@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_num_phase2_altsubject_matches@libnm_1_0_0 1.0.0
+ nm_setting_802_1x_get_optional@libnm_1_20_6 1.20.6
  nm_setting_802_1x_get_pac_file@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_password@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_password_flags@libnm_1_0_0 1.0.0
@@ -579,6 +717,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_802_1x_get_phase2_client_cert_path@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_phase2_client_cert_scheme@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_phase2_client_cert_uri@libnm_1_6_0 1.5.90
+ nm_setting_802_1x_get_phase2_domain_match@libnm_1_24_0 1.23.90
  nm_setting_802_1x_get_phase2_domain_suffix_match@libnm_1_2_0 1.1.92
  nm_setting_802_1x_get_phase2_private_key_blob@libnm_1_0_0 1.0.0
  nm_setting_802_1x_get_phase2_private_key_format@libnm_1_0_0 1.0.0
@@ -631,27 +770,57 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_bond_get_option@libnm_1_0_0 1.0.0
  nm_setting_bond_get_option_by_name@libnm_1_0_0 1.0.0
  nm_setting_bond_get_option_default@libnm_1_0_0 1.0.0
+ nm_setting_bond_get_option_normalized@libnm_1_24_0 1.23.90
  nm_setting_bond_get_type@libnm_1_0_0 1.0.0
  nm_setting_bond_get_valid_options@libnm_1_0_0 1.0.0
  nm_setting_bond_new@libnm_1_0_0 1.0.0
  nm_setting_bond_remove_option@libnm_1_0_0 1.0.0
  nm_setting_bond_validate_option@libnm_1_0_0 1.0.0
+ nm_setting_bridge_add_vlan@libnm_1_18_0 1.18.0
+ nm_setting_bridge_clear_vlans@libnm_1_18_0 1.18.0
  nm_setting_bridge_get_ageing_time@libnm_1_0_0 1.0.0
  nm_setting_bridge_get_forward_delay@libnm_1_0_0 1.0.0
+ nm_setting_bridge_get_group_address@libnm_1_24_0 1.23.90
  nm_setting_bridge_get_group_forward_mask@libnm_1_10_0 1.9.90
  nm_setting_bridge_get_hello_time@libnm_1_0_0 1.0.0
  nm_setting_bridge_get_mac_address@libnm_1_0_0 1.0.0
  nm_setting_bridge_get_max_age@libnm_1_0_0 1.0.0
+ nm_setting_bridge_get_multicast_hash_max@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_last_member_count@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_last_member_interval@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_membership_interval@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_querier@libnm_1_24_0 1.23.90
+ nm_setting_bridge_get_multicast_querier_interval@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_query_interval@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_query_response_interval@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_query_use_ifaddr@libnm_1_24_0 1.23.90
+ nm_setting_bridge_get_multicast_router@libnm_1_24_0 1.23.90
  nm_setting_bridge_get_multicast_snooping@libnm_1_2_0 1.1.90
+ nm_setting_bridge_get_multicast_startup_query_count@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_multicast_startup_query_interval@libnm_1_26_0 1.25.90
+ nm_setting_bridge_get_num_vlans@libnm_1_18_0 1.18.0
  nm_setting_bridge_get_priority@libnm_1_0_0 1.0.0
  nm_setting_bridge_get_stp@libnm_1_0_0 1.0.0
  nm_setting_bridge_get_type@libnm_1_0_0 1.0.0
+ nm_setting_bridge_get_vlan@libnm_1_18_0 1.18.0
+ nm_setting_bridge_get_vlan_default_pvid@libnm_1_18_0 1.18.0
+ nm_setting_bridge_get_vlan_filtering@libnm_1_18_0 1.18.0
+ nm_setting_bridge_get_vlan_protocol@libnm_1_24_0 1.23.90
+ nm_setting_bridge_get_vlan_stats_enabled@libnm_1_24_0 1.23.90
  nm_setting_bridge_new@libnm_1_0_0 1.0.0
+ nm_setting_bridge_port_add_vlan@libnm_1_18_0 1.18.0
+ nm_setting_bridge_port_clear_vlans@libnm_1_18_0 1.18.0
  nm_setting_bridge_port_get_hairpin_mode@libnm_1_0_0 1.0.0
+ nm_setting_bridge_port_get_num_vlans@libnm_1_18_0 1.18.0
  nm_setting_bridge_port_get_path_cost@libnm_1_0_0 1.0.0
  nm_setting_bridge_port_get_priority@libnm_1_0_0 1.0.0
  nm_setting_bridge_port_get_type@libnm_1_0_0 1.0.0
+ nm_setting_bridge_port_get_vlan@libnm_1_18_0 1.18.0
  nm_setting_bridge_port_new@libnm_1_0_0 1.0.0
+ nm_setting_bridge_port_remove_vlan@libnm_1_18_0 1.18.0
+ nm_setting_bridge_port_remove_vlan_by_vid@libnm_1_18_0 1.18.0
+ nm_setting_bridge_remove_vlan@libnm_1_18_0 1.18.0
+ nm_setting_bridge_remove_vlan_by_vid@libnm_1_18_0 1.18.0
  nm_setting_cdma_get_mtu@libnm_1_8_0 1.8.0
  nm_setting_cdma_get_number@libnm_1_0_0 1.0.0
  nm_setting_cdma_get_password@libnm_1_0_0 1.0.0
@@ -682,6 +851,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_connection_get_mdns@libnm_1_12_0 1.11.3
  nm_setting_connection_get_metered@libnm_1_0_6 1.0.6
  nm_setting_connection_get_metered@libnm_1_2_0 1.1.90
+ nm_setting_connection_get_mud_url@libnm_1_26_0 1.25.90
  nm_setting_connection_get_multi_connect@libnm_1_14_0 1.13.90
  nm_setting_connection_get_num_permissions@libnm_1_0_0 1.0.0
  nm_setting_connection_get_num_secondaries@libnm_1_0_0 1.0.0
@@ -693,6 +863,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_connection_get_timestamp@libnm_1_0_0 1.0.0
  nm_setting_connection_get_type@libnm_1_0_0 1.0.0
  nm_setting_connection_get_uuid@libnm_1_0_0 1.0.0
+ nm_setting_connection_get_wait_device_timeout@libnm_1_20_0 1.19.90
  nm_setting_connection_get_zone@libnm_1_0_0 1.0.0
  nm_setting_connection_is_slave_type@libnm_1_0_0 1.0.0
  nm_setting_connection_lldp_get_type@libnm_1_2_0 1.1.90
@@ -737,6 +908,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_enumerate_values@libnm_1_0_0 1.0.0
  nm_setting_ethtool_clear_features@libnm_1_14_0 1.13.90
  nm_setting_ethtool_get_feature@libnm_1_14_0 1.13.90
+ nm_setting_ethtool_get_optnames@libnm_1_20_0 1.19.90
  nm_setting_ethtool_get_type@libnm_1_14_0 1.13.90
  nm_setting_ethtool_new@libnm_1_14_0 1.13.90
  nm_setting_ethtool_set_feature@libnm_1_14_0 1.13.90
@@ -747,6 +919,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_get_secret_flags@libnm_1_0_0 1.0.0
  nm_setting_get_type@libnm_1_0_0 1.0.0
  nm_setting_gsm_get_apn@libnm_1_0_0 1.0.0
+ nm_setting_gsm_get_auto_config@libnm_1_22_0 1.22.0
  nm_setting_gsm_get_device_id@libnm_1_2_0 1.1.90
  nm_setting_gsm_get_home_only@libnm_1_0_0 1.0.0
  nm_setting_gsm_get_mtu@libnm_1_8_0 1.8.0
@@ -761,6 +934,11 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_gsm_get_type@libnm_1_0_0 1.0.0
  nm_setting_gsm_get_username@libnm_1_0_0 1.0.0
  nm_setting_gsm_new@libnm_1_0_0 1.0.0
+ nm_setting_hostname_get_from_dhcp@libnm_1_30_0 1.29.90
+ nm_setting_hostname_get_from_dns_lookup@libnm_1_30_0 1.29.90
+ nm_setting_hostname_get_only_from_default@libnm_1_30_0 1.29.90
+ nm_setting_hostname_get_priority@libnm_1_30_0 1.29.90
+ nm_setting_hostname_get_type@libnm_1_30_0 1.29.90
  nm_setting_infiniband_get_mac_address@libnm_1_0_0 1.0.0
  nm_setting_infiniband_get_mtu@libnm_1_0_0 1.0.0
  nm_setting_infiniband_get_p_key@libnm_1_0_0 1.0.0
@@ -771,29 +949,37 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_infiniband_new@libnm_1_0_0 1.0.0
  nm_setting_ip4_config_get_dhcp_client_id@libnm_1_0_0 1.0.0
  nm_setting_ip4_config_get_dhcp_fqdn@libnm_1_2_0 1.1.90
+ nm_setting_ip4_config_get_dhcp_vendor_class_identifier@libnm_1_26_4 1.27.90
  nm_setting_ip4_config_get_type@libnm_1_0_0 1.0.0
  nm_setting_ip4_config_new@libnm_1_0_0 1.0.0
  nm_setting_ip6_config_addr_gen_mode_get_type@libnm_1_2_0 1.1.90
  nm_setting_ip6_config_get_addr_gen_mode@libnm_1_2_0 1.1.90
  nm_setting_ip6_config_get_dhcp_duid@libnm_1_12_0 1.11.90
  nm_setting_ip6_config_get_ip6_privacy@libnm_1_0_0 1.0.0
+ nm_setting_ip6_config_get_ra_timeout@libnm_1_22_8 1.22.8
  nm_setting_ip6_config_get_token@libnm_1_4_0 1.4.0
  nm_setting_ip6_config_get_type@libnm_1_0_0 1.0.0
  nm_setting_ip6_config_new@libnm_1_0_0 1.0.0
  nm_setting_ip6_config_privacy_get_type@libnm_1_0_0 1.0.0
  nm_setting_ip_config_add_address@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_add_dhcp_reject_server@libnm_1_28_0 1.27.90
  nm_setting_ip_config_add_dns@libnm_1_0_0 1.0.0
  nm_setting_ip_config_add_dns_option@libnm_1_2_0 1.1.90
  nm_setting_ip_config_add_dns_search@libnm_1_0_0 1.0.0
  nm_setting_ip_config_add_route@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_add_routing_rule@libnm_1_18_0 1.18.0
  nm_setting_ip_config_clear_addresses@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_clear_dhcp_reject_servers@libnm_1_28_0 1.27.90
  nm_setting_ip_config_clear_dns@libnm_1_0_0 1.0.0
  nm_setting_ip_config_clear_dns_options@libnm_1_2_0 1.1.90
  nm_setting_ip_config_clear_dns_searches@libnm_1_0_0 1.0.0
  nm_setting_ip_config_clear_routes@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_clear_routing_rules@libnm_1_18_0 1.18.0
  nm_setting_ip_config_get_address@libnm_1_0_0 1.0.0
  nm_setting_ip_config_get_dad_timeout@libnm_1_2_0 1.1.91
  nm_setting_ip_config_get_dhcp_hostname@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_get_dhcp_hostname_flags@libnm_1_22_0 1.22.0
+ nm_setting_ip_config_get_dhcp_reject_servers@libnm_1_28_0 1.27.90
  nm_setting_ip_config_get_dhcp_send_hostname@libnm_1_0_0 1.0.0
  nm_setting_ip_config_get_dhcp_timeout@libnm_1_2_0 1.1.91
  nm_setting_ip_config_get_dns@libnm_1_0_0 1.0.0
@@ -812,13 +998,16 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_ip_config_get_num_dns_options@libnm_1_2_0 1.1.90
  nm_setting_ip_config_get_num_dns_searches@libnm_1_0_0 1.0.0
  nm_setting_ip_config_get_num_routes@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_get_num_routing_rules@libnm_1_18_0 1.18.0
  nm_setting_ip_config_get_route@libnm_1_0_0 1.0.0
  nm_setting_ip_config_get_route_metric@libnm_1_0_0 1.0.0
  nm_setting_ip_config_get_route_table@libnm_1_10_0 1.9.90
+ nm_setting_ip_config_get_routing_rule@libnm_1_18_0 1.18.0
  nm_setting_ip_config_get_type@libnm_1_0_0 1.0.0
  nm_setting_ip_config_has_dns_options@libnm_1_2_0 1.1.90
  nm_setting_ip_config_remove_address@libnm_1_0_0 1.0.0
  nm_setting_ip_config_remove_address_by_value@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_remove_dhcp_reject_server@libnm_1_28_0 1.27.90
  nm_setting_ip_config_remove_dns@libnm_1_0_0 1.0.0
  nm_setting_ip_config_remove_dns_by_value@libnm_1_0_0 1.0.0
  nm_setting_ip_config_remove_dns_option@libnm_1_2_0 1.1.90
@@ -827,6 +1016,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_ip_config_remove_dns_search_by_value@libnm_1_0_0 1.0.0
  nm_setting_ip_config_remove_route@libnm_1_0_0 1.0.0
  nm_setting_ip_config_remove_route_by_value@libnm_1_0_0 1.0.0
+ nm_setting_ip_config_remove_routing_rule@libnm_1_18_0 1.18.0
  nm_setting_ip_tunnel_get_flags@libnm_1_12_0 1.11.3
  nm_setting_ip_tunnel_get_input_key@libnm_1_2_0 1.1.90
  nm_setting_ip_tunnel_get_local@libnm_1_2_0 1.1.90
@@ -862,25 +1052,64 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_macvlan_get_type@libnm_1_2_0 1.1.90
  nm_setting_macvlan_mode_get_type@libnm_1_2_0 1.1.90
  nm_setting_macvlan_new@libnm_1_2_0 1.1.90
+ nm_setting_match_add_driver@libnm_1_26_0 1.25.90
  nm_setting_match_add_interface_name@libnm_1_14_0 1.13.90
+ nm_setting_match_add_kernel_command_line@libnm_1_26_0 1.25.90
+ nm_setting_match_add_path@libnm_1_26_0 1.25.90
+ nm_setting_match_clear_drivers@libnm_1_26_0 1.25.90
  nm_setting_match_clear_interface_names@libnm_1_14_0 1.13.90
+ nm_setting_match_clear_kernel_command_lines@libnm_1_26_0 1.25.90
+ nm_setting_match_clear_paths@libnm_1_26_0 1.25.90
+ nm_setting_match_get_driver@libnm_1_26_0 1.25.90
+ nm_setting_match_get_drivers@libnm_1_26_0 1.25.90
  nm_setting_match_get_interface_name@libnm_1_14_0 1.13.90
  nm_setting_match_get_interface_names@libnm_1_14_0 1.13.90
+ nm_setting_match_get_kernel_command_line@libnm_1_26_0 1.25.90
+ nm_setting_match_get_kernel_command_lines@libnm_1_26_0 1.25.90
+ nm_setting_match_get_num_drivers@libnm_1_26_0 1.25.90
  nm_setting_match_get_num_interface_names@libnm_1_14_0 1.13.90
+ nm_setting_match_get_num_kernel_command_lines@libnm_1_26_0 1.25.90
+ nm_setting_match_get_num_paths@libnm_1_26_0 1.25.90
+ nm_setting_match_get_path@libnm_1_26_0 1.25.90
+ nm_setting_match_get_paths@libnm_1_26_0 1.25.90
  nm_setting_match_get_type@libnm_1_14_0 1.13.90
+ nm_setting_match_remove_driver@libnm_1_26_0 1.25.90
+ nm_setting_match_remove_driver_by_value@libnm_1_26_0 1.25.90
  nm_setting_match_remove_interface_name@libnm_1_14_0 1.13.90
  nm_setting_match_remove_interface_name_by_value@libnm_1_14_0 1.13.90
+ nm_setting_match_remove_kernel_command_line@libnm_1_26_0 1.25.90
+ nm_setting_match_remove_kernel_command_line_by_value@libnm_1_26_0 1.25.90
+ nm_setting_match_remove_path@libnm_1_26_0 1.25.90
+ nm_setting_match_remove_path_by_value@libnm_1_26_0 1.25.90
  nm_setting_olpc_mesh_get_channel@libnm_1_0_0 1.0.0
  nm_setting_olpc_mesh_get_dhcp_anycast_address@libnm_1_0_0 1.0.0
  nm_setting_olpc_mesh_get_ssid@libnm_1_0_0 1.0.0
  nm_setting_olpc_mesh_get_type@libnm_1_0_0 1.0.0
  nm_setting_olpc_mesh_new@libnm_1_0_0 1.0.0
+ nm_setting_option_clear_by_name@libnm_1_26_0 1.25.90
+ nm_setting_option_get@libnm_1_26_0 1.25.90
+ nm_setting_option_get_all_names@libnm_1_26_0 1.25.90
+ nm_setting_option_get_boolean@libnm_1_26_0 1.25.90
+ nm_setting_option_get_uint32@libnm_1_26_0 1.25.90
+ nm_setting_option_set@libnm_1_26_0 1.25.90
+ nm_setting_option_set_boolean@libnm_1_26_0 1.25.90
+ nm_setting_option_set_uint32@libnm_1_26_0 1.25.90
  nm_setting_ovs_bridge_get_fail_mode@libnm_1_10_0 1.9.90
  nm_setting_ovs_bridge_get_mcast_snooping_enable@libnm_1_10_0 1.9.90
  nm_setting_ovs_bridge_get_rstp_enable@libnm_1_10_0 1.9.90
  nm_setting_ovs_bridge_get_stp_enable@libnm_1_10_0 1.9.90
  nm_setting_ovs_bridge_get_type@libnm_1_10_0 1.9.90
  nm_setting_ovs_bridge_new@libnm_1_10_0 1.9.90
+ nm_setting_ovs_dpdk_get_devargs@libnm_1_20_0 1.19.90
+ nm_setting_ovs_dpdk_get_type@libnm_1_20_0 1.19.90
+ nm_setting_ovs_dpdk_new@libnm_1_20_0 1.19.90
+ nm_setting_ovs_external_ids_check_key@libnm_1_30_0 1.29.90
+ nm_setting_ovs_external_ids_check_val@libnm_1_30_0 1.29.90
+ nm_setting_ovs_external_ids_get_data@libnm_1_30_0 1.29.90
+ nm_setting_ovs_external_ids_get_data_keys@libnm_1_30_0 1.29.90
+ nm_setting_ovs_external_ids_get_type@libnm_1_30_0 1.29.90
+ nm_setting_ovs_external_ids_new@libnm_1_30_0 1.29.90
+ nm_setting_ovs_external_ids_set_data@libnm_1_30_0 1.29.90
  nm_setting_ovs_interface_get_interface_type@libnm_1_10_0 1.9.90
  nm_setting_ovs_interface_get_type@libnm_1_10_0 1.9.90
  nm_setting_ovs_interface_new@libnm_1_10_0 1.9.90
@@ -1023,6 +1252,9 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_user_set_data@libnm_1_8_0 1.8.0
  nm_setting_verify@libnm_1_0_0 1.0.0
  nm_setting_verify_secrets@libnm_1_2_0 1.1.90
+ nm_setting_veth_get_peer@libnm_1_30_0 1.29.90
+ nm_setting_veth_get_type@libnm_1_30_0 1.29.90
+ nm_setting_veth_new@libnm_1_30_0 1.29.90
  nm_setting_vlan_add_priority@libnm_1_0_0 1.0.0
  nm_setting_vlan_add_priority_str@libnm_1_0_0 1.0.0
  nm_setting_vlan_clear_priorities@libnm_1_0_0 1.0.0
@@ -1053,6 +1285,9 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_vpn_new@libnm_1_0_0 1.0.0
  nm_setting_vpn_remove_data_item@libnm_1_0_0 1.0.0
  nm_setting_vpn_remove_secret@libnm_1_0_0 1.0.0
+ nm_setting_vrf_get_table@libnm_1_24_0 1.23.90
+ nm_setting_vrf_get_type@libnm_1_24_0 1.23.90
+ nm_setting_vrf_new@libnm_1_24_0 1.23.90
  nm_setting_vxlan_get_ageing@libnm_1_2_0 1.1.90
  nm_setting_vxlan_get_destination_port@libnm_1_2_0 1.1.90
  nm_setting_vxlan_get_id@libnm_1_2_0 1.1.90
@@ -1071,6 +1306,11 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_vxlan_get_ttl@libnm_1_2_0 1.1.90
  nm_setting_vxlan_get_type@libnm_1_2_0 1.1.90
  nm_setting_vxlan_new@libnm_1_2_0 1.1.90
+ nm_setting_wifi_p2p_get_peer@libnm_1_16_0 1.16.0
+ nm_setting_wifi_p2p_get_type@libnm_1_16_0 1.16.0
+ nm_setting_wifi_p2p_get_wfd_ies@libnm_1_16_0 1.16.0
+ nm_setting_wifi_p2p_get_wps_method@libnm_1_16_0 1.16.0
+ nm_setting_wifi_p2p_new@libnm_1_16_0 1.16.0
  nm_setting_wimax_get_mac_address@libnm_1_0_0 1.0.0
  nm_setting_wimax_get_network_name@libnm_1_0_0 1.0.0
  nm_setting_wimax_get_type@libnm_1_0_0 1.0.0
@@ -1106,10 +1346,28 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_wired_remove_s390_option@libnm_1_0_0 1.0.0
  nm_setting_wired_wake_on_lan_get_type@libnm_1_0_6 1.0.6
  nm_setting_wired_wake_on_lan_get_type@libnm_1_2_0 1.1.90
+ nm_setting_wireguard_append_peer@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_clear_peers@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_fwmark@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_ip4_auto_default_route@libnm_1_20_0 1.19.90
+ nm_setting_wireguard_get_ip6_auto_default_route@libnm_1_20_0 1.19.90
+ nm_setting_wireguard_get_listen_port@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_mtu@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_peer@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_peer_by_public_key@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_peer_routes@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_peers_len@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_private_key@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_private_key_flags@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_get_type@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_new@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_remove_peer@libnm_1_16_0 1.16.0
+ nm_setting_wireguard_set_peer@libnm_1_16_0 1.16.0
  nm_setting_wireless_add_mac_blacklist_item@libnm_1_0_0 1.0.0
  nm_setting_wireless_add_seen_bssid@libnm_1_0_0 1.0.0
  nm_setting_wireless_ap_security_compatible@libnm_1_0_0 1.0.0
  nm_setting_wireless_clear_mac_blacklist_items@libnm_1_0_0 1.0.0
+ nm_setting_wireless_get_ap_isolation@libnm_1_28_0 1.27.90
  nm_setting_wireless_get_band@libnm_1_0_0 1.0.0
  nm_setting_wireless_get_bssid@libnm_1_0_0 1.0.0
  nm_setting_wireless_get_channel@libnm_1_0_0 1.0.0
@@ -1175,6 +1433,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_setting_wireless_security_wps_method_get_type@libnm_1_10_0 1.9.90
  nm_setting_wireless_wake_on_wlan_get_type@libnm_1_12_0 1.11.90
  nm_setting_wpan_get_type@libnm_1_14_0 1.13.90
+ nm_settings_add_connection2_flags_get_type@libnm_1_20_0 1.19.90
  nm_settings_connection_flags_get_type@libnm_1_12_0 1.11.3
  nm_settings_error_get_type@libnm_1_0_0 1.0.0
  nm_settings_error_quark@libnm_1_0_0 1.0.0
@@ -1214,12 +1473,15 @@ libnm.so.0 libnm0 #MINVER#
  nm_tc_action_unref@libnm_1_10_2 1.10.2
  nm_tc_qdisc_dup@libnm_1_10_2 1.10.2
  nm_tc_qdisc_equal@libnm_1_10_2 1.10.2
+ nm_tc_qdisc_get_attribute@libnm_1_18_0 1.18.0
+ nm_tc_qdisc_get_attribute_names@libnm_1_18_0 1.18.0
  nm_tc_qdisc_get_handle@libnm_1_10_2 1.10.2
  nm_tc_qdisc_get_kind@libnm_1_10_2 1.10.2
  nm_tc_qdisc_get_parent@libnm_1_10_2 1.10.2
  nm_tc_qdisc_get_type@libnm_1_10_2 1.10.2
  nm_tc_qdisc_new@libnm_1_10_2 1.10.2
  nm_tc_qdisc_ref@libnm_1_10_2 1.10.2
+ nm_tc_qdisc_set_attribute@libnm_1_18_0 1.18.0
  nm_tc_qdisc_set_handle@libnm_1_10_2 1.10.2
  nm_tc_qdisc_unref@libnm_1_10_2 1.10.2
  nm_tc_tfilter_dup@libnm_1_10_2 1.10.2
@@ -1245,6 +1507,8 @@ libnm.so.0 libnm0 #MINVER#
  nm_team_link_watcher_get_source_host@libnm_1_10_2 1.10.2
  nm_team_link_watcher_get_target_host@libnm_1_10_2 1.10.2
  nm_team_link_watcher_get_type@libnm_1_10_2 1.10.2
+ nm_team_link_watcher_get_vlanid@libnm_1_16_0 1.16.0
+ nm_team_link_watcher_new_arp_ping2@libnm_1_16_0 1.16.0
  nm_team_link_watcher_new_arp_ping@libnm_1_10_2 1.10.2
  nm_team_link_watcher_new_ethtool@libnm_1_10_2 1.10.2
  nm_team_link_watcher_new_nsna_ping@libnm_1_10_2 1.10.2
@@ -1252,6 +1516,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_team_link_watcher_unref@libnm_1_10_2 1.10.2
  nm_ternary_get_type@libnm_1_14_0 1.13.90
  nm_utils_ap_mode_security_valid@libnm_1_0_0 1.0.0
+ nm_utils_base64secret_decode@libnm_1_16_0 1.16.0
  nm_utils_bin2hexstr@libnm_1_0_0 1.0.0
  nm_utils_bond_mode_int_to_string@libnm_1_2_0 1.1.90
  nm_utils_bond_mode_string_to_int@libnm_1_2_0 1.1.90
@@ -1300,6 +1565,7 @@ libnm.so.0 libnm0 #MINVER#
  nm_utils_is_uuid@libnm_1_0_0 1.0.0
  nm_utils_is_valid_iface_name@libnm_1_6_0 1.5.90
  nm_utils_parse_variant_attributes@libnm_1_8_0 1.8.0
+ nm_utils_print@libnm_1_30_0 1.29.90
  nm_utils_same_ssid@libnm_1_0_0 1.0.0
  nm_utils_security_type_get_type@libnm_1_0_0 1.0.0
  nm_utils_security_valid@libnm_1_0_0 1.0.0
@@ -1400,6 +1666,19 @@ libnm.so.0 libnm0 #MINVER#
  nm_vpn_service_plugin_shutdown@libnm_1_12_0 1.11.3
  nm_vpn_service_state_get_type@libnm_1_0_0 1.0.0
  nm_wep_key_type_get_type@libnm_1_0_0 1.0.0
+ nm_wifi_p2p_peer_connection_valid@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_filter_connections@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_flags@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_hw_address@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_last_seen@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_manufacturer@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_model@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_model_number@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_name@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_serial@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_strength@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_type@libnm_1_16_0 1.16.0
+ nm_wifi_p2p_peer_get_wfd_ies@libnm_1_16_0 1.16.0
  nm_wimax_nsp_connection_valid@libnm_1_0_0 1.0.0
  nm_wimax_nsp_filter_connections@libnm_1_0_0 1.0.0
  nm_wimax_nsp_get_name@libnm_1_0_0 1.0.0
@@ -1407,3 +1686,27 @@ libnm.so.0 libnm0 #MINVER#
  nm_wimax_nsp_get_signal_quality@libnm_1_0_0 1.0.0
  nm_wimax_nsp_get_type@libnm_1_0_0 1.0.0
  nm_wimax_nsp_network_type_get_type@libnm_1_0_0 1.0.0
+ nm_wireguard_peer_append_allowed_ip@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_clear_allowed_ips@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_cmp@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_allowed_ip@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_allowed_ips_len@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_endpoint@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_persistent_keepalive@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_preshared_key@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_preshared_key_flags@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_public_key@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_get_type@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_is_sealed@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_is_valid@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_new@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_new_clone@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_ref@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_remove_allowed_ip@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_seal@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_set_endpoint@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_set_persistent_keepalive@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_set_preshared_key@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_set_preshared_key_flags@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_set_public_key@libnm_1_16_0 1.16.0
+ nm_wireguard_peer_unref@libnm_1_16_0 1.16.0

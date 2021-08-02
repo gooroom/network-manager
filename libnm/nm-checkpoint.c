@@ -1,52 +1,42 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program. If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * Copyright 2017 Red Hat, Inc.
+ * Copyright (C) 2017 Red Hat, Inc.
  */
 
-#include "nm-default.h"
+#include "libnm/nm-default-libnm.h"
 
 #include "nm-checkpoint.h"
+
 #include "nm-core-internal.h"
 #include "nm-dbus-interface.h"
 #include "nm-device.h"
 #include "nm-object-private.h"
 
+/*****************************************************************************/
+
+NM_GOBJECT_PROPERTIES_DEFINE_BASE(PROP_DEVICES, PROP_CREATED, PROP_ROLLBACK_TIMEOUT, );
+
 typedef struct {
-	GPtrArray *devices;
-	gint64 created;
-	guint32 rollback_timeout;
+    NMLDBusPropertyAO devices;
+    gint64            created;
+    guint32           rollback_timeout;
 } NMCheckpointPrivate;
 
 struct _NMCheckpoint {
-	NMObject parent;
-	NMCheckpointPrivate _priv;
+    NMObject            parent;
+    NMCheckpointPrivate _priv;
 };
 
 struct _NMCheckpointClass {
-	NMObjectClass parent;
+    NMObjectClass parent;
 };
 
-G_DEFINE_TYPE (NMCheckpoint, nm_checkpoint, NM_TYPE_OBJECT)
+G_DEFINE_TYPE(NMCheckpoint, nm_checkpoint, NM_TYPE_OBJECT)
 
-#define NM_CHECKPOINT_GET_PRIVATE(self) _NM_GET_PRIVATE (self, NMCheckpoint, NM_IS_CHECKPOINT)
+#define NM_CHECKPOINT_GET_PRIVATE(self) \
+    _NM_GET_PRIVATE(self, NMCheckpoint, NM_IS_CHECKPOINT, NMObject)
 
-enum {
-	PROP_0,
-	PROP_DEVICES,
-	PROP_CREATED,
-	PROP_ROLLBACK_TIMEOUT,
-
-	LAST_PROP
-};
+/*****************************************************************************/
 
 /**
  * nm_checkpoint_get_devices:
@@ -59,11 +49,12 @@ enum {
  * Since: 1.12
  **/
 const GPtrArray *
-nm_checkpoint_get_devices (NMCheckpoint *checkpoint)
+nm_checkpoint_get_devices(NMCheckpoint *checkpoint)
 {
-	g_return_val_if_fail (NM_IS_CHECKPOINT (checkpoint), NULL);
+    g_return_val_if_fail(NM_IS_CHECKPOINT(checkpoint), NULL);
 
-	return NM_CHECKPOINT_GET_PRIVATE (checkpoint)->devices;
+    return nml_dbus_property_ao_get_objs_as_ptrarray(
+        &NM_CHECKPOINT_GET_PRIVATE(checkpoint)->devices);
 }
 
 /**
@@ -80,141 +71,132 @@ nm_checkpoint_get_devices (NMCheckpoint *checkpoint)
  * Since: 1.12
  **/
 gint64
-nm_checkpoint_get_created (NMCheckpoint *checkpoint)
+nm_checkpoint_get_created(NMCheckpoint *checkpoint)
 {
-	g_return_val_if_fail (NM_IS_CHECKPOINT (checkpoint), 0);
+    g_return_val_if_fail(NM_IS_CHECKPOINT(checkpoint), 0);
 
-	return NM_CHECKPOINT_GET_PRIVATE (checkpoint)->created;
+    return NM_CHECKPOINT_GET_PRIVATE(checkpoint)->created;
 }
 
 /**
  * nm_checkpoint_get_rollback_timeout:
  * @checkpoint: a #NMCheckpoint
  *
- * Gets the the timeout in seconds for automatic rollback.
+ * Gets the timeout in seconds for automatic rollback.
  *
  * Returns: the rollback timeout.
  *
  * Since: 1.12
  **/
 guint32
-nm_checkpoint_get_rollback_timeout (NMCheckpoint *checkpoint)
+nm_checkpoint_get_rollback_timeout(NMCheckpoint *checkpoint)
 {
-	g_return_val_if_fail (NM_IS_CHECKPOINT (checkpoint), 0);
+    g_return_val_if_fail(NM_IS_CHECKPOINT(checkpoint), 0);
 
-	return NM_CHECKPOINT_GET_PRIVATE (checkpoint)->rollback_timeout;
+    return NM_CHECKPOINT_GET_PRIVATE(checkpoint)->rollback_timeout;
 }
 
 /*****************************************************************************/
 
 static void
-nm_checkpoint_init (NMCheckpoint *checkpoint)
-{
-}
+nm_checkpoint_init(NMCheckpoint *checkpoint)
+{}
 
 static void
-finalize (GObject *object)
+get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-	NMCheckpointPrivate *priv = NM_CHECKPOINT_GET_PRIVATE (NM_CHECKPOINT (object));
+    NMCheckpoint *       checkpoint = NM_CHECKPOINT(object);
+    NMCheckpointPrivate *priv       = NM_CHECKPOINT_GET_PRIVATE(checkpoint);
 
-	g_ptr_array_unref (priv->devices);
-
-	G_OBJECT_CLASS (nm_checkpoint_parent_class)->finalize (object);
+    switch (prop_id) {
+    case PROP_DEVICES:
+        g_value_take_boxed(value,
+                           _nm_utils_copy_object_array(nm_checkpoint_get_devices(checkpoint)));
+        break;
+    case PROP_CREATED:
+        g_value_set_int64(value, priv->created);
+        break;
+    case PROP_ROLLBACK_TIMEOUT:
+        g_value_set_uint(value, priv->rollback_timeout);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
+    }
 }
 
-static void
-get_property (GObject *object,
-              guint prop_id,
-              GValue *value,
-              GParamSpec *pspec)
-{
-	NMCheckpoint *checkpoint = NM_CHECKPOINT (object);
-	NMCheckpointPrivate *priv = NM_CHECKPOINT_GET_PRIVATE (checkpoint);
-
-	switch (prop_id) {
-	case PROP_DEVICES:
-		g_value_take_boxed (value, _nm_utils_copy_object_array (priv->devices));
-		break;
-	case PROP_CREATED:
-		g_value_set_int64 (value, priv->created);
-		break;
-	case PROP_ROLLBACK_TIMEOUT:
-		g_value_set_uint (value, priv->rollback_timeout);
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
-}
+const NMLDBusMetaIface _nml_dbus_meta_iface_nm_checkpoint = NML_DBUS_META_IFACE_INIT_PROP(
+    NM_DBUS_INTERFACE_CHECKPOINT,
+    nm_checkpoint_get_type,
+    NML_DBUS_META_INTERFACE_PRIO_INSTANTIATE_30,
+    NML_DBUS_META_IFACE_DBUS_PROPERTIES(
+        NML_DBUS_META_PROPERTY_INIT_X("Created", PROP_CREATED, NMCheckpoint, _priv.created),
+        NML_DBUS_META_PROPERTY_INIT_AO_PROP("Devices",
+                                            PROP_DEVICES,
+                                            NMCheckpoint,
+                                            _priv.devices,
+                                            nm_device_get_type,
+                                            .is_always_ready = TRUE),
+        NML_DBUS_META_PROPERTY_INIT_U("RollbackTimeout",
+                                      PROP_ROLLBACK_TIMEOUT,
+                                      NMCheckpoint,
+                                      _priv.rollback_timeout), ), );
 
 static void
-init_dbus (NMObject *object)
+nm_checkpoint_class_init(NMCheckpointClass *klass)
 {
-	NMCheckpointPrivate *priv = NM_CHECKPOINT_GET_PRIVATE (NM_CHECKPOINT (object));
-	const NMPropertiesInfo property_info[] = {
-		{ NM_CHECKPOINT_DEVICES,            &priv->devices, NULL, NM_TYPE_DEVICE },
-		{ NM_CHECKPOINT_CREATED,            &priv->created },
-		{ NM_CHECKPOINT_ROLLBACK_TIMEOUT,   &priv->rollback_timeout },
-		{ NULL },
-	};
+    GObjectClass * object_class    = G_OBJECT_CLASS(klass);
+    NMObjectClass *nm_object_class = NM_OBJECT_CLASS(klass);
 
-	NM_OBJECT_CLASS (nm_checkpoint_parent_class)->init_dbus (object);
+    object_class->get_property = get_property;
 
-	_nm_object_register_properties (object,
-	                                NM_DBUS_INTERFACE_CHECKPOINT,
-	                                property_info);
-}
+    _NM_OBJECT_CLASS_INIT_PRIV_PTR_DIRECT(nm_object_class, NMCheckpoint);
 
-static void
-nm_checkpoint_class_init (NMCheckpointClass *checkpoint_class)
-{
-	GObjectClass *object_class = G_OBJECT_CLASS (checkpoint_class);
-	NMObjectClass *nm_object_class = NM_OBJECT_CLASS (checkpoint_class);
+    _NM_OBJECT_CLASS_INIT_PROPERTY_AO_FIELDS_1(nm_object_class, NMCheckpointPrivate, devices);
 
-	object_class->get_property = get_property;
-	object_class->finalize = finalize;
+    /**
+     * NMCheckpoint:devices: (type GPtrArray(NMDevice))
+     *
+     * The devices that are part of this checkpoint.
+     *
+     * Since: 1.12
+     **/
+    obj_properties[PROP_DEVICES] = g_param_spec_boxed(NM_CHECKPOINT_DEVICES,
+                                                      "",
+                                                      "",
+                                                      G_TYPE_PTR_ARRAY,
+                                                      G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
-	nm_object_class->init_dbus = init_dbus;
+    /**
+     * NMCheckpoint:created:
+     *
+     * The timestamp (in CLOCK_BOOTTIME milliseconds) of checkpoint creation.
+     *
+     * Since: 1.12
+     **/
+    obj_properties[PROP_CREATED] = g_param_spec_int64(NM_CHECKPOINT_CREATED,
+                                                      "",
+                                                      "",
+                                                      G_MININT64,
+                                                      G_MAXINT64,
+                                                      0,
+                                                      G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
-	/**
-	 * NMCheckpoint:devices: (type GPtrArray(NMDevice))
-	 *
-	 * The devices that are part of this checkpoint.
-	 *
-	 * Since: 1.12
-	 **/
-	g_object_class_install_property
-		(object_class, PROP_DEVICES,
-		 g_param_spec_boxed (NM_CHECKPOINT_DEVICES, "", "",
-		                     G_TYPE_PTR_ARRAY,
-		                     G_PARAM_READABLE |
-		                     G_PARAM_STATIC_STRINGS));
+    /**
+     * NMCheckpoint:rollback-timeout:
+     *
+     * Timeout in seconds for automatic rollback, or zero.
+     *
+     * Since: 1.12
+     **/
+    obj_properties[PROP_ROLLBACK_TIMEOUT] =
+        g_param_spec_uint(NM_CHECKPOINT_ROLLBACK_TIMEOUT,
+                          "",
+                          "",
+                          0,
+                          G_MAXUINT32,
+                          0,
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
-	/**
-	 * NMCheckpoint:created:
-	 *
-	 * The timestamp (in CLOCK_BOOTTIME milliseconds) of checkpoint creation.
-	 *
-	 * Since: 1.12
-	 **/
-	g_object_class_install_property
-		(object_class, PROP_CREATED,
-		 g_param_spec_int64 (NM_CHECKPOINT_CREATED, "", "",
-		                     G_MININT64, G_MAXINT64, 0,
-		                     G_PARAM_READABLE |
-		                     G_PARAM_STATIC_STRINGS));
-
-	/**
-	 * NMCheckpoint:rollback-timeout:
-	 *
-	 * Timeout in seconds for automatic rollback, or zero.
-	 *
-	 * Since: 1.12
-	 **/
-	g_object_class_install_property
-		(object_class, PROP_ROLLBACK_TIMEOUT,
-		 g_param_spec_uint (NM_CHECKPOINT_ROLLBACK_TIMEOUT, "", "",
-		                    0, G_MAXUINT32, 0,
-		                    G_PARAM_READABLE |
-		                    G_PARAM_STATIC_STRINGS));
+    _nml_dbus_meta_class_init_with_properties(object_class, &_nml_dbus_meta_iface_nm_checkpoint);
 }

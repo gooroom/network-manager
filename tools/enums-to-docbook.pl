@@ -1,21 +1,7 @@
 #!/usr/bin/perl -n
-
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-#
-#
-# Copyright 2016 Red Hat, Inc.
+# Copyright (C) 2016 Red Hat, Inc.
 #
 
 # This tool formats enums along with their Gtk-Doc comments from a header
@@ -28,6 +14,7 @@
 use strict;
 use warnings;
 
+our $enum_name;
 our $name;
 our $desc;
 our $choice;
@@ -89,6 +76,7 @@ chomp;
 
 if (/^\/\*\*$/) {
 	# Start of a documentation comment
+	$enum_name = undef;
 	$name = '';
 	$desc = '';
 	$choice = undef;
@@ -132,11 +120,24 @@ if (/^\/\*\*$/) {
 } elsif (/^\s+([^,\s]+),?$/) {
 	# A choice without a literal value
 	next unless @choices;
-	die "Saw enum value '$1', but didn't see start of enum before" unless defined $val;
-	my ($this) = grep { $_->[0] eq $1 } @choices;
-	die "Documentation for value '$1' missing" unless $this;
-	$val = inc $val;
-	$this->[2] = "= <literal>$val</literal>";
+
+	if (defined $enum_name) {
+		next unless $enum_name;
+		$val = $1;
+		my ($this) = grep { $_->[0] eq $enum_name } @choices;
+		die "Documentation for value '$1' missing" unless $this;
+		$this->[2] = "= <literal>$val</literal>";
+		$enum_name = undef;
+	} else {
+		die "Saw enum value '$1', but didn't see start of enum before" unless defined $val;
+		my ($this) = grep { $_->[0] eq $1 } @choices;
+		die "Documentation for value '$1' missing" unless $this;
+		$val = inc $val;
+		$this->[2] = "= <literal>$val</literal>";
+	}
+} elsif (/^\s+(\S+)\s+=$/) {
+	next unless @choices;
+	$enum_name = $1
 } elsif (/^\} ([^;]+);/) {
 	# End of an enum
 	next unless defined $name;

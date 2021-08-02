@@ -1,24 +1,24 @@
-test_unit = 'test-dispatcher-envp'
-
-incs = [
-  dispatcher_inc,
-  libnm_inc
-]
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 exe = executable(
-  test_unit,
-  test_unit + '.c',
-  include_directories: incs,
-  dependencies: nm_core_dep,
+  'test-dispatcher-envp',
+  [
+    'test-dispatcher-envp.c',
+    nmdbus_dispatcher_sources,
+  ],
+  include_directories: dispatcher_inc,
+  dependencies: [
+    libnm_nm_default_dep,
+    libnm_glib_aux_dep,
+  ],
   c_args: [
-      '-DNETWORKMANAGER_COMPILATION_TEST',
-      '-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_CLIENT',
-    ],
-  link_with: libnm_dispatcher_core
+    '-DG_LOG_DOMAIN="test"',
+  ] + introspection_extra_cflags,
+  link_with: libnm_dispatcher_core,
 )
 
 test(
-  'dispatcher/' + test_unit,
+  'dispatcher/test-dispatcher-envp',
   test_script,
-  args: test_args + [exe.full_path()]
+  args: test_args + [exe.full_path()],
 )

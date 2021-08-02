@@ -153,26 +153,18 @@ plugins-=remove-me
       </varlistentry>
       <varlistentry>
         <term><varname>monitor-connection-files</varname></term>
-        <listitem><para>Whether the configured settings plugin(s)
-        should set up file monitors and immediately pick up changes
-        made to connection files while NetworkManager is running. This
-        is disabled by default; NetworkManager will only read
-        the connection files at startup, and when explicitly requested
-        via the ReloadConnections D-Bus call. If this key is set to
-        '<literal>true</literal>', then NetworkManager will reload
-        connection files any time they changed.
-        Automatic reloading is not advised because there are race conditions
-        involved and it depends on the way how the editor updates the file.
-        In some situations, NetworkManager might first delete and add the
-        connection anew, instead of updating the existing one. Also, NetworkManager
-        might pick up incomplete settings while the user is still editing the files.
-        </para></listitem>
+        <listitem><para>This setting is deprecated and has no effect. Profiles
+        from disk are never automatically reloaded. Use for example <literal>nmcli connection (re)load</literal>
+        for that.</para></listitem>
       </varlistentry>
       <varlistentry>
         <term><varname>auth-polkit</varname></term>
         <listitem><para>Whether the system uses PolicyKit for authorization.
-        If <literal>false</literal>, all requests will be allowed. If
-        <literal>true</literal>, non-root requests are authorized using PolicyKit.
+        If <literal>true</literal>, non-root requests are authorized using PolicyKit.
+        Requests from root (user ID zero) are always granted without asking PolicyKit.
+        If <literal>false</literal>, all requests will be allowed and PolicyKit is
+        not used. If set to <literal>root-only</literal> PolicyKit is not used and
+        all requests except root are denied.
         The default value is <literal>&NM_CONFIG_DEFAULT_MAIN_AUTH_POLKIT_TEXT;</literal>.
         </para></listitem>
       </varlistentry>
@@ -187,7 +179,7 @@ plugins-=remove-me
         option uses a built-in DHCP client which is not currently as
         featureful as the external clients.</para>
         <para>If this key is missing, it defaults to <literal>&NM_CONFIG_DEFAULT_MAIN_DHCP;</literal>.
-        It the chosen plugin is not available, clients are looked for
+        If the chosen plugin is not available, clients are looked for
         in this order: <literal>dhclient</literal>, <literal>dhcpcd</literal>,
         <literal>internal</literal>.</para></listitem>
       </varlistentry>
@@ -204,7 +196,7 @@ plugins-=remove-me
         <para>When the default wired connection is deleted or saved
         to a new persistent connection by a plugin, the device is
         added to a list in the file
-        <filename>/run/NetworkManager/no-auto-default.state</filename>
+        <filename>&nmstatedir;/no-auto-default.state</filename>
         to prevent creating the default connection for that device
         again.</para>
         <para>See <xref linkend="device-spec"/> for the syntax how to
@@ -262,7 +254,7 @@ no-auto-default=*
             environments where network setup is more or less static or it is
             desirable to save process time but still handle some dynamic
             configurations.  When this option is <literal>true</literal>,
-            network configuration for WiFi, WWAN, Bluetooth, ADSL, and PPPoE
+            network configuration for Wi-Fi, WWAN, Bluetooth, ADSL, and PPPoE
             interfaces cannot be preserved due to their use of external
             services, and these devices will be deconfigured when NetworkManager
             quits even though other interface's configuration may be preserved.
@@ -286,18 +278,24 @@ no-auto-default=*
             this option. An hostname empty or equal to 'localhost', 'localhost6',
             'localhost.localdomain' or 'localhost6.localdomain' is considered invalid.
           </para>
-          <para><literal>default</literal>: NetworkManager will update the hostname
-          with the one provided via DHCP on the main connection (the one with a default
-          route). If not present, the hostname will be updated to the last one set
-          outside NetworkManager. If it is not valid, NetworkManager will try to recover
-          the hostname from the reverse lookup of the IP address of the main connection.
-          If this fails too, the hostname will be set to 'localhost.localdomain'.
+          <para><literal>default</literal>: NetworkManager will update the
+          hostname with the one provided via DHCP or reverse DNS lookup of the
+          IP address on the connection with the default route or on any
+          connection with the property hostname.only-from-default set to
+          '<literal>false</literal>'. Connections are considered in order of
+          increasing value of the <literal>hostname.priority</literal>
+          property. In case multiple connections have the same priority,
+          connections activated earlier are considered first. If no hostname can
+          be determined in such way, the hostname will be updated to the last
+          one set outside NetworkManager or to 'localhost.localdomain'.
           </para>
-          <para><literal>dhcp</literal>: NetworkManager will update the transient hostname
-          only with information coming from DHCP. No fallback nor reverse lookup will be
-          performed, but when the dhcp connection providing the hostname is deactivated,
-          the hostname is reset to the last hostname set outside NetworkManager or
-          'localhost' if none valid is there.
+          <para><literal>dhcp</literal>: this is similar to
+          '<literal>default</literal>', with the difference that after trying to
+          get the DHCP hostname, reverse DNS lookup is not done. Note that
+          selecting this option is equivalent to setting the property
+          '<literal>hostname.from-dns-lookup</literal>' to
+          '<literal>false</literal>' globally for all connections in
+          NetworkManager.conf.
           </para>
           <para><literal>none</literal>: NetworkManager will not manage the transient
           hostname and will never set it.
@@ -306,8 +304,8 @@ no-auto-default=*
       </varlistentry>
       <varlistentry>
         <term><varname>dns</varname></term>
-        <listitem><para>Set the DNS (<filename>resolv.conf</filename>) processing mode.
-        If the key is unspecified, <literal>default</literal> is used,
+        <listitem><para>Set the DNS processing mode.</para>
+        <para>If the key is unspecified, <literal>default</literal> is used,
         unless <filename>/etc/resolv.conf</filename> is a symlink to
         <filename>/run/systemd/resolve/stub-resolv.conf</filename>,
         <filename>/run/systemd/resolve/resolv.conf</filename>,
@@ -317,10 +315,11 @@ no-auto-default=*
         </para>
         <para><literal>default</literal>: NetworkManager will update
         <filename>/etc/resolv.conf</filename> to reflect the nameservers
-        provided by currently active connections.</para>
+        provided by currently active connections. The <literal>rc-manager</literal>
+        setting (below) controls how this is done.</para>
         <para><literal>dnsmasq</literal>: NetworkManager will run
-        dnsmasq as a local caching nameserver, using a "split DNS"
-        configuration if you are connected to a VPN, and then update
+        dnsmasq as a local caching nameserver, using "Conditional Forwarding"
+        if you are connected to a VPN, and then update
         <filename>resolv.conf</filename> to point to the local
         nameserver. It is possible to pass custom options to the
         dnsmasq instance by adding them to files in the
@@ -331,51 +330,99 @@ no-auto-default=*
         after some time. This behavior can be modified passing the
         'all-servers' or 'strict-order' options to dnsmasq (see the
         manual page for more details).</para>
-        <para><literal>unbound</literal>: NetworkManager will talk
-        to unbound and dnssec-triggerd, providing a "split DNS"
-        configuration with DNSSEC support. <filename>/etc/resolv.conf</filename>
-        will be managed by dnssec-trigger daemon.</para>
         <para><literal>systemd-resolved</literal>: NetworkManager will
         push the DNS configuration to systemd-resolved</para>
+        <para><literal>unbound</literal>: NetworkManager will talk
+        to unbound and dnssec-triggerd, using "Conditional Forwarding"
+        with DNSSEC support. <filename>/etc/resolv.conf</filename>
+        will be managed by dnssec-trigger daemon.</para>
         <para><literal>none</literal>: NetworkManager will not
         modify resolv.conf. This implies
         <literal>rc-manager</literal>&nbsp;<literal>unmanaged</literal></para>
+
+        <para>Note that the plugins <literal>dnsmasq</literal>, <literal>systemd-resolved</literal>
+        and <literal>unbound</literal> are caching local nameservers.
+        Hence, when NetworkManager writes <filename>&nmrundir;/resolv.conf</filename>
+        and <filename>/etc/resolv.conf</filename> (according to <literal>rc-manager</literal>
+        setting below), the name server there will be localhost only.
+        NetworkManager also writes a file <filename>&nmrundir;/no-stub-resolv.conf</filename>
+        that contains the original name servers pushed to the DNS plugin.</para>
+
+        <para>When using <literal>dnsmasq</literal> and <literal>systemd-resolved</literal>
+        per-connection added dns servers will always be queried using
+        the device the connection has been activated on.</para>
         </listitem>
       </varlistentry>
 
       <varlistentry>
         <term><varname>rc-manager</varname></term>
-        <listitem><para>Set the <filename>resolv.conf</filename>
-        management mode. The default value depends on NetworkManager build
-        options, and this version of NetworkManager was build with a default of
-        "<literal>&NM_CONFIG_DEFAULT_MAIN_RC_MANAGER;</literal>".
-        Regardless of this setting, NetworkManager will
-        always write resolv.conf to its runtime state directory
-        <filename>&nmrundir;/resolv.conf</filename>.</para>
+        <listitem>
+        <para>Set the <filename>resolv.conf</filename>
+          management mode. This option is about how NetworkManager writes to
+          <filename>/etc/resolv.conf</filename>, if at all.
+          The default value depends on NetworkManager build
+          options, and this version of NetworkManager was build with a default of
+          "<literal>&NM_CONFIG_DEFAULT_MAIN_RC_MANAGER;</literal>".
+          Regardless of this setting, NetworkManager will
+          always write its version of resolv.conf to its runtime state directory
+          as <filename>&nmrundir;/resolv.conf</filename>.
+        </para>
+        <para>If you configure <literal>dns=none</literal> or make <filename>/etc/resolv.conf</filename>
+          immutable with <literal>chattr +i</literal>, NetworkManager will ignore this setting and
+          always choose <literal>unmanaged</literal> (below).
+        </para>
+        <para><literal>auto</literal>: if systemd-resolved plugin is configured via
+          the <literal>dns</literal> setting or if it gets detected as main DNS plugin,
+          NetworkManager will update systemd-resolved without touching <filename>/etc/resolv.conf</filename>.
+          Alternatively, if <literal>resolvconf</literal> or <literal>netconfig</literal> are enabled
+          at compile time and the respective binary is found, NetworkManager will automatically use it.
+          Note that if you install or uninstall these binaries, you need to reload the
+          <literal>rc-manager</literal> setting with SIGHUP or
+          <literal>systemctl reload NetworkManager</literal>. As last fallback
+          it uses the <literal>symlink</literal> option (see next).
+        </para>
         <para><literal>symlink</literal>: If <filename>/etc/resolv.conf</filename> is
-        a regular file, NetworkManager will replace the file on update. If
-        <filename>/etc/resolv.conf</filename> is instead a symlink, NetworkManager
-        will leave it alone. Unless the symlink points to the internal file
-        <filename>&nmrundir;/resolv.conf</filename>,
-        in which case the symlink will be updated to emit an inotify notification.
-        This allows the user to conveniently instruct NetworkManager not
-        to manage <filename>/etc/resolv.conf</filename> by replacing it with
-        a symlink.</para>
+          a regular file or does not exist, NetworkManager will write the file directly.
+          If <filename>/etc/resolv.conf</filename> is instead a symlink, NetworkManager
+          will leave it alone. Unless the symlink points to the internal file
+          <filename>&nmrundir;/resolv.conf</filename>,
+          in which case the symlink will be updated to emit an inotify notification.
+          This allows the user to conveniently instruct NetworkManager not
+          to manage <filename>/etc/resolv.conf</filename> by replacing it with
+          a symlink.
+        </para>
         <para><literal>file</literal>: NetworkManager will write
-        <filename>/etc/resolv.conf</filename> as file. If it finds
-        a symlink to an existing target, it will follow the symlink and
-        update the target instead. In no case will an existing symlink
-        be replaced by a file. Note that older versions of NetworkManager
-        behaved differently and would replace dangling symlinks with a
-        plain file.</para>
+            <filename>/etc/resolv.conf</filename> as regular file. If it finds
+            a symlink to an existing target, it will follow the symlink and
+            update the target instead. In no case will an existing symlink
+            be replaced by a file. Note that older versions of NetworkManager
+            behaved differently and would replace dangling symlinks with a
+            plain file.
+        </para>
         <para><literal>resolvconf</literal>: NetworkManager will run
-        resolvconf to update the DNS configuration.</para>
+          resolvconf to update the DNS configuration.</para>
         <para><literal>netconfig</literal>: NetworkManager will run
-        netconfig to update the DNS configuration.</para>
+          netconfig to update the DNS configuration.</para>
         <para><literal>unmanaged</literal>: don't touch
-        <filename>/etc/resolv.conf</filename>.</para>
+          <filename>/etc/resolv.conf</filename>.</para>
         <para><literal>none</literal>: deprecated alias for
-        <literal>symlink</literal>.</para>
+          <literal>symlink</literal>.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>systemd-resolved</varname></term>
+        <listitem><para>Send the connection DNS configuration to
+        <literal>systemd-resolved</literal>. Defaults to "<literal>true</literal>".
+        </para>
+        <para>Note that this setting is complementary to the
+        <varname>dns</varname> setting. You can keep this enabled while using
+        <varname>dns</varname> set to another DNS plugin alongside
+        <literal>systemd-resolved</literal>, or <varname>dns</varname> set to
+        <literal>systemd-resolved</literal> to configure the system resolver to use
+        <literal>systemd-resolved</literal>.</para>
+        <para>If systemd-resolved is enabled, the connectivity check resolves the
+        hostname per-device.</para>
         </listitem>
       </varlistentry>
 
@@ -383,7 +430,7 @@ no-auto-default=*
         <term><varname>debug</varname></term>
         <listitem><para>Comma separated list of options to aid
         debugging. This value will be combined with the environment
-        variable <literal>NM_DEBUG</literal>. Currently the following
+        variable <literal>NM_DEBUG</literal>. Currently, the following
         values are supported:</para>
         <para>
           <literal>RLIMIT_CORE</literal>: set ulimit -c unlimited
@@ -458,7 +505,7 @@ no-auto-default=*
           <listitem><para>Set devices that should be ignored by
            NetworkManager.
           </para>
-          <para>See <xref linkend="device-spec"/> for the syntax how to
+          <para>See <xref linkend="device-spec"/> for the syntax on how to
            specify a device.
           </para>
           <para>
@@ -627,6 +674,18 @@ unmanaged-devices=mac:00:22:68:1c:59:b1;mac:00:1E:65:30:D1:C4;interface-name:eth
     <para>Specify default values for connections.
     </para>
     <para>
+      Such default values are only consulted if the corresponding per-connection property
+      explicitly allows for that. That means, all these properties correspond to
+      a property of the connection profile (for example <literal>connection.mud-url</literal>).
+      Only if the per-profile property is set to a special value that indicates to use the
+      default, the default value from NetworkManager.conf is consulted. It depends on the
+      property, which is the special value that indicates fallback to the default, but it
+      usually is something like empty, unset values or special numeric values like 0 or -1.
+      That means the effectively used value can first always be configured for each profile,
+      and these default values only matter if the per-profile values explicitly indicates
+      to use the default from <literal>NetworkManager.conf</literal>.
+    </para>
+    <para>
       Example:
 <programlisting>
 [connection]
@@ -639,8 +698,10 @@ ipv6.ip6-privacy=0
       Not all properties can be overwritten, only the following
       properties are supported to have their default values configured
       (see <link linkend='nm-settings'><citerefentry><refentrytitle>nm-settings</refentrytitle><manvolnum>5</manvolnum></citerefentry></link> for details).
-      A default value is only consulted if the corresponding per-connection value
-      explicitly allows for that.
+    </para>
+    <para>
+      <!-- The following comment is used by check-config-options.sh, don't remove it. -->
+      <!-- start connection defaults -->
       <variablelist>
         <varlistentry>
           <term><varname>802-1x.auth-timeout</varname></term>
@@ -657,13 +718,19 @@ ipv6.ip6-privacy=0
           <term><varname>connection.autoconnect-slaves</varname></term>
         </varlistentry>
         <varlistentry>
+          <term><varname>connection.mud-url</varname></term>
+          <listitem><para>If unspecified, MUD URL defaults to <literal>"none"</literal>.</para></listitem>
+        </varlistentry>
+        <varlistentry>
           <term><varname>connection.lldp</varname></term>
         </varlistentry>
         <varlistentry>
           <term><varname>connection.llmnr</varname></term>
+          <listitem><para>If unspecified, the ultimate default values depends on the DNS plugin. With systemd-resolved the default currently is "yes" (2) and for all other plugins "no" (0).</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>connection.mdns</varname></term>
+          <listitem><para>If unspecified, the ultimate default values depends on the DNS plugin. With systemd-resolved the default currently is "no" (0) and for all other plugins also "no" (0).</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>connection.stable-id</varname></term>
@@ -686,6 +753,18 @@ ipv6.ip6-privacy=0
           <term><varname>gsm.mtu</varname></term>
         </varlistentry>
         <varlistentry>
+          <term><varname>hostname.from-dhcp</varname></term>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>hostname.from-dns-lookup</varname></term>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>hostname.only-from-default</varname></term>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>hostname.priority</varname></term>
+        </varlistentry>
+        <varlistentry>
           <term><varname>infiniband.mtu</varname></term>
           <listitem><para>If configured explicitly to 0, the MTU is not reconfigured during device activation unless it is required due to IPv6 constraints. If left unspecified, a DHCP/IPv6 SLAAC provided value is used or the MTU is left unspecified on activation.</para></listitem>
         </varlistentry>
@@ -700,9 +779,26 @@ ipv6.ip6-privacy=0
           <term><varname>ipv4.dhcp-client-id</varname></term>
         </varlistentry>
         <varlistentry>
+          <term><varname>ipv4.dhcp-iaid</varname></term>
+          <listitem><para>If left unspecified, it defaults to "ifname".</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv4.dhcp-hostname-flags</varname></term>
+          <listitem><para>If left unspecified, the value 3 (fqdn-encoded,fqdn-serv-update) is used.</para></listitem>
+        </varlistentry>
+        <varlistentry>
           <term><varname>ipv4.dhcp-timeout</varname></term>
           <listitem><para>If left unspecified, the default value for
            the interface type is used.</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv4.dhcp-vendor-class-identifier</varname></term>
+          <listitem><para>If left unspecified, the default is to not send the DHCP option to the server.</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv4.dns-priority</varname></term>
+          <listitem><para>If unspecified or zero, use 50 for VPN profiles
+           and 100 for other profiles.</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>ipv4.route-metric</varname></term>
@@ -715,13 +811,30 @@ ipv6.ip6-privacy=0
           </para></listitem>
         </varlistentry>
         <varlistentry>
+          <term><varname>ipv6.ra-timeout</varname></term>
+          <listitem><para>If left unspecified, the default value depends on the sysctl solicitation settings.</para></listitem>
+        </varlistentry>
+        <varlistentry>
           <term><varname>ipv6.dhcp-duid</varname></term>
           <listitem><para>If left unspecified, it defaults to "lease".</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv6.dhcp-iaid</varname></term>
+          <listitem><para>If left unspecified, it defaults to "ifname".</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv6.dhcp-hostname-flags</varname></term>
+          <listitem><para>If left unspecified, the value 1 (fqdn-serv-update) is used.</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>ipv6.dhcp-timeout</varname></term>
           <listitem><para>If left unspecified, the default value for
            the interface type is used.</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv6.dns-priority</varname></term>
+          <listitem><para>If unspecified or zero, use 50 for VPN profiles
+           and 100 for other profiles.</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>ipv6.ip6-privacy</varname></term>
@@ -746,6 +859,10 @@ ipv6.ip6-privacy=0
         <varlistentry>
           <term><varname>vpn.timeout</varname></term>
           <listitem><para>If left unspecified, default value of 60 seconds is used.</para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>wifi.ap-isolation</varname></term>
+          <listitem><para>If left unspecified, AP isolation is disabled.</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>wifi.cloned-mac-address</varname></term>
@@ -782,7 +899,12 @@ ipv6.ip6-privacy=0
         <varlistentry>
           <term><varname>wifi.wake-on-wlan</varname></term>
         </varlistentry>
+        <varlistentry>
+          <term><varname>wireguard.mtu</varname></term>
+        </varlistentry>
       </variablelist>
+      <!-- The following comment is used by check-config-options.sh, don't remove it. -->
+      <!-- end connection defaults -->
     </para>
     </refsect2>
 
@@ -964,7 +1086,7 @@ managed=1
           <term><varname>wifi.backend</varname></term>
           <listitem>
             <para>
-              Specify the Wi-Fi backend used for the device. Currently supported
+              Specify the Wi-Fi backend used for the device. Currently, supported
               are <literal>wpa_supplicant</literal> and <literal>iwd</literal> (experimental).
             </para>
           </listitem>
@@ -980,8 +1102,25 @@ managed=1
             </para>
           </listitem>
         </varlistentry>
+        <varlistentry>
+          <term><varname>wifi.iwd.autoconnect</varname></term>
+          <listitem>
+            <para>
+              If <literal>wifi.backend</literal> is <literal>iwd</literal>, setting this to
+              <literal>false</literal> forces IWD's autoconnect mechanism to be disabled for
+              this device and connections will only be initiated by NetworkManager whether
+              commaned by a client or automatically.  Leaving it <literal>true</literal> (default)
+              stops NetworkManager from automatically initiating connections and allows
+              IWD to use its network ranking and scanning logic to decide the best networks
+              to autoconnect to next.  Connections' <literal>autoconnect-priority</literal>,
+              <literal>autoconnect-retries</literal> settings will be ignored.  Other settings
+              like <literal>permissions</literal> or <literal>multi-connect</literal> may interfere
+              with IWD connection attempts.
+            </para>
+          </listitem>
+        </varlistentry>
         <varlistentry id="sriov-num-vfs">
-          <term><varname>sriov-num-vfs</varname></term>
+         <term><varname>sriov-num-vfs</varname></term>
           <listitem>
             <para>
               Specify the number of virtual functions (VF) to enable
@@ -1009,13 +1148,43 @@ managed=1
 
   <refsect1>
     <title><literal>connectivity</literal> section</title>
+
     <para>This section controls NetworkManager's optional connectivity
     checking functionality.  This allows NetworkManager to detect
     whether or not the system can actually access the internet or
     whether it is behind a captive portal.</para>
 
+    <para>Connectivity checking serves two purposes. For one, it exposes
+    a connectivity state on D-Bus, which other applications may use. For example,
+    Gnome's portal helper uses this as signal to show a captive portal login
+    page.
+    The other use is that default-route of devices without global connectivity
+    get a penalty of +20000 to the route-metric. This has the purpose to give a
+    better default-route to devices that have global connectivity. For example,
+    when being connected to WWAN and to a Wi-Fi network which is behind a captive
+    portal, WWAN still gets preferred until login.</para>
+
+    <para>Note that your distribution might set <literal>/proc/sys/net/ipv4/conf/*/rp_filter</literal> to
+    strict filtering. That works badly with per-device connectivity checking,
+    which uses SO_BINDDEVICE to send requests on all devices. A strict rp_filter
+    setting will reject any response and the connectivity check on all but the
+    best route will fail.</para>
+
     <para>
       <variablelist>
+        <varlistentry>
+          <term><varname>enabled</varname></term>
+          <listitem><para>Whether connectivity check is enabled.
+          Note that to enable connectivity check, a valid uri must
+          also be configured. The value defaults to true, but since
+          the uri is unset by default, connectivity check may be disabled.
+          The main purpose of this option is to have a single flag
+          to disable connectivity check. Note that this setting can
+          also be set via D-Bus API at runtime. In that case, the value gets
+          stored in <filename>/var/lib/NetworkManager/NetworkManager-intern.conf</filename>
+          file.
+          </para></listitem>
+        </varlistentry>
         <varlistentry>
           <term><varname>uri</varname></term>
           <listitem><para>The URI of a web page to periodically
@@ -1037,10 +1206,15 @@ managed=1
         </varlistentry>
         <varlistentry>
           <term><varname>response</varname></term>
-          <listitem><para>If set controls what body content
+          <listitem><para>If set, controls what body content
           NetworkManager checks for when requesting the URI for
-          connectivity checking.  If missing, defaults to
-          "NetworkManager is online" </para></listitem>
+          connectivity checking.  Note that this only compares
+          that the HTTP response starts with the specifid text,
+          it does not compare the exact string. This behavior
+          might change in the future, so avoid relying on it.
+          If missing, the response defaults to "NetworkManager is online".
+          If set to empty, the HTTP server is expected to answer with
+          status code 204 or send no data.</para></listitem>
         </varlistentry>
       </variablelist>
     </para>
@@ -1064,7 +1238,7 @@ managed=1
           <term><varname>options</varname></term>
           <listitem>
             <para>
-             A list of of options to be passed to the hostname resolver.
+             A list of options to be passed to the hostname resolver.
            </para>
           </listitem>
         </varlistentry>
@@ -1149,7 +1323,7 @@ enable=nm-version-min:1.2
 
 # Match against the maximum allowed version. The example matches
 # versions 1.2.0, 1.2.2, 1.2.4. Again, only the last version digit
-# is allowed to be smaller. So this would not match match on 1.1.10.
+# is allowed to be smaller. So this would not match on 1.1.10.
 [.config]
 enable=nm-version-max:1.2.6
 </programlisting>
@@ -1273,17 +1447,8 @@ enable=nm-version-min:1.3,nm-version-min:1.2.6,nm-version-min:1.0.16
         <term><varname>ibft</varname>, <varname>no-ibft</varname></term>
         <listitem>
           <para>
-            This plugin allows to read iBFT configuration (iSCSI Boot Firmware Table).
-            The configuration is read using <filename>/sbin/iscsiadm</filename>. Users are
-            expected to configure iBFT connections via the firmware interfaces.
-            If ibft support is available, it is automatically enabled after
-            <literal>ifcfg-rh</literal>. This can be disabled by <literal>no-ibft</literal>.
-            You can also explicitly specify <literal>ibft</literal> to load the
-            plugin without <literal>ifcfg-rh</literal> or to change the plugin order.
-          </para>
-          <para>
-            Note that ibft plugin uses <filename>/sbin/iscsiadm</filename> and thus requires
-            CAP_SYS_ADMIN capability.
+            These plugins are deprecated and their selection has no effect.
+            This is now handled by nm-initrd-generator.
           </para>
         </listitem>
       </varlistentry>

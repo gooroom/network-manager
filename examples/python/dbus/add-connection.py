@@ -1,18 +1,5 @@
 #!/usr/bin/env python
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Copyright (C) 2010 - 2012 Red Hat, Inc.
 #
@@ -30,34 +17,33 @@
 
 import dbus, uuid
 
-s_wired = dbus.Dictionary({'duplex': 'full'})
-s_con = dbus.Dictionary({
-            'type': '802-3-ethernet',
-            'uuid': str(uuid.uuid4()),
-            'id': 'MyConnectionExample'})
+s_wired = dbus.Dictionary({"duplex": "full"})
 
-addr1 = dbus.Dictionary({
-    'address': '10.1.2.3',
-    'prefix': dbus.UInt32(8)})
-s_ip4 = dbus.Dictionary({
-            'address-data': dbus.Array([addr1], signature=dbus.Signature('a{sv}')),
-            'gateway': '10.1.2.1',
-            'method': 'manual'})
+s_con = dbus.Dictionary(
+    {"type": "802-3-ethernet", "uuid": str(uuid.uuid4()), "id": "MyConnectionExample"}
+)
 
-s_ip6 = dbus.Dictionary({'method': 'ignore'})
+addr1 = dbus.Dictionary({"address": "10.1.2.3", "prefix": dbus.UInt32(8)})
 
-con = dbus.Dictionary({
-    '802-3-ethernet': s_wired,
-    'connection': s_con,
-    'ipv4': s_ip4,
-    'ipv6': s_ip6})
+s_ip4 = dbus.Dictionary(
+    {
+        "address-data": dbus.Array([addr1], signature=dbus.Signature("a{sv}")),
+        "gateway": "10.1.2.1",
+        "method": "manual",
+    }
+)
 
+s_ip6 = dbus.Dictionary({"method": "ignore"})
 
-print("Creating connection:", s_con['id'], "-", s_con['uuid'])
+con = dbus.Dictionary(
+    {"802-3-ethernet": s_wired, "connection": s_con, "ipv4": s_ip4, "ipv6": s_ip6}
+)
 
+print("Creating connection:", s_con["id"], "-", s_con["uuid"])
 bus = dbus.SystemBus()
-proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+proxy = bus.get_object(
+    "org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings"
+)
 settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
 
 settings.AddConnection(con)
-

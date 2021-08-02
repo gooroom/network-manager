@@ -30,7 +30,12 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CAPABILITY_TEAM</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>1</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>Teams can be managed</para><para></para></entry>
+              <entry role="enum_member_description"><para>Teams can be managed. This means the team device plugin is loaded.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CAPABILITY_OVS</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>OpenVSwitch can be managed. This means the OVS device plugin is loaded. Since: 1.24.</para><para></para></entry>
             </row>
           </tbody>
         </tgroup>
@@ -125,7 +130,7 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CONNECTIVITY_PORTAL</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>2</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>The Internet connection is hijacked by a captive portal gateway. The graphical shell may open a sandboxed web browser window (because the captive portals typically attempt a man-in-the-middle attacks agains the https connections) for the purpose of authenticating to a gateway and retrigger the connectivity check with CheckConnectivity() when the browser window is dismissed.</para><para></para></entry>
+              <entry role="enum_member_description"><para>The Internet connection is hijacked by a captive portal gateway. The graphical shell may open a sandboxed web browser window (because the captive portals typically attempt a man-in-the-middle attacks against the https connections) for the purpose of authenticating to a gateway and retrigger the connectivity check with CheckConnectivity() when the browser window is dismissed.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CONNECTIVITY_LIMITED</para><para></para></entry>
@@ -175,7 +180,7 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_DEVICE_TYPE_WIFI</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>2</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>an 802.11 WiFi device</para><para></para></entry>
+              <entry role="enum_member_description"><para>an 802.11 Wi-Fi device</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_DEVICE_TYPE_UNUSED1</para><para></para></entry>
@@ -307,6 +312,16 @@
               <entry role="enum_member_value"><para>= <literal>29</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>a WireGuard interface</para><para></para></entry>
             </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_TYPE_WIFI_P2P</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>30</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>an 802.11 Wi-Fi P2P device. Since: 1.16.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_TYPE_VRF</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>31</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>A VRF (Virtual Routing and Forwarding) interface. Since: 1.24.</para><para></para></entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
@@ -432,6 +447,16 @@
               <entry role="enum_member_value"><para>= <literal>0x00000400</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>device supports 5GHz frequencies</para><para></para></entry>
             </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_WIFI_DEVICE_CAP_MESH</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x00001000</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>device supports acting as a mesh point. Since: 1.20.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_WIFI_DEVICE_CAP_IBSS_RSN</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x00002000</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>device supports WPA2/RSN in an IBSS network. Since: 1.22.</para><para></para></entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
@@ -552,6 +577,26 @@
               <entry role="enum_member_value"><para>= <literal>0x00000200</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>802.1x authentication and key management is supported</para><para></para></entry>
             </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_802_11_AP_SEC_KEY_MGMT_SAE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x00000400</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>WPA/RSN Simultaneous Authentication of Equals is supported</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_802_11_AP_SEC_KEY_MGMT_OWE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x00000800</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>WPA/RSN Opportunistic Wireless Encryption is supported</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_802_11_AP_SEC_KEY_MGMT_OWE_TM</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x00001000</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>WPA/RSN Opportunistic Wireless Encryption transition mode is supported. Since: 1.26.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_802_11_AP_SEC_KEY_MGMT_EAP_SUITE_B_192</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x00002000</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>WPA3 Enterprise Suite-B 192 bit mode is supported. Since: 1.30.</para><para></para></entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
@@ -591,6 +636,11 @@
               <entry role="enum_member_name"><para>NM_802_11_MODE_AP</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>3</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>the device is an access point/hotspot.  Not valid for access point objects; used only for hotspot mode on the local machine.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_802_11_MODE_MESH</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>4</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the device is a 802.11s mesh point. Since: 1.20.</para><para></para></entry>
             </row>
           </tbody>
         </tgroup>
@@ -760,7 +810,7 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_DEVICE_STATE_CONFIG</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>50</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>the device is connecting to the requested network. This may include operations like associating with the WiFi AP, dialing the modem, connecting to the remote Bluetooth device, etc.</para><para></para></entry>
+              <entry role="enum_member_description"><para>the device is connecting to the requested network. This may include operations like associating with the Wi-Fi AP, dialing the modem, connecting to the remote Bluetooth device, etc.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_DEVICE_STATE_NEED_AUTH</para><para></para></entry>
@@ -1085,7 +1135,7 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_DEVICE_STATE_REASON_SSID_NOT_FOUND</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>53</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>The WiFi network could not be found</para><para></para></entry>
+              <entry role="enum_member_description"><para>The Wi-Fi network could not be found</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_DEVICE_STATE_REASON_SECONDARY_CONNECTION_FAILED</para><para></para></entry>
@@ -1152,6 +1202,11 @@
               <entry role="enum_member_value"><para>= <literal>66</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>configuration of SR-IOV parameters failed</para><para></para></entry>
             </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_STATE_REASON_PEER_NOT_FOUND</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>67</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>The Wi-Fi P2P peer could not be found</para><para></para></entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
@@ -1163,7 +1218,7 @@
     <indexterm zone="NMMetered">
       <primary>NMMetered</primary>
     </indexterm>
-    <para><para>Since: 1.2</para><para></para></para>
+    <para><para>The NMMetered enum has two different purposes: one is to configure "connection.metered" setting of a connection profile in <link linkend="NMSettingConnection,">NMSettingConnection,</link> and the other is to express the actual metered state of the <link linkend="NMDevice">NMDevice</link> at a given moment.</para><para>For the connection profile only <link linkend="NM_METERED_UNKNOWN,">NM_METERED_UNKNOWN,</link> <link linkend="NM_METERED_NO">NM_METERED_NO</link> and <link linkend="NM_METERED_YES">NM_METERED_YES</link> are allowed.</para><para>The device's metered state at runtime is determined by the profile which is currently active. If the profile explicitly specifies <link linkend="NM_METERED_NO">NM_METERED_NO</link> or <link linkend="NM_METERED_YES,">NM_METERED_YES,</link> then the device's metered state is as such. If the connection profile leaves it undecided at <link linkend="NM_METERED_UNKNOWN">NM_METERED_UNKNOWN</link> (the default), then NetworkManager tries to guess the metered state, for example based on the device type or on DHCP options (like Android devices exposing a "ANDROID_METERED" DHCP vendor option). This then leads to either <link linkend="NM_METERED_GUESS_NO">NM_METERED_GUESS_NO</link> or <link linkend="NM_METERED_GUESS_YES">NM_METERED_GUESS_YES</link>.</para><para>Most applications probably should treat the runtime state <link linkend="NM_METERED_GUESS_YES">NM_METERED_GUESS_YES</link> like <link linkend="NM_METERED_YES,">NM_METERED_YES,</link> and all other states as not metered.</para><para>Note that the per-device metered states are then combined to a global metered state. This is basically the metered state of the device with the best default route. However, that generalization of a global metered state may not be correct if the default routes for IPv4 and IPv6 are on different devices, or if policy routing is configured. In general, the global metered state tries to express whether the traffic is likely metered, but since that depends on the traffic itself, there is not one answer in all cases. Hence, an application may want to consider the per-device's metered states.</para><para>Since: 1.2</para><para></para></para>
     <refsect3 role="enum_members">
       <title>Values</title>
       <informaltable role="enum_members_table" pgwide="1" frame="none">
@@ -1180,12 +1235,12 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_METERED_YES</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>1</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>Metered, the value was statically set</para><para></para></entry>
+              <entry role="enum_member_description"><para>Metered, the value was explicitly configured</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_METERED_NO</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>2</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>Not metered, the value was statically set</para><para></para></entry>
+              <entry role="enum_member_description"><para>Not metered, the value was explicitly configured</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_METERED_GUESS_YES</para><para></para></entry>
@@ -1220,7 +1275,7 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CONNECTION_MULTI_CONNECT_DEFAULT</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>0</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>indicates that the per-connection setting is unspecified. In this case, it will fallback to the default value, which is @NM_CONNECTION_MULTI_CONNECT_SINGLE.</para><para></para></entry>
+              <entry role="enum_member_description"><para>indicates that the per-connection setting is unspecified. In this case, it will fallback to the default value, which is %NM_CONNECTION_MULTI_CONNECT_SINGLE.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CONNECTION_MULTI_CONNECT_SINGLE</para><para></para></entry>
@@ -1575,17 +1630,17 @@
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CHECKPOINT_CREATE_FLAG_DELETE_NEW_CONNECTIONS</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>0x02</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>upon rollback, delete any new connection added after the checkpoint (Since: 1.6)</para><para></para></entry>
+              <entry role="enum_member_description"><para>upon rollback, delete any new connection added after the checkpoint. Since: 1.6.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CHECKPOINT_CREATE_FLAG_DISCONNECT_NEW_DEVICES</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>0x04</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>upon rollback, disconnect any new device appeared after the checkpoint (Since: 1.6)</para><para></para></entry>
+              <entry role="enum_member_description"><para>upon rollback, disconnect any new device appeared after the checkpoint. Since: 1.6.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_CHECKPOINT_CREATE_FLAG_ALLOW_OVERLAPPING</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>0x08</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>by default, creating a checkpoint fails if there are already existing checkoints that reference the same devices. With this flag, creation of such checkpoints is allowed, however, if an older checkpoint that references overlapping devices gets rolled back, it will automatically destroy this checkpoint during rollback. This allows to create several overlapping checkpoints in parallel, and rollback to them at will. With the special case that rolling back to an older checkpoint will invalidate all overlapping younger checkpoints. This opts-in that the checkpoint can be automatically destroyed by the rollback of an older checkpoint. (Since: 1.12)</para><para></para></entry>
+              <entry role="enum_member_description"><para>by default, creating a checkpoint fails if there are already existing checkoints that reference the same devices. With this flag, creation of such checkpoints is allowed, however, if an older checkpoint that references overlapping devices gets rolled back, it will automatically destroy this checkpoint during rollback. This allows to create several overlapping checkpoints in parallel, and rollback to them at will. With the special case that rolling back to an older checkpoint will invalidate all overlapping younger checkpoints. This opts-in that the checkpoint can be automatically destroyed by the rollback of an older checkpoint. Since: 1.12.</para><para></para></entry>
             </row>
           </tbody>
         </tgroup>
@@ -1667,6 +1722,11 @@
               <entry role="enum_member_value"><para>= <literal>0x04</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>The connection will be deleted when it disconnects. That is for in-memory connections (unsaved), which are currently active but deleted on disconnect. Volatile connections are always unsaved, but they are also no backing file on disk and are entirely in-memory only.</para><para></para></entry>
             </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_SETTINGS_CONNECTION_FLAG_EXTERNAL</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x08</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the profile was generated to represent an external configuration of a networking device. Since: 1.26.</para><para></para></entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
@@ -1694,33 +1754,83 @@
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_IS_MASTER</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x1</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>the device is a master.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_IS_SLAVE</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x2</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>the device is a slave.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_LAYER2_READY</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x4</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>layer2 is activated and ready.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_IP4_READY</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x8</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>IPv4 setting is completed.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_IP6_READY</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x10</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>IPv6 setting is completed.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_MASTER_HAS_SLAVES</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x20</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>The master has any slave devices attached. This only makes sense if the device is a master.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_LIFETIME_BOUND_TO_PROFILE_VISIBILITY</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x40</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the lifetime of the activation is bound to the visibility of the connection profile, which in turn depends on "connection.permissions" and whether a session for the user exists. Since: 1.16.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_ACTIVATION_STATE_FLAG_EXTERNAL</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x80</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the active connection was generated to represent an external configuration of a networking device. Since: 1.26.</para><para></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </refsect3>
+  </refsect2>
+
+  <refsect2 id="NMSettingsAddConnection2Flags" role="enum">
+    <title>enum NMSettingsAddConnection2Flags</title>
+    <indexterm zone="NMSettingsAddConnection2Flags">
+      <primary>NMSettingsAddConnection2Flags</primary>
+    </indexterm>
+    <para><para>Numeric flags for the "flags" argument of AddConnection2() D-Bus API.</para><para>Since: 1.20</para><para></para></para>
+    <refsect3 role="enum_members">
+      <title>Values</title>
+      <informaltable role="enum_members_table" pgwide="1" frame="none">
+        <tgroup cols="4">
+          <colspec colname="enum_members_name" colwidth="300px" />
+          <colspec colname="enum_members_value" colwidth="100px"/>
+          <colspec colname="enum_members_description" />
+          <tbody>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_SETTINGS_ADD_CONNECTION2_FLAG_NONE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>an alias for numeric zero, no flags set.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_SETTINGS_ADD_CONNECTION2_FLAG_TO_DISK</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x1</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>to persist the connection to disk.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_SETTINGS_ADD_CONNECTION2_FLAG_IN_MEMORY</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>to make the connection in-memory only.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_SETTINGS_ADD_CONNECTION2_FLAG_BLOCK_AUTOCONNECT</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x20</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>usually, when the connection has autoconnect enabled and gets added, it becomes eligible to autoconnect right away. Setting this flag, disables autoconnect until the connection is manually activated.</para><para></para></entry>
             </row>
           </tbody>
         </tgroup>
@@ -1749,33 +1859,38 @@
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_TO_DISK</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x1</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>to persist the connection to disk.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>to make the connection in-memory only. If the connection was previously persistent, the corresponding file on disk is not deleted but merely the connection is decoupled from the file on disk. If you later delete an in-memory connection, the connection on disk will be deleted as well.</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>makes the profile in-memory. Note that such profiles are stored in keyfile format under /run. If the file is already in-memory, the file in /run is updated in-place. Otherwise, the previous storage for the profile is left unchanged on disk, and the in-memory copy shadows it. Note that the original filename of the previous persistent storage (if any) is remembered. That means, when later persisting the profile again to disk, the file on disk will be overwritten again. Likewise, when finally deleting the profile, both the storage from /run and persistent storage are deleted (or if the persistent storage does not allow deletion, and nmmeta file is written to mark the UUID as deleted).</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY_DETACHED</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>this is like @NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY, but if the connection has a corresponding file on disk, the association between the connection and the file is forgotten but the file is not modified. The difference to %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY is if you later save the connection again to disk, a new file name will be chosen without overwriting the remaining file on disk. Also, if you delete the connection later, the file on disk will not be deleted.</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x4</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>this is almost the same as %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY, with one difference: when later deleting the profile, the original profile will not be deleted. Instead a nmmeta file is written to /run to indicate that the profile is gone. Note that if such a nmmeta tombstone file exists and hides a file in persistent storage, then when re-adding the profile with the same UUID, then the original storage is taken over again.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY_ONLY</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>this is like @NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY, but if the connection has a corresponding file on disk, the file on disk will be deleted.</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x8</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>this is like %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY, but if the connection has a corresponding file on persistent storage, the file will be deleted right away. If the profile is later again persisted to disk, a new, unused filename will be chosen.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_VOLATILE</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>This can be specified with either %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY_DETACHED or %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY_ONLY. After making the connection in-memory only, the connection is marked as volatile. That means, if the connection is currently not active it will be deleted right away. Otherwise, it is marked to for deletion once the connection deactivates. A volatile connection cannot autoactivate again (because it's about to be deleted), but a manual activation will clear the volatile flag.</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x10</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>This can be specified with either %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY, %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY_DETACHED or %NM_SETTINGS_UPDATE2_FLAG_IN_MEMORY_ONLY. After making the connection in-memory only, the connection is marked as volatile. That means, if the connection is currently not active it will be deleted right away. Otherwise, it is marked to for deletion once the connection deactivates. A volatile connection cannot autoactivate again (because it's about to be deleted), but a manual activation will clear the volatile flag.</para><para></para></entry>
             </row>
             <row role="constant">
               <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_BLOCK_AUTOCONNECT</para><para></para></entry>
-              <entry role="enum_member_value"><para>= <literal>(1LL</literal></para><para></para></entry>
-              <entry role="enum_member_description"><para>usually, when the connection has autoconnect enabled and is modified, it becomes elegible to autoconnect right away. Setting this flag, disables autoconnect until the connection is manually activated.</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x20</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>usually, when the connection has autoconnect enabled and is modified, it becomes eligible to autoconnect right away. Setting this flag, disables autoconnect until the connection is manually activated.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_SETTINGS_UPDATE2_FLAG_NO_REAPPLY</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x40</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>when a profile gets modified that is currently active, then these changes don't take effect for the active device unless the profile gets reactivated or the configuration reapplied. There are two exceptions: by default "connection.zone" and "connection.metered" properties take effect immediately. Specify this flag to prevent these properties to take effect, so that the change is restricted to modify the profile. Since: 1.20.</para><para></para></entry>
             </row>
           </tbody>
         </tgroup>
@@ -1811,6 +1926,241 @@
               <entry role="enum_member_name"><para>NM_TERNARY_TRUE</para><para></para></entry>
               <entry role="enum_member_value"><para>= <literal>1</literal></para><para></para></entry>
               <entry role="enum_member_description"><para>the option is enabled.</para><para></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </refsect3>
+  </refsect2>
+
+  <refsect2 id="NMManagerReloadFlags" role="enum">
+    <title>enum NMManagerReloadFlags</title>
+    <indexterm zone="NMManagerReloadFlags">
+      <primary>NMManagerReloadFlags</primary>
+    </indexterm>
+    <para><para>Flags for the manager Reload() call.</para><para>Since: 1.22</para><para></para></para>
+    <refsect3 role="enum_members">
+      <title>Values</title>
+      <informaltable role="enum_members_table" pgwide="1" frame="none">
+        <tgroup cols="4">
+          <colspec colname="enum_members_name" colwidth="300px" />
+          <colspec colname="enum_members_value" colwidth="100px"/>
+          <colspec colname="enum_members_description" />
+          <tbody>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_MANAGER_RELOAD_FLAG_NONE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>an alias for numeric zero, no flags set. This reloads everything that is supported and is identical to a SIGHUP.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_MANAGER_RELOAD_FLAG_CONF</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x1</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>reload the NetworkManager.conf configuration from disk. Note that this does not include connections, which can be reloaded via Setting's ReloadConnections().</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_MANAGER_RELOAD_FLAG_DNS_RC</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>update DNS configuration, which usually involves writing /etc/resolv.conf anew.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_MANAGER_RELOAD_FLAG_DNS_FULL</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x4</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>means to restart the DNS plugin. This is for example useful when using dnsmasq plugin, which uses additional configuration in /etc/NetworkManager/dnsmasq.d. If you edit those files, you can restart the DNS plugin. This action shortly interrupts name resolution.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_MANAGER_RELOAD_FLAG_ALL</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x7</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>all flags.</para><para></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </refsect3>
+  </refsect2>
+
+  <refsect2 id="NMDeviceInterfaceFlags" role="enum">
+    <title>enum NMDeviceInterfaceFlags</title>
+    <indexterm zone="NMDeviceInterfaceFlags">
+      <primary>NMDeviceInterfaceFlags</primary>
+    </indexterm>
+    <para><para>Flags for a network interface.</para><para>Since: 1.22</para><para></para></para>
+    <refsect3 role="enum_members">
+      <title>Values</title>
+      <informaltable role="enum_members_table" pgwide="1" frame="none">
+        <tgroup cols="4">
+          <colspec colname="enum_members_name" colwidth="300px" />
+          <colspec colname="enum_members_value" colwidth="100px"/>
+          <colspec colname="enum_members_description" />
+          <tbody>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_INTERFACE_FLAG_NONE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>an alias for numeric zero, no flags set.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_INTERFACE_FLAG_UP</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x1</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the interface is enabled from the administrative point of view. Corresponds to kernel IFF_UP.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_INTERFACE_FLAG_LOWER_UP</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the physical link is up. Corresponds to kernel IFF_LOWER_UP.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_DEVICE_INTERFACE_FLAG_CARRIER</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0x10000</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the interface has carrier. In most cases this is equal to the value of @NM_DEVICE_INTERFACE_FLAG_LOWER_UP. However some devices have a non-standard carrier detection mechanism.</para><para></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </refsect3>
+  </refsect2>
+
+  <refsect2 id="NMClientPermission" role="enum">
+    <title>enum NMClientPermission</title>
+    <indexterm zone="NMClientPermission">
+      <primary>NMClientPermission</primary>
+    </indexterm>
+    <para><para><link linkend="NMClientPermission">NMClientPermission</link> values indicate various permissions that NetworkManager clients can obtain to perform certain tasks on behalf of the current user.</para><para></para></para>
+    <refsect3 role="enum_members">
+      <title>Values</title>
+      <informaltable role="enum_members_table" pgwide="1" frame="none">
+        <tgroup cols="4">
+          <colspec colname="enum_members_name" colwidth="300px" />
+          <colspec colname="enum_members_value" colwidth="100px"/>
+          <colspec colname="enum_members_description" />
+          <tbody>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_NONE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>unknown or no permission</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_ENABLE_DISABLE_NETWORK</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>1</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether networking can be globally enabled or disabled</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_ENABLE_DISABLE_WIFI</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether Wi-Fi can be globally enabled or disabled</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_ENABLE_DISABLE_WWAN</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>3</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether WWAN (3G) can be globally enabled or disabled</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_ENABLE_DISABLE_WIMAX</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>4</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether WiMAX can be globally enabled or disabled</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_SLEEP_WAKE</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>5</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether the client can ask NetworkManager to sleep and wake</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_NETWORK_CONTROL</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>6</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether networking connections can be started, stopped, and changed</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_WIFI_SHARE_PROTECTED</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>7</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether a password protected Wi-Fi hotspot can be created</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_WIFI_SHARE_OPEN</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>8</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether an open Wi-Fi hotspot can be created</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_SETTINGS_MODIFY_SYSTEM</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>9</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether connections that are available to all users can be modified</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_SETTINGS_MODIFY_OWN</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>10</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether connections owned by the current user can be modified</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_SETTINGS_MODIFY_HOSTNAME</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>11</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether the persistent hostname can be changed</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_SETTINGS_MODIFY_GLOBAL_DNS</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>12</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>modify persistent global DNS configuration</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_RELOAD</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>13</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls access to Reload.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_CHECKPOINT_ROLLBACK</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>14</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>permission to create checkpoints.</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_ENABLE_DISABLE_STATISTICS</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>15</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether device statistics can be globally enabled or disabled</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_ENABLE_DISABLE_CONNECTIVITY_CHECK</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>16</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether connectivity check can be enabled or disabled</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_WIFI_SCAN</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>17</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>controls whether wifi scans can be performed</para><para></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </refsect3>
+  </refsect2>
+
+  <refsect2 id="NMClientPermissionResult" role="enum">
+    <title>enum NMClientPermissionResult</title>
+    <indexterm zone="NMClientPermissionResult">
+      <primary>NMClientPermissionResult</primary>
+    </indexterm>
+    <para><para><link linkend="NMClientPermissionResult">NMClientPermissionResult</link> values indicate what authorizations and permissions the user requires to obtain a given <link linkend="NMClientPermission">NMClientPermission</link></para><para></para></para>
+    <refsect3 role="enum_members">
+      <title>Values</title>
+      <informaltable role="enum_members_table" pgwide="1" frame="none">
+        <tgroup cols="4">
+          <colspec colname="enum_members_name" colwidth="300px" />
+          <colspec colname="enum_members_value" colwidth="100px"/>
+          <colspec colname="enum_members_description" />
+          <tbody>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_RESULT_UNKNOWN</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>0</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>unknown or no authorization</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_RESULT_YES</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>1</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>the permission is available</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_RESULT_AUTH</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>2</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>authorization is necessary before the permission is available</para><para></para></entry>
+            </row>
+            <row role="constant">
+              <entry role="enum_member_name"><para>NM_CLIENT_PERMISSION_RESULT_NO</para><para></para></entry>
+              <entry role="enum_member_value"><para>= <literal>3</literal></para><para></para></entry>
+              <entry role="enum_member_description"><para>permission to perform the operation is denied by system policy</para><para></para></entry>
             </row>
           </tbody>
         </tgroup>

@@ -50,6 +50,8 @@ PropertiesChanged (a{sv} properties);
 HwAddress  readable   s
 </programlisting>
 <para>        Hardware address of the device.
+n
+        DEPRECATED. Use the "HwAddress" property in "org.freedesktop.NetworkManager.Device" instead which exists since version NetworkManager 1.24.0.
 </para>
 </refsect2>
 <refsect2 role="property" id="gdbus-property-org-freedesktop-NetworkManager-Device-Bridge.Carrier">
@@ -60,6 +62,8 @@ Carrier  readable   b
 </programlisting>
 <para>        Indicates whether the physical carrier is found (e.g. whether a cable is
         plugged in or not).
+</para><para>        DEPRECATED: check for the "carrier" flag in the "InterfaceFlags"
+        property on the "org.freedesktop.NetworkManager.Device" interface.
 </para>
 </refsect2>
 <refsect2 role="property" id="gdbus-property-org-freedesktop-NetworkManager-Device-Bridge.Slaves">

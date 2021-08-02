@@ -1,27 +1,13 @@
 #!/usr/bin/env python
-# -*- Mode: Python; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
-# vim: ft=python ts=4 sts=4 sw=4 et ai
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-#
-# Copyright 2013 - 2014 Red Hat, Inc.
+# Copyright (C) 2013 - 2014 Red Hat, Inc.
 #
 
 import sys
 import gi
-gi.require_version('NM', '1.0')
+
+gi.require_version("NM", "1.0")
 from gi.repository import GLib, NM
 
 #
@@ -41,13 +27,15 @@ from gi.repository import GLib, NM
 
 main_loop = None
 
+
 def connection_saved(connection, error, data):
-    print ("Connection '%s' saved.") % (connection.get_id())
+    print("Connection '%s' saved.") % (connection.get_id())
     main_loop.quit()
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 and len(sys.argv) != 3:
-        sys.exit('Usage: %s <connection name or UUID> [new zone]' % sys.argv[0])
+        sys.exit("Usage: %s <connection name or UUID> [new zone]" % sys.argv[0])
 
     main_loop = GLib.MainLoop()
     client = NM.Client.new(None)

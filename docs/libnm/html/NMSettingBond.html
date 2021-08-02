@@ -8,7 +8,7 @@
 <link rel="up" href="ch03.html" title="Connection and Setting API Reference">
 <link rel="prev" href="NMSettingBluetooth.html" title="NMSettingBluetooth">
 <link rel="next" href="NMSettingBridgePort.html" title="NMSettingBridgePort">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -37,8 +37,8 @@
 <a name="NMSettingBond.functions"></a><h2>Functions</h2>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
-<col width="150px" class="functions_return">
-<col class="functions_name">
+<col width="150px" class="functions_proto_type">
+<col class="functions_proto_name">
 </colgroup>
 <tbody>
 <tr>
@@ -110,6 +110,13 @@
 <a class="link" href="NMSettingBond.html#nm-setting-bond-get-option-default" title="nm_setting_bond_get_option_default ()">nm_setting_bond_get_option_default</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
+<tr>
+<td class="function_type">const <span class="returnvalue">char</span> *
+</td>
+<td class="function_name">
+<a class="link" href="NMSettingBond.html#nm-setting-bond-get-option-normalized" title="nm_setting_bond_get_option_normalized ()">nm_setting_bond_get_option_normalized</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
 </tbody>
 </table></div>
 </div>
@@ -133,8 +140,8 @@
 <a name="NMSettingBond.other"></a><h2>Types and Values</h2>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
-<col width="150px" class="name">
-<col class="description">
+<col width="150px" class="other_proto_type">
+<col class="other_proto_name">
 </colgroup>
 <tbody>
 <tr>
@@ -282,7 +289,7 @@ nm_setting_bond_new (<em class="parameter"><code><span class="type">void</span><
 <div class="refsect3">
 <a name="nm-setting-bond-new.returns"></a><h4>Returns</h4>
 <p>the new empty <a class="link" href="NMSettingBond.html" title="NMSettingBond"><span class="type">NMSettingBond</span></a> object. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -350,14 +357,14 @@ such as during option iteration.</p>
 <td class="parameter_name"><p>out_name</p></td>
 <td class="parameter_description"><p>on return, the name of the bonding option;
 this value is owned by the setting and should not be modified. </p></td>
-<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>out_value</p></td>
 <td class="parameter_description"><p>on return, the value of the name of the
 bonding option; this value is owned by the setting and should not be
 modified. </p></td>
-<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></td>
 </tr>
 </tbody>
 </table></div>
@@ -413,12 +420,8 @@ setting; the value is owned by the setting and must not be modified</p>
 nm_setting_bond_add_option (<em class="parameter"><code><a class="link" href="NMSettingBond.html" title="NMSettingBond"><span class="type">NMSettingBond</span></a> *setting</code></em>,
                             <em class="parameter"><code>const <span class="type">char</span> *name</code></em>,
                             <em class="parameter"><code>const <span class="type">char</span> *value</code></em>);</pre>
-<p>Add an option to the table.  The option is compared to an internal list
-of allowed options.  Option names may contain only alphanumeric characters
-(ie [a-zA-Z0-9]).  Adding a new name replaces any existing name/value pair
+<p>Add an option to the table. Adding a new name replaces any existing name/value pair
 that may already exist.</p>
-<p>The order of how to set several options is relevant because there are options
-that conflict with each other.</p>
 <div class="refsect3">
 <a name="nm-setting-bond-add-option.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -448,8 +451,16 @@ that conflict with each other.</p>
 </div>
 <div class="refsect3">
 <a name="nm-setting-bond-add-option.returns"></a><h4>Returns</h4>
-<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the option was valid and was added to the internal option
-list, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if it was not.</p>
+<p> returns <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if either <em class="parameter"><code>name</code></em>
+or <em class="parameter"><code>value</code></em>
+is <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>, in that case
+the option is not set. Otherwise, the function does not fail and does not validate
+the arguments. All validation happens via <a class="link" href="NMConnection.html#nm-connection-verify" title="nm_connection_verify ()"><code class="function">nm_connection_verify()</code></a> or do basic validation
+yourself with <a class="link" href="NMSettingBond.html#nm-setting-bond-validate-option" title="nm_setting_bond_validate_option ()"><code class="function">nm_setting_bond_validate_option()</code></a>.</p>
+<p>Note: Before 1.30, libnm would perform basic validation of the name and the value
+via <a class="link" href="NMSettingBond.html#nm-setting-bond-validate-option" title="nm_setting_bond_validate_option ()"><code class="function">nm_setting_bond_validate_option()</code></a> and reject the request by returning FALSE.
+Since 1.30, libnm no longer rejects any values as the setter is not supposed
+to perform validation.</p>
 </div>
 </div>
 <hr>
@@ -516,8 +527,8 @@ the <em class="parameter"><code>name</code></em>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
-<td class="parameter_name"><p>value</p></td>
-<td class="parameter_description"><p>the value of the option to validate</p></td>
+<td class="parameter_name"><p>value (allow-none)</p></td>
+<td class="parameter_description"><p>the value of the option to validate.</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -557,7 +568,7 @@ nm_setting_bond_get_valid_options (<em class="parameter"><code><a class="link" h
 <div class="refsect3">
 <a name="nm-setting-bond-get-valid-options.returns"></a><h4>Returns</h4>
 <p>a <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated array of strings of valid bond options. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -593,6 +604,42 @@ nm_setting_bond_get_option_default (<em class="parameter"><code><a class="link" 
 <p> the value of the bond option if not overridden by an entry in
 the <a class="link" href="NMSettingBond.html#NMSettingBond--options" title="The “options” property"><span class="type">“options”</span></a> property.</p>
 </div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="nm-setting-bond-get-option-normalized"></a><h3>nm_setting_bond_get_option_normalized ()</h3>
+<pre class="programlisting">const <span class="returnvalue">char</span> *
+nm_setting_bond_get_option_normalized (<em class="parameter"><code><a class="link" href="NMSettingBond.html" title="NMSettingBond"><span class="type">NMSettingBond</span></a> *setting</code></em>,
+                                       <em class="parameter"><code>const <span class="type">char</span> *name</code></em>);</pre>
+<div class="refsect3">
+<a name="nm-setting-bond-get-option-normalized.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>setting</p></td>
+<td class="parameter_description"><p>the <a class="link" href="NMSettingBond.html" title="NMSettingBond"><span class="type">NMSettingBond</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>name</p></td>
+<td class="parameter_description"><p>the name of the option</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="nm-setting-bond-get-option-normalized.returns"></a><h4>Returns</h4>
+<p> the value of the bond option after normalization, which is what NetworkManager
+will actually apply when activating the connection. <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if the option won't be applied
+to the connection.</p>
+</div>
+<p class="since">Since: 1.24</p>
 </div>
 </div>
 <div class="refsect1">
@@ -782,11 +829,12 @@ the <a class="link" href="NMSettingBond.html#NMSettingBond--options" title="The 
 <div class="refsect2">
 <a name="NMSettingBond--options"></a><h3>The <code class="literal">“options”</code> property</h3>
 <pre class="programlisting">  “options”                  <a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#GHashTable"><span class="type">GHashTable</span></a> *</pre>
+<p>Owner: NMSettingBond</p>
 <p>Flags: Read / Write</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

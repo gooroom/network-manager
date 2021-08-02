@@ -1,10 +1,25 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
 libnm_core_inc = include_directories('.')
+
+nm_version_macro_header = configure_file(
+  input: 'nm-version-macros.h.in',
+  output: '@BASENAME@',
+  configuration: data_conf,
+)
+
+libnm_core_nm_default_dep = declare_dependency(
+  sources: nm_version_macro_header,
+  include_directories: libnm_core_inc,
+  dependencies: glib_nm_default_dep,
+)
 
 libnm_core_headers = files(
   'nm-connection.h',
   'nm-core-types.h',
   'nm-dbus-interface.h',
   'nm-errors.h',
+  'nm-keyfile.h',
   'nm-setting-6lowpan.h',
   'nm-setting-8021x.h',
   'nm-setting-adsl.h',
@@ -19,6 +34,7 @@ libnm_core_headers = files(
   'nm-setting-ethtool.h',
   'nm-setting-generic.h',
   'nm-setting-gsm.h',
+  'nm-setting-hostname.h',
   'nm-setting-infiniband.h',
   'nm-setting-ip-config.h',
   'nm-setting-ip-tunnel.h',
@@ -29,6 +45,8 @@ libnm_core_headers = files(
   'nm-setting-match.h',
   'nm-setting-olpc-mesh.h',
   'nm-setting-ovs-bridge.h',
+  'nm-setting-ovs-dpdk.h',
+  'nm-setting-ovs-external-ids.h',
   'nm-setting-ovs-interface.h',
   'nm-setting-ovs-patch.h',
   'nm-setting-ovs-port.h',
@@ -42,11 +60,15 @@ libnm_core_headers = files(
   'nm-setting-team.h',
   'nm-setting-tun.h',
   'nm-setting-user.h',
+  'nm-setting-veth.h',
   'nm-setting-vlan.h',
   'nm-setting-vpn.h',
+  'nm-setting-vrf.h',
   'nm-setting-vxlan.h',
+  'nm-setting-wifi-p2p.h',
   'nm-setting-wimax.h',
   'nm-setting-wired.h',
+  'nm-setting-wireguard.h',
   'nm-setting-wireless-security.h',
   'nm-setting-wireless.h',
   'nm-setting-wpan.h',
@@ -56,7 +78,53 @@ libnm_core_headers = files(
   'nm-version.h',
   'nm-vpn-dbus-interface.h',
   'nm-vpn-editor-plugin.h',
-  'nm-vpn-plugin-info.h'
+  'nm-vpn-plugin-info.h',
+)
+
+libnm_core_enum_sources = gnome.mkenums_simple(
+  'nm-core-enum-types',
+  sources: libnm_core_headers + [nm_version_macro_header],
+  identifier_prefix: nm_id_prefix,
+  body_prefix: '#include "libnm-core/nm-default-libnm-core.h"',
+  install_header: true,
+  install_dir: libnm_pkgincludedir,
+)
+
+libnm_libnm_core_intern = static_library(
+  'nm-libnm-core-intern',
+  sources: files(
+    'nm-libnm-core-intern/nm-auth-subject.c',
+    'nm-libnm-core-intern/nm-libnm-core-utils.c',
+  ) + [libnm_core_enum_sources[1]],
+  dependencies: [
+    libnm_core_nm_default_dep,
+    libnm_base_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="libnm"',
+  ],
+)
+
+libnm_libnm_core_intern_dep = declare_dependency(
+  sources: [libnm_core_enum_sources[1], nm_version_macro_header],
+  include_directories: [libnm_core_inc, shared_inc],
+  dependencies: [
+    libnm_glib_aux_dep,
+    libnm_base_dep,
+  ],
+  link_with: libnm_libnm_core_intern,
+)
+
+libnm_crypto = static_library(
+  'nm-crypto',
+  sources: 'nm-crypto-@0@.c'.format(crypto),
+  dependencies: [
+    crypto_dep,
+    libnm_glib_aux_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="libnm"',
+  ],
 )
 
 libnm_core_settings_sources = files(
@@ -74,6 +142,7 @@ libnm_core_settings_sources = files(
   'nm-setting-ethtool.c',
   'nm-setting-generic.c',
   'nm-setting-gsm.c',
+  'nm-setting-hostname.c',
   'nm-setting-infiniband.c',
   'nm-setting-ip-config.c',
   'nm-setting-ip-tunnel.c',
@@ -84,6 +153,8 @@ libnm_core_settings_sources = files(
   'nm-setting-match.c',
   'nm-setting-olpc-mesh.c',
   'nm-setting-ovs-bridge.c',
+  'nm-setting-ovs-dpdk.c',
+  'nm-setting-ovs-external-ids.c',
   'nm-setting-ovs-interface.c',
   'nm-setting-ovs-patch.c',
   'nm-setting-ovs-port.c',
@@ -97,117 +168,88 @@ libnm_core_settings_sources = files(
   'nm-setting-team.c',
   'nm-setting-tun.c',
   'nm-setting-user.c',
+  'nm-setting-veth.c',
   'nm-setting-vlan.c',
   'nm-setting-vpn.c',
+  'nm-setting-vrf.c',
   'nm-setting-vxlan.c',
+  'nm-setting-wifi-p2p.c',
   'nm-setting-wimax.c',
   'nm-setting-wired.c',
+  'nm-setting-wireguard.c',
   'nm-setting-wireless-security.c',
   'nm-setting-wireless.c',
-  'nm-setting-wpan.c'
+  'nm-setting-wpan.c',
 )
 
 libnm_core_sources = libnm_core_settings_sources + files(
-  'nm-crypto.c',
   'nm-connection.c',
+  'nm-crypto.c',
   'nm-dbus-utils.c',
   'nm-errors.c',
-  'nm-keyfile.c',
   'nm-keyfile-utils.c',
+  'nm-keyfile.c',
+  'nm-meta-setting-base-impl.c',
   'nm-property-compare.c',
   'nm-setting.c',
   'nm-simple-connection.c',
+  'nm-team-utils.c',
   'nm-utils.c',
   'nm-vpn-editor-plugin.c',
-  'nm-vpn-plugin-info.c'
+  'nm-vpn-plugin-info.c',
 )
-
-enum_headers = libnm_core_headers + [version_header]
-enum_types = 'nm-core-enum-types'
-
-libnm_core_enum = gnome.mkenums(
-  enum_types,
-  sources: enum_headers,
-  identifier_prefix: nm_id_prefix,
-  c_template: enum_types + '.c.template',
-  h_template: enum_types + '.h.template',
-  install_header: true,
-  install_dir: libnm_pkgincludedir
-)
-
-deps = [
-  dl_dep,
-  libudev_dep,
-  shared_dep,
-  uuid_dep,
-  shared_c_siphash_dep,
-]
-
-cflags = [
-  '-DG_LOG_DOMAIN="@0@"'.format(libnm_name),
-  '-DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIBNM_CORE',
-]
-
-if enable_json_validation
-  libnm_core_sources += files('nm-json.c')
-  deps += jansson_dep
-endif
-
-if (crypto_gnutls_dep.found())
-  libnm_crypto_gnutls = static_library(
-    'nm-crypto-gnutls',
-    sources: [ 'nm-crypto-gnutls.c' ],
-    dependencies: deps + [ crypto_gnutls_dep ],
-    c_args: cflags
-  )
-endif
-
-if (crypto_nss_dep.found())
-  libnm_crypto_nss = static_library(
-    'nm-crypto-nss',
-    sources: [ 'nm-crypto-nss.c' ],
-    dependencies: deps + [ crypto_nss_dep ],
-    c_args: cflags
-  )
-endif
-
-if crypto == 'gnutls'
-  libnm_crypto = libnm_crypto_gnutls
-elif crypto == 'nss'
-  libnm_crypto = libnm_crypto_nss
-else
-  error('bug')
-endif
-
-libnm_core_sources_all =  libnm_core_sources
-libnm_core_sources_all += libnm_core_enum
-libnm_core_sources_all += shared_nm_meta_setting_c
-libnm_core_sources_all += shared_nm_ethtool_utils_c
-libnm_core_sources_all += shared_files_libnm_core
-libnm_core_sources_all += [version_header]
 
 libnm_core = static_library(
   'nm-core',
-  sources: libnm_core_sources_all,
-  dependencies: deps,
-  link_with: libnm_crypto,
-  c_args: cflags
-)
-
-nm_core_dep = declare_dependency(
-  sources: libnm_core_enum[1],
-  include_directories: libnm_core_inc,
+  sources: libnm_core_sources + libnm_core_enum_sources + [nm_version_macro_header],
+  include_directories: top_inc,
   dependencies: [
-    shared_dep,
-    shared_c_siphash_dep,
+    dl_dep,
+    libnm_systemd_shared_dep,
+    libnm_glib_aux_dep,
+    uuid_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="libnm"',
+  ],
+  link_with: [
+    libnm_crypto,
+    libnm_libnm_core_intern,
   ],
 )
 
-enums_to_docbook = join_paths(meson.source_root(), 'tools', 'enums-to-docbook.pl')
+libnm_core_dep = declare_dependency(
+  sources: [libnm_core_enum_sources[1], nm_version_macro_header],
+  include_directories: [libnm_core_inc, shared_inc],
+  dependencies: glib_dep,
+  link_with: libnm_core,
+)
+
+libnm_libnm_core_aux = static_library(
+  'nm-libnm-core-aux',
+  sources: files(
+    'nm-libnm-core-aux/nm-libnm-core-aux.c',
+  ) + [libnm_core_enum_sources[1]],
+  dependencies: libnm_glib_aux_dep,
+  c_args: [
+    '-DG_LOG_DOMAIN="libnm"',
+  ],
+  link_with: [
+    libnm_libnm_core_intern,
+    libnm_base,
+  ],
+)
+
+libnm_libnm_core_aux_dep = declare_dependency(
+  sources: [libnm_core_enum_sources[1], nm_version_macro_header],
+  include_directories: [libnm_core_inc, shared_inc],
+  dependencies: glib_dep,
+  link_with: libnm_libnm_core_aux,
+)
 
 docbooks = [
-  ['nm-dbus-types', 'nm-dbus-interface.h', 'NetworkManager D-Bus API Types'],
-  ['nm-vpn-dbus-types', 'nm-vpn-dbus-interface.h', 'VPN Plugin D-Bus API Types']
+  ['nm-dbus-types',     'nm-dbus-interface.h',     'NetworkManager D-Bus API Types'],
+  ['nm-vpn-dbus-types', 'nm-vpn-dbus-interface.h', 'VPN Plugin D-Bus API Types'],
 ]
 
 foreach docbook: docbooks
@@ -218,10 +260,16 @@ foreach docbook: docbooks
     input: docbook[1],
     output: output,
     capture: true,
-    command: [perl, enums_to_docbook, docbook[0], docbook[2], '@INPUT@'],
+    command: [
+      perl,
+      join_paths(source_root, 'tools', 'enums-to-docbook.pl'),
+      docbook[0],
+      docbook[2],
+      '@INPUT@',
+    ],
     # FIXME: gtkdoc does not depend directly on this.
     #        https://github.com/mesonbuild/meson/pull/2806
-    build_by_default: true
+    build_by_default: true,
   )
 
   content_files += xml.full_path()

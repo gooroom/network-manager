@@ -1,23 +1,39 @@
-test_unit = 'test-general'
-
-deps = [
-  libnm_dep,
-  libnmc_dep,
-  libnmc_base_dep,
-  nm_core_dep
-]
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 exe = executable(
-  'clients-' + test_unit,
-  test_unit + '.c',
-  dependencies: deps,
-  c_args: clients_cflags + [
-    '-DNETWORKMANAGER_COMPILATION_TEST',
+  'test-clients-common',
+  'test-clients-common.c',
+  dependencies: [
+    libnmc_base_dep,
+    libnmc_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="test"',
   ],
 )
 
 test(
-  'clients/' + test_unit,
+  'clients/common/tests/test-clients-common',
+  test_script,
+  args: test_args + [exe.full_path()],
+)
+
+exe = executable(
+  'test-libnm-core-aux',
+  'test-libnm-core-aux.c',
+  dependencies: [
+    libnm_dep,
+    libnm_libnm_core_aux_dep,
+    libnm_nm_default_dep,
+  ],
+  c_args: [
+    '-DG_LOG_DOMAIN="test"',
+  ],
+  link_with: libnm_systemd_logging_stub,
+)
+
+test(
+  'clients/common/tests/test-libnm-core-aux',
   test_script,
   args: test_args + [exe.full_path()]
 )
