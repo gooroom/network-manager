@@ -1,3 +1,11 @@
+network-manager (1.30.0-2+grm3u1) unstable; urgency=medium
+
+  [ seolhee.sun ]
+  * [1f3d6855] Several g_prefix_error functions have been replaced for translation.
+  * [d17a8eeb] Update NetworkManager translation based gooroom-3.0
+
+ -- Gooroom Autobuilder <jenkins@gooroom.kr>  Sat, 04 Dec 2021 21:55:26 +0900
+
 network-manager (1.30.0-2) unstable; urgency=medium
 
   * core: fix crash in nm_wildcard_match_check()
