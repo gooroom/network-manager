@@ -1,0 +1,1297 @@
+diff --git a/libnm-core/nm-connection.c b/libnm-core/nm-connection.c
+index b39c41d..c359124 100644
+--- a/libnm-core/nm-connection.c
++++ b/libnm-core/nm-connection.c
+@@ -2549,15 +2549,13 @@ _nm_connection_verify_required_interface_name(NMConnection *connection, GError *
+     if (interface_name)
+         return TRUE;
+ 
+-    g_set_error_literal(error,
+-                        NM_CONNECTION_ERROR,
+-                        NM_CONNECTION_ERROR_MISSING_PROPERTY,
+-                        _("property is missing"));
+-    g_prefix_error(error,
+-                   "%s.%s: ",
+-                   NM_SETTING_CONNECTION_SETTING_NAME,
+-                   NM_SETTING_CONNECTION_INTERFACE_NAME);
+-    return FALSE;
++	g_set_error_literal (error,
++	                     NM_CONNECTION_ERROR,
++	                     NM_CONNECTION_ERROR_MISSING_PROPERTY,
++	                     _("property is missing"));
++//	g_prefix_error (error, "%s.%s: ", NM_SETTING_CONNECTION_SETTING_NAME, NM_SETTING_CONNECTION_INTERFACE_NAME);
++	nm_utils_set_prefix_error_for_property (error, NM_SETTING_CONNECTION_SETTING_NAME, NM_SETTING_CONNECTION_INTERFACE_NAME);
++	return FALSE;
+ }
+ 
+ /**
+diff --git a/libnm-core/nm-setting-bond.c b/libnm-core/nm-setting-bond.c
+index 2d64ef0..8a99478 100644
+--- a/libnm-core/nm-setting-bond.c
++++ b/libnm-core/nm-setting-bond.c
+@@ -781,10 +781,11 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+             n = &priv->options_idx_cache[i];
+ 
+             if (!n->value_str || !_nm_setting_bond_validate_option(n->name, n->value_str, error)) {
+-                g_prefix_error(error,
+-                               "%s.%s: ",
+-                               NM_SETTING_BOND_SETTING_NAME,
+-                               NM_SETTING_BOND_OPTIONS);
++//                g_prefix_error(error,
++//                               "%s.%s: ",
++//                               NM_SETTING_BOND_SETTING_NAME,
++//                               NM_SETTING_BOND_OPTIONS);
++                nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+                 return FALSE;
+             }
+         }
+@@ -813,7 +814,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("mandatory option '%s' is missing"),
+                     NM_SETTING_BOND_OPTION_MODE);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+         return FALSE;
+     }
+     bond_mode = _nm_setting_bond_mode_from_string(mode_str);
+@@ -824,7 +826,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     _("'%s' is not a valid value for '%s'"),
+                     mode_str,
+                     NM_SETTING_BOND_OPTION_MODE);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+         return FALSE;
+     }
+ 
+@@ -838,7 +841,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_SETTING_BOND_OPTION_MODE,
+                         mode_str,
+                         NM_SETTING_BOND_OPTION_ARP_INTERVAL);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return FALSE;
+         }
+     }
+@@ -855,7 +859,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         primary,
+                         NM_SETTING_BOND_OPTION_PRIMARY,
+                         tmp_error->message);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             g_error_free(tmp_error);
+             return FALSE;
+         }
+@@ -867,7 +872,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_SETTING_BOND_OPTION_PRIMARY,
+                     NM_SETTING_BOND_OPTION_MODE,
+                     "active-backup");
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+         return FALSE;
+     }
+ 
+@@ -880,7 +886,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_SETTING_BOND_OPTION_MODE,
+                         mode_str,
+                         NM_SETTING_INFINIBAND_SETTING_NAME);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return FALSE;
+         }
+     }
+@@ -894,7 +901,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("'%s' option requires '%s' option to be enabled"),
+                         NM_SETTING_BOND_OPTION_UPDELAY,
+                         NM_SETTING_BOND_OPTION_MIIMON);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return FALSE;
+         }
+ 
+@@ -905,7 +913,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("'%s' option requires '%s' option to be enabled"),
+                         NM_SETTING_BOND_OPTION_DOWNDELAY,
+                         NM_SETTING_BOND_OPTION_MIIMON);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return FALSE;
+         }
+     }
+@@ -922,7 +931,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("'%s' option requires '%s' option to be set"),
+                         NM_SETTING_BOND_OPTION_ARP_INTERVAL,
+                         NM_SETTING_BOND_OPTION_ARP_IP_TARGET);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return FALSE;
+         }
+     } else {
+@@ -933,7 +943,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("'%s' option requires '%s' option to be set"),
+                         NM_SETTING_BOND_OPTION_ARP_IP_TARGET,
+                         NM_SETTING_BOND_OPTION_ARP_INTERVAL);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return FALSE;
+         }
+     }
+@@ -946,7 +957,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     _("'%s' option is only valid with mode '%s'"),
+                     NM_SETTING_BOND_OPTION_LACP_RATE,
+                     "802.3ad");
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+         return FALSE;
+     }
+ 
+@@ -959,7 +971,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     _("'%s' and '%s' cannot have different values"),
+                     NM_SETTING_BOND_OPTION_NUM_GRAT_ARP,
+                     NM_SETTING_BOND_OPTION_NUM_UNSOL_NA);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+         return FALSE;
+     }
+ 
+@@ -981,7 +994,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("'%s' option should be string"),
+                     NM_SETTING_BOND_OPTION_MODE);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+         return NM_SETTING_VERIFY_NORMALIZABLE;
+     }
+ 
+@@ -995,7 +1009,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("'%s' option is not valid with mode '%s'"),
+                         n->name,
+                         mode_str);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_BOND_SETTING_NAME, NM_SETTING_BOND_OPTIONS);
+             return NM_SETTING_VERIFY_NORMALIZABLE;
+         }
+     }
+diff --git a/libnm-core/nm-setting-bridge.c b/libnm-core/nm-setting-bridge.c
+index 15d663d..b23f21b 100644
+--- a/libnm-core/nm-setting-bridge.c
++++ b/libnm-core/nm-setting-bridge.c
+@@ -1166,7 +1166,9 @@ check_range(guint32 val, guint32 min, guint32 max, gboolean zero, const char *pr
+                     val,
+                     min,
+                     max);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_BRIDGE_SETTING_NAME, prop);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_BRIDGE_SETTING_NAME, prop);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               prop);
+         return FALSE;
+     }
+     return TRUE;
+@@ -1182,10 +1184,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("is not a valid MAC address"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_BRIDGE_SETTING_NAME,
+-                       NM_SETTING_BRIDGE_MAC_ADDRESS);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_BRIDGE_SETTING_NAME,
++//                       NM_SETTING_BRIDGE_MAC_ADDRESS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               NM_SETTING_BRIDGE_MAC_ADDRESS);
+         return FALSE;
+     }
+ 
+@@ -1226,10 +1230,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("the mask can't contain bits 0 (STP), 1 (MAC) or 2 (LACP)"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_BRIDGE_SETTING_NAME,
+-                       NM_SETTING_BRIDGE_GROUP_FORWARD_MASK);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_BRIDGE_SETTING_NAME,
++//                       NM_SETTING_BRIDGE_GROUP_FORWARD_MASK);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               NM_SETTING_BRIDGE_GROUP_FORWARD_MASK);
+         return FALSE;
+     }
+ 
+@@ -1248,10 +1254,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("is not a valid link local MAC address"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_BRIDGE_SETTING_NAME,
+-                       NM_SETTING_BRIDGE_GROUP_ADDRESS);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_BRIDGE_SETTING_NAME,
++//                       NM_SETTING_BRIDGE_GROUP_ADDRESS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               NM_SETTING_BRIDGE_GROUP_ADDRESS);
+         return FALSE;
+     }
+ 
+@@ -1260,10 +1268,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("is not a valid VLAN filtering protocol"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_BRIDGE_SETTING_NAME,
+-                       NM_SETTING_BRIDGE_VLAN_PROTOCOL);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_BRIDGE_SETTING_NAME,
++//                       NM_SETTING_BRIDGE_VLAN_PROTOCOL);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               NM_SETTING_BRIDGE_VLAN_PROTOCOL);
+         return FALSE;
+     }
+ 
+@@ -1272,10 +1282,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("is not a valid option"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_BRIDGE_SETTING_NAME,
+-                       NM_SETTING_BRIDGE_MULTICAST_ROUTER);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_BRIDGE_SETTING_NAME,
++//                       NM_SETTING_BRIDGE_MULTICAST_ROUTER);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               NM_SETTING_BRIDGE_MULTICAST_ROUTER);
+         return FALSE;
+     }
+ 
+@@ -1285,10 +1297,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("'%s' option must be a power of 2"),
+                     NM_SETTING_BRIDGE_MULTICAST_HASH_MAX);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_BRIDGE_SETTING_NAME,
+-                       NM_SETTING_BRIDGE_MULTICAST_HASH_MAX);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_BRIDGE_SETTING_NAME,
++//                       NM_SETTING_BRIDGE_MULTICAST_HASH_MAX);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_BRIDGE_SETTING_NAME,
++                                               NM_SETTING_BRIDGE_MULTICAST_HASH_MAX);
+         return FALSE;
+     }
+ 
+diff --git a/libnm-core/nm-setting-cdma.c b/libnm-core/nm-setting-cdma.c
+index 42e77c6..6c4ec44 100644
+--- a/libnm-core/nm-setting-cdma.c
++++ b/libnm-core/nm-setting-cdma.c
+@@ -125,14 +125,16 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                             _("property is missing"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_NUMBER);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_NUMBER);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_NUMBER);
+         return FALSE;
+     } else if (!strlen(priv->number)) {
+         g_set_error_literal(error,
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_NUMBER);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_NUMBER);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_NUMBER);
+         return FALSE;
+     }
+ 
+@@ -141,7 +143,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_USERNAME);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_USERNAME);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CDMA_SETTING_NAME, NM_SETTING_CDMA_USERNAME);
+         return FALSE;
+     }
+ 
+diff --git a/libnm-core/nm-setting-connection.c b/libnm-core/nm-setting-connection.c
+index d6626a4..1d8cd3f 100644
+--- a/libnm-core/nm-setting-connection.c
++++ b/libnm-core/nm-setting-connection.c
+@@ -1071,20 +1071,24 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                             _("property is missing"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_ID);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_ID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_ID);
+         return FALSE;
+     } else if (!priv->id[0]) {
+         g_set_error_literal(error,
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_ID);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_ID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_ID);
+         return FALSE;
+     }
+ 
+@@ -1094,10 +1098,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("'%s' is not a valid UUID"),
+                     priv->uuid);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_UUID);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_UUID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_UUID);
+         return FALSE;
+     }
+ 
+@@ -1109,10 +1115,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                                 NM_CONNECTION_ERROR,
+                                 NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                                 _("property is missing"));
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_CONNECTION_SETTING_NAME,
+-                           NM_SETTING_CONNECTION_TYPE);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_CONNECTION_SETTING_NAME,
++//                           NM_SETTING_CONNECTION_TYPE);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                                   NM_SETTING_CONNECTION_TYPE);
+             return FALSE;
+         }
+         type = nm_setting_get_name(normerr_base_type);
+@@ -1124,10 +1132,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                                 NM_CONNECTION_ERROR,
+                                 NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                 _("property is empty"));
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_CONNECTION_SETTING_NAME,
+-                           NM_SETTING_CONNECTION_TYPE);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_CONNECTION_SETTING_NAME,
++//                           NM_SETTING_CONNECTION_TYPE);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                                   NM_SETTING_CONNECTION_TYPE);
+             return FALSE;
+         }
+ 
+@@ -1139,10 +1149,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("connection type '%s' is not valid"),
+                         type);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_CONNECTION_SETTING_NAME,
+-                           NM_SETTING_CONNECTION_TYPE);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_CONNECTION_SETTING_NAME,
++//                           NM_SETTING_CONNECTION_TYPE);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                                   NM_SETTING_CONNECTION_TYPE);
+             return FALSE;
+         }
+ 
+@@ -1219,10 +1231,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         "'%s': %s",
+                         priv->interface_name,
+                         tmp_error->message);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_CONNECTION_SETTING_NAME,
+-                           NM_SETTING_CONNECTION_INTERFACE_NAME);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_CONNECTION_SETTING_NAME,
++//                           NM_SETTING_CONNECTION_INTERFACE_NAME);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                                   NM_SETTING_CONNECTION_INTERFACE_NAME);
+             g_error_free(tmp_error);
+             return FALSE;
+         }
+@@ -1247,10 +1261,12 @@ after_interface_name:
+                     NM_SETTING_OVS_PORT_SETTING_NAME,
+                     NM_SETTING_OVS_BRIDGE_SETTING_NAME,
+                     slave_type);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_SLAVE_TYPE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_SLAVE_TYPE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_SLAVE_TYPE);
+         return FALSE;
+     }
+ 
+@@ -1261,10 +1277,12 @@ after_interface_name:
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("metered value %d is not valid"),
+                     priv->metered);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_METERED);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_METERED);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_METERED);
+         return FALSE;
+     }
+ 
+@@ -1275,10 +1293,12 @@ after_interface_name:
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("value %d is not valid"),
+                     priv->mdns);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_MDNS);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_MDNS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_MDNS);
+         return FALSE;
+     }
+ 
+@@ -1289,10 +1309,12 @@ after_interface_name:
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("value %d is not valid"),
+                     priv->llmnr);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_LLMNR);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_LLMNR);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_LLMNR);
+         return FALSE;
+     }
+ 
+@@ -1306,10 +1328,12 @@ after_interface_name:
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("value %d is not valid"),
+                     priv->multi_connect);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_MULTI_CONNECT);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_MULTI_CONNECT);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_MULTI_CONNECT);
+         return FALSE;
+     }
+ 
+@@ -1319,10 +1343,12 @@ after_interface_name:
+                                 NM_CONNECTION_ERROR,
+                                 NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                 _("property is empty"));
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           nm_setting_get_name(setting),
+-                           NM_SETTING_CONNECTION_MUD_URL);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           nm_setting_get_name(setting),
++//                           NM_SETTING_CONNECTION_MUD_URL);
++            nm_utils_set_prefix_error_for_property(error, nm_setting_get_name(setting),
++                                                   NM_SETTING_CONNECTION_MUD_URL);
+             return FALSE;
+         }
+         if (nm_streq(priv->mud_url, NM_CONNECTION_MUD_URL_NONE)) {
+@@ -1333,10 +1359,12 @@ after_interface_name:
+                                     NM_CONNECTION_ERROR,
+                                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                     _("DHCP option cannot be longer than 255 characters"));
+-                g_prefix_error(error,
+-                               "%s.%s: ",
+-                               nm_setting_get_name(setting),
+-                               NM_SETTING_CONNECTION_MUD_URL);
++//                g_prefix_error(error,
++//                               "%s.%s: ",
++//                               nm_setting_get_name(setting),
++//                               NM_SETTING_CONNECTION_MUD_URL);
++                nm_utils_set_prefix_error_for_property(error, nm_setting_get_name(setting),
++                                                       NM_SETTING_CONNECTION_MUD_URL);
+                 return FALSE;
+             }
+             if (!nm_sd_http_url_is_valid_https(priv->mud_url)) {
+@@ -1344,10 +1372,12 @@ after_interface_name:
+                                     NM_CONNECTION_ERROR,
+                                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                     _("MUD URL is not a valid URL"));
+-                g_prefix_error(error,
+-                               "%s.%s: ",
+-                               nm_setting_get_name(setting),
+-                               NM_SETTING_CONNECTION_MUD_URL);
++//                g_prefix_error(error,
++//                               "%s.%s: ",
++//                               nm_setting_get_name(setting),
++//                               NM_SETTING_CONNECTION_MUD_URL);
++                nm_utils_set_prefix_error_for_property(error, nm_setting_get_name(setting),
++                                                       NM_SETTING_CONNECTION_MUD_URL);
+                 return FALSE;
+             }
+         }
+@@ -1364,10 +1394,12 @@ after_interface_name:
+                                     NM_CONNECTION_ERROR,
+                                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                     _("invalid permissions not in format \"user:$UNAME[:]\""));
+-                g_prefix_error(error,
+-                               "%s.%s: ",
+-                               nm_setting_get_name(setting),
+-                               NM_SETTING_CONNECTION_PERMISSIONS);
++//                g_prefix_error(error,
++//                               "%s.%s: ",
++//                               nm_setting_get_name(setting),
++//                               NM_SETTING_CONNECTION_PERMISSIONS);
++                nm_utils_set_prefix_error_for_property(error, nm_setting_get_name(setting),
++                                                       NM_SETTING_CONNECTION_PERMISSIONS);
+                 return FALSE;
+             }
+             nm_assert(nm_settings_connection_validate_permission_user(permissions->item, -1));
+@@ -1381,10 +1413,12 @@ after_interface_name:
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                             _("property is missing"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_UUID);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_UUID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_UUID);
+         return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+     }
+ 
+@@ -1394,10 +1428,12 @@ after_interface_name:
+                     NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                     _("property type should be set to '%s'"),
+                     nm_setting_get_name(normerr_base_type));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_TYPE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_TYPE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_TYPE);
+         return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+     }
+ 
+@@ -1427,10 +1463,12 @@ after_interface_name:
+                     normerr_missing_slave_type_port,
+                     NM_SETTING_CONNECTION_SLAVE_TYPE,
+                     normerr_missing_slave_type);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_CONNECTION_SETTING_NAME,
+-                       NM_SETTING_CONNECTION_SLAVE_TYPE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_CONNECTION_SETTING_NAME,
++//                       NM_SETTING_CONNECTION_SLAVE_TYPE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                               NM_SETTING_CONNECTION_SLAVE_TYPE);
+         return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+     }
+ 
+@@ -1452,10 +1490,12 @@ after_interface_name:
+                         priv->slave_type ?: "",
+                         has_bridge_port ? NM_SETTING_BRIDGE_PORT_SETTING_NAME
+                                         : NM_SETTING_TEAM_PORT_SETTING_NAME);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_CONNECTION_SETTING_NAME,
+-                           NM_SETTING_CONNECTION_SLAVE_TYPE);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_CONNECTION_SETTING_NAME,
++//                           NM_SETTING_CONNECTION_SLAVE_TYPE);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_CONNECTION_SETTING_NAME,
++                                                   NM_SETTING_CONNECTION_SLAVE_TYPE);
+             return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+         }
+     }
+diff --git a/libnm-core/nm-setting-gsm.c b/libnm-core/nm-setting-gsm.c
+index c4eda96..81a9396 100644
+--- a/libnm-core/nm-setting-gsm.c
++++ b/libnm-core/nm-setting-gsm.c
+@@ -280,7 +280,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_NUMBER);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_NUMBER);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_NUMBER);
+         return FALSE;
+     }
+ 
+@@ -294,7 +295,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("property value '%s' is empty or too long (>64)"),
+                         priv->apn);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_APN);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_APN);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_APN);
+             return FALSE;
+         }
+ 
+@@ -324,7 +326,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("'%s' contains invalid char(s) (use [A-Za-z._-])"),
+                             priv->apn);
+-                g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_APN);
++//                g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_APN);
++                nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_APN);
+                 return FALSE;
+             }
+         }
+@@ -335,7 +338,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_USERNAME);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_USERNAME);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_USERNAME);
+         return FALSE;
+     }
+ 
+@@ -350,10 +354,11 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("'%s' length is invalid (should be 5 or 6 digits)"),
+                         priv->network_id);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_GSM_SETTING_NAME,
+-                           NM_SETTING_GSM_NETWORK_ID);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_GSM_SETTING_NAME,
++//                           NM_SETTING_GSM_NETWORK_ID);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_NETWORK_ID);
+             return FALSE;
+         }
+ 
+@@ -364,10 +369,11 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("'%s' is not a number"),
+                             priv->network_id);
+-                g_prefix_error(error,
+-                               "%s.%s: ",
+-                               NM_SETTING_GSM_SETTING_NAME,
+-                               NM_SETTING_GSM_NETWORK_ID);
++//                g_prefix_error(error,
++//                               "%s.%s: ",
++//                               NM_SETTING_GSM_SETTING_NAME,
++//                               NM_SETTING_GSM_NETWORK_ID);
++                nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_NETWORK_ID);
+                 return FALSE;
+             }
+         }
+@@ -378,7 +384,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_DEVICE_ID);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_DEVICE_ID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_DEVICE_ID);
+         return FALSE;
+     }
+ 
+@@ -387,7 +394,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_SIM_ID);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_SIM_ID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_SIM_ID);
+         return FALSE;
+     }
+ 
+@@ -400,10 +408,11 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                                 NM_CONNECTION_ERROR,
+                                 NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                 _("property is empty or wrong size"));
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_GSM_SETTING_NAME,
+-                           NM_SETTING_GSM_SIM_OPERATOR_ID);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_GSM_SETTING_NAME,
++//                           NM_SETTING_GSM_SIM_OPERATOR_ID);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_SIM_OPERATOR_ID);
+             return FALSE;
+         }
+ 
+@@ -413,10 +422,11 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                                     NM_CONNECTION_ERROR,
+                                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                                     _("property must contain only digits"));
+-                g_prefix_error(error,
+-                               "%s.%s: ",
+-                               NM_SETTING_GSM_SETTING_NAME,
+-                               NM_SETTING_GSM_SIM_OPERATOR_ID);
++//                g_prefix_error(error,
++//                               "%s.%s: ",
++//                               NM_SETTING_GSM_SETTING_NAME,
++//                               NM_SETTING_GSM_SIM_OPERATOR_ID);
++                nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_SIM_OPERATOR_ID);
+                 return FALSE;
+             }
+         }
+@@ -427,7 +437,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("can't be enabled when manual configuration is present"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_AUTO_CONFIG);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_AUTO_CONFIG);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_GSM_SETTING_NAME, NM_SETTING_GSM_AUTO_CONFIG);
+         return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+     }
+ 
+diff --git a/libnm-core/nm-setting-ip-tunnel.c b/libnm-core/nm-setting-ip-tunnel.c
+index 998b816..957a1f5 100644
+--- a/libnm-core/nm-setting-ip-tunnel.c
++++ b/libnm-core/nm-setting-ip-tunnel.c
+@@ -329,10 +329,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("'%d' is not a valid tunnel mode"),
+                     (int) priv->mode);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_MODE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_MODE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_MODE);
+         return FALSE;
+     }
+ 
+@@ -343,10 +345,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("'%s' is neither an UUID nor an interface name"),
+                     priv->parent);
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_PARENT);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_PARENT);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_PARENT);
+         return FALSE;
+     }
+ 
+@@ -357,10 +361,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     _("'%s' is not a valid IPv%c address"),
+                     priv->local,
+                     family == AF_INET ? '4' : '6');
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_LOCAL);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_LOCAL);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_LOCAL);
+         return FALSE;
+     }
+ 
+@@ -369,10 +375,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is missing"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_REMOTE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_REMOTE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_REMOTE);
+         return FALSE;
+     }
+ 
+@@ -383,10 +391,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     _("'%s' is not a valid IPv%c address"),
+                     priv->remote,
+                     family == AF_INET ? '4' : '6');
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_REMOTE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_REMOTE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_REMOTE);
+         return FALSE;
+     }
+ 
+@@ -414,10 +424,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("'%s' is not a valid tunnel key"),
+                         priv->input_key);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                           NM_SETTING_IP_TUNNEL_INPUT_KEY);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                           NM_SETTING_IP_TUNNEL_INPUT_KEY);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                                   NM_SETTING_IP_TUNNEL_INPUT_KEY);
+             return FALSE;
+         }
+     }
+@@ -432,10 +444,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("'%s' is not a valid tunnel key"),
+                         priv->output_key);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                           NM_SETTING_IP_TUNNEL_OUTPUT_KEY);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                           NM_SETTING_IP_TUNNEL_OUTPUT_KEY);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                                   NM_SETTING_IP_TUNNEL_OUTPUT_KEY);
+             return FALSE;
+         }
+     }
+@@ -445,10 +459,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("a fixed TTL is allowed only when path MTU discovery is enabled"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_TTL);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_TTL);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_TTL);
+         return FALSE;
+     }
+ 
+@@ -461,10 +477,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("some flags are invalid for the select mode: %s"),
+                     nm_utils_enum_to_str(nm_ip_tunnel_flags_get_type(), flags));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_FLAGS);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_FLAGS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_FLAGS);
+         return FALSE;
+     }
+ 
+@@ -474,10 +492,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("wired setting not allowed for mode %s"),
+                     nm_utils_enum_to_str(nm_ip_tunnel_mode_get_type(), priv->mode));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
+-                       NM_SETTING_IP_TUNNEL_MODE);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_IP_TUNNEL_SETTING_NAME,
++//                       NM_SETTING_IP_TUNNEL_MODE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_IP_TUNNEL_SETTING_NAME,
++                                               NM_SETTING_IP_TUNNEL_MODE);
+         return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+     }
+ 
+diff --git a/libnm-core/nm-setting-macsec.c b/libnm-core/nm-setting-macsec.c
+index d70696d..e49babd 100644
+--- a/libnm-core/nm-setting-macsec.c
++++ b/libnm-core/nm-setting-macsec.c
+@@ -286,10 +286,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                                 priv->parent,
+                                 NM_SETTING_CONNECTION_MASTER,
+                                 master);
+-                    g_prefix_error(error,
+-                                   "%s.%s: ",
+-                                   NM_SETTING_MACSEC_SETTING_NAME,
+-                                   NM_SETTING_MACSEC_PARENT);
++//                    g_prefix_error(error,
++//                                   "%s.%s: ",
++//                                   NM_SETTING_MACSEC_SETTING_NAME,
++//                                   NM_SETTING_MACSEC_PARENT);
++                    nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                                           NM_SETTING_MACSEC_PARENT);
+                     return FALSE;
+                 }
+             }
+@@ -300,10 +302,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("'%s' is neither an UUID nor an interface name"),
+                         priv->parent);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_MACSEC_SETTING_NAME,
+-                           NM_SETTING_MACSEC_PARENT);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_MACSEC_SETTING_NAME,
++//                           NM_SETTING_MACSEC_PARENT);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                                   NM_SETTING_MACSEC_PARENT);
+             return FALSE;
+         }
+     } else {
+@@ -317,27 +321,33 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("property is not specified and neither is '%s:%s'"),
+                         NM_SETTING_WIRED_SETTING_NAME,
+                         NM_SETTING_WIRED_MAC_ADDRESS);
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_MACSEC_SETTING_NAME,
+-                           NM_SETTING_MACSEC_PARENT);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_MACSEC_SETTING_NAME,
++//                           NM_SETTING_MACSEC_PARENT);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                                   NM_SETTING_MACSEC_PARENT);
+             return FALSE;
+         }
+     }
+ 
+     if (priv->mode == NM_SETTING_MACSEC_MODE_PSK) {
+         if (!verify_macsec_key(priv->mka_ckn, FALSE, error)) {
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_MACSEC_SETTING_NAME,
+-                           NM_SETTING_MACSEC_MKA_CKN);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_MACSEC_SETTING_NAME,
++//                           NM_SETTING_MACSEC_MKA_CKN);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                                   NM_SETTING_MACSEC_MKA_CKN);
+             return FALSE;
+         }
+         if (!verify_macsec_key(priv->mka_cak, TRUE, error)) {
+-            g_prefix_error(error,
+-                           "%s.%s: ",
+-                           NM_SETTING_MACSEC_SETTING_NAME,
+-                           NM_SETTING_MACSEC_MKA_CAK);
++//            g_prefix_error(error,
++//                           "%s.%s: ",
++//                           NM_SETTING_MACSEC_SETTING_NAME,
++//                           NM_SETTING_MACSEC_MKA_CAK);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                                   NM_SETTING_MACSEC_MKA_CAK);
+             return FALSE;
+         }
+     } else if (priv->mode == NM_SETTING_MACSEC_MODE_EAP) {
+@@ -355,7 +365,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("must be either psk (0) or eap (1)"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_MACSEC_SETTING_NAME, NM_SETTING_MACSEC_MODE);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_MACSEC_SETTING_NAME, NM_SETTING_MACSEC_MODE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                               NM_SETTING_MACSEC_MODE);
+         return FALSE;
+     }
+ 
+@@ -365,7 +377,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                     _("invalid port %d"),
+                     priv->port);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_MACSEC_SETTING_NAME, NM_SETTING_MACSEC_PORT);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_MACSEC_SETTING_NAME, NM_SETTING_MACSEC_PORT);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                               NM_SETTING_MACSEC_PORT);
+         return FALSE;
+     }
+ 
+@@ -374,10 +388,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("only valid for psk mode"));
+-        g_prefix_error(error,
+-                       "%s.%s: ",
+-                       NM_SETTING_MACSEC_SETTING_NAME,
+-                       priv->mka_cak ? NM_SETTING_MACSEC_MKA_CAK : NM_SETTING_MACSEC_MKA_CKN);
++//        g_prefix_error(error,
++//                       "%s.%s: ",
++//                       NM_SETTING_MACSEC_SETTING_NAME,
++//                       priv->mka_cak ? NM_SETTING_MACSEC_MKA_CAK : NM_SETTING_MACSEC_MKA_CKN);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_MACSEC_SETTING_NAME,
++                                               priv->mka_cak ? NM_SETTING_MACSEC_MKA_CAK : NM_SETTING_MACSEC_MKA_CKN);
+         return NM_SETTING_VERIFY_NORMALIZABLE;
+     }
+ 
+diff --git a/libnm-core/nm-setting-pppoe.c b/libnm-core/nm-setting-pppoe.c
+index ef1d9ba..eb0edd9 100644
+--- a/libnm-core/nm-setting-pppoe.c
++++ b/libnm-core/nm-setting-pppoe.c
+@@ -127,14 +127,16 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_MISSING_PROPERTY,
+                             _("property is missing"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_USERNAME);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_USERNAME);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_USERNAME);
+         return FALSE;
+     } else if (!strlen(priv->username)) {
+         g_set_error_literal(error,
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_USERNAME);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_USERNAME);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_USERNAME);
+         return FALSE;
+     }
+ 
+@@ -143,7 +145,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("property is empty"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_SERVICE);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_SERVICE);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_SERVICE);
+         return FALSE;
+     }
+ 
+@@ -154,7 +157,8 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     "'%s': %s",
+                     priv->parent,
+                     local_error->message);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_PARENT);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_PARENT);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_PPPOE_SETTING_NAME, NM_SETTING_PPPOE_PARENT);
+         return FALSE;
+     }
+ 
+diff --git a/libnm-core/nm-setting-vlan.c b/libnm-core/nm-setting-vlan.c
+index 123c119..11ff627 100644
+--- a/libnm-core/nm-setting-vlan.c
++++ b/libnm-core/nm-setting-vlan.c
+@@ -593,10 +593,12 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                                 priv->parent,
+                                 NM_SETTING_CONNECTION_MASTER,
+                                 master);
+-                    g_prefix_error(error,
+-                                   "%s.%s: ",
+-                                   NM_SETTING_VLAN_SETTING_NAME,
+-                                   NM_SETTING_VLAN_PARENT);
++//                    g_prefix_error(error,
++//                                   "%s.%s: ",
++//                                   NM_SETTING_VLAN_SETTING_NAME,
++//                                   NM_SETTING_VLAN_PARENT);
++                    nm_utils_set_prefix_error_for_property(error, NM_SETTING_VLAN_SETTING_NAME,
++                                                           NM_SETTING_VLAN_PARENT);
+                     return FALSE;
+                 }
+             }
+@@ -607,7 +609,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                         _("'%s' is neither an UUID nor an interface name"),
+                         priv->parent);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_PARENT);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_PARENT);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_VLAN_SETTING_NAME,
++                                                   NM_SETTING_VLAN_PARENT);
+             return FALSE;
+         }
+     } else {
+@@ -621,7 +625,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                         _("property is not specified and neither is '%s:%s'"),
+                         NM_SETTING_WIRED_SETTING_NAME,
+                         NM_SETTING_WIRED_MAC_ADDRESS);
+-            g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_PARENT);
++//            g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_PARENT);
++            nm_utils_set_prefix_error_for_property(error, NM_SETTING_VLAN_SETTING_NAME,
++                                                   NM_SETTING_VLAN_PARENT);
+             return FALSE;
+         }
+     }
+@@ -632,7 +638,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                     _("the vlan id must be in range 0-4094 but is %u"),
+                     priv->id);
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_ID);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_ID);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_VLAN_SETTING_NAME,
++                                               NM_SETTING_VLAN_ID);
+         return FALSE;
+     }
+ 
+@@ -641,7 +649,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+                             _("flags are invalid"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_FLAGS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_FLAGS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_VLAN_SETTING_NAME,
++                                               NM_SETTING_VLAN_FLAGS);
+         return FALSE;
+     }
+ 
+@@ -653,7 +663,9 @@ verify(NMSetting *setting, NMConnection *connection, GError **error)
+                             NM_CONNECTION_ERROR,
+                             NM_CONNECTION_ERROR_SETTING_NOT_FOUND,
+                             _("vlan setting should have a ethernet setting as well"));
+-        g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_FLAGS);
++//        g_prefix_error(error, "%s.%s: ", NM_SETTING_VLAN_SETTING_NAME, NM_SETTING_VLAN_FLAGS);
++        nm_utils_set_prefix_error_for_property(error, NM_SETTING_VLAN_SETTING_NAME,
++                                               NM_SETTING_VLAN_FLAGS);
+         return NM_SETTING_VERIFY_NORMALIZABLE;
+     }
+ 
+diff --git a/libnm-core/nm-team-utils.c b/libnm-core/nm-team-utils.c
+index b7da35a..17fc591 100644
+--- a/libnm-core/nm-team-utils.c
++++ b/libnm-core/nm-team-utils.c
+@@ -2192,10 +2192,13 @@ nm_team_setting_config_set(NMTeamSetting *self, const char *js_str)
+ static void
+ _team_setting_prefix_error_plain(gboolean is_port, const char *property_name, GError **error)
+ {
+-    g_prefix_error(error,
+-                   "%s.%s: ",
+-                   is_port ? NM_SETTING_TEAM_PORT_SETTING_NAME : NM_SETTING_TEAM_SETTING_NAME,
+-                   property_name);
++//    g_prefix_error(error,
++//                   "%s.%s: ",
++//                   is_port ? NM_SETTING_TEAM_PORT_SETTING_NAME : NM_SETTING_TEAM_SETTING_NAME,
++//                   property_name);
++    nm_utils_set_prefix_error_for_property(error,
++                                           is_port ? NM_SETTING_TEAM_PORT_SETTING_NAME : NM_SETTING_TEAM_SETTING_NAME,
++                                           property_name);
+ }
+ 
+ static void
+diff --git a/libnm-core/nm-utils.c b/libnm-core/nm-utils.c
+index 6ceef1e..d87ac9e 100644
+--- a/libnm-core/nm-utils.c
++++ b/libnm-core/nm-utils.c
+@@ -5709,6 +5709,21 @@ nm_utils_get_timestamp_msec(void)
+     g_return_val_if_reached(-1);
+ }
+ 
++void
++nm_utils_set_prefix_error_for_property (GError     **error,
++                                        const char  *prop1,
++                                        const char  *prop2)
++{
++	char *err_msg;
++
++	if (!error) return;
++
++	err_msg = g_strdup_printf ("%s.%s: ", prop1, prop2);
++	g_prefix_error (error, "%s", _(err_msg));
++
++	g_free (err_msg);
++}
++
+ /*****************************************************************************/
+ 
+ /**
+diff --git a/libnm-core/nm-utils.h b/libnm-core/nm-utils.h
+index 0f8dcda..5527604 100644
+--- a/libnm-core/nm-utils.h
++++ b/libnm-core/nm-utils.h
+@@ -174,6 +174,10 @@ gboolean nm_utils_is_valid_iface_name(const char *name, GError **error);
+ 
+ gboolean nm_utils_is_uuid(const char *str);
+ 
++void     nm_utils_set_prefix_error_for_property (GError     **error,
++                                                 const char  *prop1,
++                                                 const char  *prop2);
++
+ /**
+  * NM_UTILS_INET_ADDRSTRLEN:
+  *
