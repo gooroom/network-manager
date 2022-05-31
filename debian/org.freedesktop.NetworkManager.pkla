@@ -1,6 +1,13 @@
 [Adding or changing system-wide NetworkManager connections]
-Identity=unix-group:netdev;unix-group:sudo
+Identity=unix-group:netdev;unix-group:sudo;unix-group:gpms
 Action=org.freedesktop.NetworkManager.settings.modify.system
+ResultAny=no
+ResultInactive=no
+ResultActive=yes
+
+[Changing NetworkManager Network Control]
+Identity=unix-group:sudo;unix-group:gpms
+Action=org.freedesktop.NetworkManager.network-control
 ResultAny=no
 ResultInactive=no
 ResultActive=yes

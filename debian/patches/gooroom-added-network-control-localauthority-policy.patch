@@ -1,0 +1,15 @@
+diff --git a/data/org.freedesktop.NetworkManager.policy.in.in b/data/org.freedesktop.NetworkManager.policy.in.in
+index 8b6ea51..e5f9a38 100644
+--- a/data/org.freedesktop.NetworkManager.policy.in.in
++++ b/data/org.freedesktop.NetworkManager.policy.in.in
+@@ -69,8 +69,8 @@
+     <_message>System policy prevents control of network connections</_message>
+     <defaults>
+       <allow_any>auth_admin</allow_any>
+-      <allow_inactive>yes</allow_inactive>
+-      <allow_active>yes</allow_active>
++      <allow_inactive>auth_admin</allow_inactive>
++      <allow_active>auth_admin</allow_active>
+     </defaults>
+   </action>
+ 
