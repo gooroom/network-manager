@@ -1,3 +1,10 @@
+network-manager (1.30.0-2+grm3u2) unstable; urgency=medium
+
+  [ heejun.jang ]
+  * [fd0aeb96] 보안 취약점 패치 구름 공통버전 적용
+
+ -- Gooroom Autobuilder <jenkins@gooroom.kr>  Mon, 20 Jun 2022 08:39:00 +0900
+
 network-manager (1.30.0-2+grm3u1) unstable; urgency=medium
 
   [ seolhee.sun ]
