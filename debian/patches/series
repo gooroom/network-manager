@@ -3,3 +3,6 @@ core-fix-crash-in-nm_wildcard_match_check.patch
 gooroom-wrap-error-message-for-translation.patch
 gooroom-translation-merge.patch
 gooroom-added-network-control-localauthority-policy.patch
+Do-not-manage-Docker-bridge-interfaces.patch
+Don-t-setup-Sleep-Monitor-if-not-booted-with-systemd.patch
+Update-dnsmasq-parameters.patch
